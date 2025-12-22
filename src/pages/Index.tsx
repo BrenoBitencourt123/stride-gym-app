@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Settings } from "lucide-react";
 import AvatarFrame from "@/components/AvatarFrame";
 import XPBar from "@/components/XPBar";
@@ -16,8 +17,21 @@ const mockGoals = [
 ];
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState<"inicio" | "treino" | "nutricao">("inicio");
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const getActiveTab = () => {
+    if (location.pathname.startsWith("/treino")) return "treino";
+    if (location.pathname.startsWith("/nutricao")) return "nutricao";
+    return "inicio";
+  };
+
+  const handleTabChange = (tab: "inicio" | "treino" | "nutricao") => {
+    if (tab === "inicio") navigate("/");
+    else if (tab === "treino") navigate("/treino");
+    else if (tab === "nutricao") navigate("/nutricao");
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -74,7 +88,7 @@ const Index = () => {
 
         {/* Start Workout CTA */}
         <div className="mb-4">
-          <StartWorkoutButton onClick={() => setActiveTab("treino")} />
+          <StartWorkoutButton onClick={() => navigate("/treino")} />
         </div>
 
         {/* Achievements Card */}
@@ -84,7 +98,7 @@ const Index = () => {
       </div>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={getActiveTab()} onTabChange={handleTabChange} />
 
       {/* Settings Modal */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />

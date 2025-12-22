@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, Play, Plus } from "lucide-react";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import SetRow from "@/components/SetRow";
 
@@ -30,7 +30,6 @@ const exerciseData: Record<
 };
 
 const ExerciseLogging = () => {
-  const navigate = useNavigate();
   const { slug, exerciseSlug } = useParams();
   const [warmupDone, setWarmupDone] = useState(true);
   const [validSets, setValidSets] = useState([
@@ -51,13 +50,9 @@ const ExerciseLogging = () => {
     ]);
   };
 
-  const handleNextExercise = () => {
-    if (exercise.nextExercise) {
-      navigate(`/treino/${slug}/${exercise.nextExercise}`);
-    } else {
-      navigate(`/treino/${slug}`);
-    }
-  };
+  const nextExercisePath = exercise.nextExercise 
+    ? `/treino/${slug}/${exercise.nextExercise}`
+    : `/treino/${slug}`;
 
   return (
     <div className="min-h-screen bg-background pb-40">
@@ -71,12 +66,12 @@ const ExerciseLogging = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(`/treino/${slug}`)}
+            <Link
+              to={`/treino/${slug}`}
               className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
             >
               <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-            </button>
+            </Link>
             <h1 className="text-2xl font-bold text-foreground">{exercise.name}</h1>
           </div>
           <button className="text-primary text-sm font-medium hover:underline">
@@ -190,13 +185,13 @@ const ExerciseLogging = () => {
       {/* Sticky CTA */}
       <div className="fixed bottom-20 left-0 right-0 z-20 px-4 pb-4">
         <div className="max-w-md mx-auto">
-          <button
-            onClick={handleNextExercise}
+          <Link
+            to={nextExercisePath}
             className="w-full cta-button flex items-center justify-center gap-3"
           >
             <Play className="w-5 h-5 fill-primary-foreground" />
             <span className="text-lg font-semibold">Próximo exercício</span>
-          </button>
+          </Link>
         </div>
       </div>
 

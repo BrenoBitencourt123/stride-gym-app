@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Settings } from "lucide-react";
 import AvatarFrame from "@/components/AvatarFrame";
 import XPBar from "@/components/XPBar";
@@ -15,8 +15,6 @@ const mockGoals = [
 ];
 
 const Index = () => {
-  const navigate = useNavigate();
-
   return (
     <div className="min-h-screen bg-background pb-28">
       {/* Starfield background effect */}
@@ -38,12 +36,12 @@ const Index = () => {
       {/* Content */}
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
         {/* Settings button */}
-        <button 
-          onClick={() => navigate("/settings")}
+        <Link 
+          to="/settings"
           className="absolute top-6 right-4 w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
         >
           <Settings className="w-5 h-5 text-muted-foreground" />
-        </button>
+        </Link>
 
         {/* Avatar section */}
         <div className="flex flex-col items-center pt-4 pb-6">
@@ -72,7 +70,7 @@ const Index = () => {
 
         {/* Start Workout CTA */}
         <div className="mb-4">
-          <StartWorkoutButton onClick={() => navigate("/treino")} />
+          <StartWorkoutButton />
         </div>
 
         {/* Achievements Card */}

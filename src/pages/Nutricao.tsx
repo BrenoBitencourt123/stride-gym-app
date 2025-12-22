@@ -1,10 +1,8 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
 const Nutricao = () => {
-  const navigate = useNavigate();
-
   return (
     <div className="min-h-screen bg-background pb-28">
       {/* Background effect */}
@@ -56,13 +54,13 @@ const Nutricao = () => {
           
           {/* Empty state card */}
           <div className="bg-muted/20 rounded-2xl border border-border/50 p-6 flex flex-col items-center">
-            <button
-              onClick={() => navigate("/nutricao/adicionar-alimento")}
+            <Link
+              to="/nutricao/adicionar-alimento"
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/50 text-primary hover:bg-primary/10 transition-colors mb-4"
             >
               <Plus size={18} />
               <span className="font-medium">Adicionar alimento</span>
-            </button>
+            </Link>
             
             <p className="text-muted-foreground text-center text-sm">
               Nenhum alimento registrado hoje
@@ -80,13 +78,13 @@ const Nutricao = () => {
       {/* Bottom CTA */}
       <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
         <div className="max-w-md mx-auto">
-          <button
-            onClick={() => navigate("/nutricao/criar-dieta")}
+          <Link
+            to="/nutricao/criar-dieta"
             className="w-full card-glass flex items-center justify-center gap-2 py-4 rounded-2xl border border-border/50 hover:border-primary/50 transition-colors"
           >
             <Plus size={20} className="text-primary" />
             <span className="text-foreground font-medium">Criar minha dieta</span>
-          </button>
+          </Link>
         </div>
       </div>
 

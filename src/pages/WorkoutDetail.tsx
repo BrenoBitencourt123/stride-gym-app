@@ -1,5 +1,5 @@
 import { ArrowLeft, Play } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import ExerciseCard from "@/components/ExerciseCard";
 import BottomNav from "@/components/BottomNav";
 
@@ -59,15 +59,9 @@ const workoutDetails: Record<string, WorkoutData> = {
 };
 
 const WorkoutDetail = () => {
-  const navigate = useNavigate();
   const { slug } = useParams();
   const workout = workoutDetails[slug || ""] || { title: "Treino", exercises: [] };
-
-  const handleStartWorkout = () => {
-    if (workout.exercises.length > 0) {
-      navigate(`/treino/${slug}/${workout.exercises[0].slug}`);
-    }
-  };
+  const firstExerciseSlug = workout.exercises.length > 0 ? workout.exercises[0].slug : null;
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -80,12 +74,12 @@ const WorkoutDetail = () => {
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-2">
-          <button
-            onClick={() => navigate("/treino")}
+          <Link
+            to="/treino"
             className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-          </button>
+          </Link>
           <div>
             <h1 className="text-2xl font-bold text-foreground">{workout.title}</h1>
             <p className="text-sm text-muted-foreground">{workout.exercises.length} exercícios</p>
@@ -108,13 +102,15 @@ const WorkoutDetail = () => {
         </div>
 
         {/* Start Workout CTA */}
-        <button
-          onClick={handleStartWorkout}
-          className="w-full mt-6 cta-button flex items-center justify-center gap-2"
-        >
-          <Play className="w-5 h-5 fill-current" />
-          Iniciar treino
-        </button>
+        {firstExerciseSlug && (
+          <Link
+            to={`/treino/${slug}/${firstExerciseSlug}`}
+            className="w-full mt-6 cta-button flex items-center justify-center gap-2"
+          >
+            <Play className="w-5 h-5 fill-current" />
+            Iniciar treino
+          </Link>
+        )}
       </div>
 
       {/* Bottom Navigation */}

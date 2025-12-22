@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Search, ScanLine, Minus, Plus } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
@@ -61,12 +61,12 @@ const AdicionarAlimento = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/nutricao")}
+            <Link
+              to="/nutricao"
               className="p-2 -ml-2 rounded-xl hover:bg-card/50 transition-colors"
             >
               <ChevronLeft size={24} className="text-foreground" />
-            </button>
+            </Link>
             <h1 className="text-2xl font-bold text-foreground">Adicionar alimento</h1>
           </div>
           <button className="p-2 rounded-xl hover:bg-card/50 transition-colors">

@@ -9,6 +9,7 @@ import WorkoutDetail from "./pages/WorkoutDetail";
 import ExerciseLogging from "./pages/ExerciseLogging";
 import Nutricao from "./pages/Nutricao";
 import CriarDieta from "./pages/CriarDieta";
+import AdicionarAlimento from "./pages/AdicionarAlimento";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/treino/:slug/:exerciseSlug" element={<ExerciseLogging />} />
           <Route path="/nutricao" element={<Nutricao />} />
           <Route path="/nutricao/criar-dieta" element={<CriarDieta />} />
+          <Route path="/nutricao/adicionar-alimento" element={<AdicionarAlimento />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

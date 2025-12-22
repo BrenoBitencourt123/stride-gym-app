@@ -1,13 +1,26 @@
-import { ArrowLeft, Play } from "lucide-react";
+import { ArrowLeft, Play, RotateCcw } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import { useState } from "react";
 import ExerciseCard from "@/components/ExerciseCard";
 import BottomNav from "@/components/BottomNav";
 import { getWorkout } from "@/data/workouts";
-import { saveTreinoHoje } from "@/lib/storage";
+import { saveTreinoHoje, clearTreinoProgress } from "@/lib/storage";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const WorkoutDetail = () => {
   const { treinoId } = useParams();
   const workout = getWorkout(treinoId || "");
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
   
   if (!workout) {
     return (
@@ -27,6 +40,14 @@ const WorkoutDetail = () => {
     });
   };
 
+  const handleResetWorkout = () => {
+    if (treinoId) {
+      clearTreinoProgress(treinoId);
+      setResetKey(prev => prev + 1);
+    }
+    setShowResetDialog(false);
+  };
+
   return (
     <div className="min-h-screen bg-background pb-32">
       {/* Background */}
@@ -37,21 +58,30 @@ const WorkoutDetail = () => {
       {/* Content */}
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-2">
-          <Link
-            to="/treino"
-            className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{workout.titulo}</h1>
-            <p className="text-sm text-muted-foreground">{workout.exercicios.length} exercícios</p>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-4">
+            <Link
+              to="/treino"
+              className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">{workout.titulo}</h1>
+              <p className="text-sm text-muted-foreground">{workout.exercicios.length} exercícios</p>
+            </div>
           </div>
+          <button
+            onClick={() => setShowResetDialog(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-secondary/50 text-muted-foreground text-sm hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span className="hidden sm:inline">Reiniciar</span>
+          </button>
         </div>
 
         {/* Exercise List */}
-        <div className="space-y-3 mt-6">
+        <div className="space-y-3 mt-6" key={resetKey}>
           {workout.exercicios.map((exercise) => (
             <ExerciseCard
               key={exercise.id}
@@ -77,6 +107,24 @@ const WorkoutDetail = () => {
           </Link>
         )}
       </div>
+
+      {/* Reset Confirmation Dialog */}
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reiniciar treino?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza? Isso apagará todas as séries registradas deste treino. Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetWorkout}>
+              Reiniciar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Bottom Navigation */}
       <BottomNav />

@@ -10,6 +10,7 @@ import {
   SetProgress,
   ExerciseProgress 
 } from "@/lib/storage";
+import { toast } from "sonner";
 
 const ExerciseLogging = () => {
   const { treinoId, exercicioId } = useParams();
@@ -107,6 +108,30 @@ const ExerciseLogging = () => {
       done: false,
     };
     setWorkSets(prev => [...prev, newSet]);
+  };
+
+  const handleRemoveSet = (index: number) => {
+    if (workSets.length <= 1) {
+      toast.error("Não é possível remover a última série");
+      return;
+    }
+    
+    const removedSet = workSets[index];
+    setWorkSets(prev => prev.filter((_, i) => i !== index));
+    
+    toast("Série removida", {
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          setWorkSets(prev => {
+            const newSets = [...prev];
+            newSets.splice(index, 0, removedSet);
+            return newSets;
+          });
+        },
+      },
+      duration: 3000,
+    });
   };
 
   // Navigation
@@ -243,9 +268,11 @@ const ExerciseLogging = () => {
               rest={restTime}
               done={set.done}
               showDoneLabel={true}
+              canRemove={workSets.length > 1}
               onKgChange={(kg) => updateWorkSet(index, "kg", kg)}
               onRepsChange={(reps) => updateWorkSet(index, "reps", reps)}
               onDoneChange={(done) => updateWorkSet(index, "done", done)}
+              onRemove={() => handleRemoveSet(index)}
             />
           ))}
 

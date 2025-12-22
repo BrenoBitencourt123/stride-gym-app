@@ -1,0 +1,18 @@
+{
+  "name": "LevelUp GYM",
+  "short_name": "LevelUp",
+  "description": "App de fitness gamificado - Ganhe XP e evolua seu nível",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0B0F1A",
+  "background_color": "#0B0F1A",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

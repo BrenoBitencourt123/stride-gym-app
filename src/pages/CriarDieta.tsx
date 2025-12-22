@@ -59,7 +59,7 @@ const CriarDieta = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-40">
+    <div className="min-h-screen bg-background pb-28">
       {/* Background effect */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-card/30" />
@@ -152,18 +152,14 @@ const CriarDieta = () => {
             Você pode seguir esta dieta como base e registrar extras no dia.
           </p>
         </div>
-      </div>
 
-      {/* Bottom CTA */}
-      <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
-        <div className="max-w-md mx-auto">
-          <button
-            onClick={handleSave}
-            className="w-full bg-primary text-primary-foreground font-semibold py-4 rounded-2xl hover:bg-primary/90 transition-colors"
-          >
-            Salvar minha dieta
-          </button>
-        </div>
+        {/* Save button */}
+        <button
+          onClick={handleSave}
+          className="w-full bg-primary text-primary-foreground font-semibold py-4 rounded-2xl hover:bg-primary/90 transition-colors mt-6"
+        >
+          Salvar minha dieta
+        </button>
       </div>
 
       {/* Bottom Navigation */}

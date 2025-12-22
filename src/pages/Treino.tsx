@@ -1,5 +1,4 @@
 import { Filter } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
 import WorkoutCard from "@/components/WorkoutCard";
 import BottomNav from "@/components/BottomNav";
 
@@ -27,37 +26,11 @@ const workoutPlans = [
 ];
 
 const Treino = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const getActiveTab = () => {
-    if (location.pathname.startsWith("/treino")) return "treino";
-    if (location.pathname.startsWith("/nutricao")) return "nutricao";
-    return "inicio";
-  };
-
-  const handleTabChange = (tab: "inicio" | "treino" | "nutricao") => {
-    if (tab === "inicio") navigate("/");
-    else if (tab === "treino") navigate("/treino");
-    else if (tab === "nutricao") navigate("/nutricao");
-  };
-
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Starfield background effect */}
+      {/* Background effect */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-card/30" />
-        {[...Array(50)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-0.5 h-0.5 bg-foreground/20 rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-            }}
-          />
-        ))}
       </div>
 
       {/* Content */}
@@ -89,7 +62,7 @@ const Treino = () => {
       </div>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={getActiveTab()} onTabChange={handleTabChange} />
+      <BottomNav />
     </div>
   );
 };

@@ -50,7 +50,7 @@ const AdicionarAlimento = () => {
   const adjustedFat = selectedFood ? Math.round(selectedFood.fat * portionMultiplier) : 0;
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-28">
       {/* Background effect */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-card/30" />

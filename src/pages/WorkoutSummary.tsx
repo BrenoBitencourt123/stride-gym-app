@@ -1,7 +1,7 @@
-import { Trophy, ArrowRight, CheckCircle } from "lucide-react";
+import { Trophy, ArrowRight, CheckCircle, Dumbbell } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getWorkout, treinoDoDiaId } from "@/data/workouts";
-import { completeTreinoDoDia, countCompletedSets } from "@/lib/storage";
+import { completeTreinoDoDia, getWorkoutSummaryStats } from "@/lib/storage";
 import BottomNav from "@/components/BottomNav";
 
 const XP_PER_WORKOUT = 150;
@@ -11,7 +11,7 @@ const WorkoutSummary = () => {
   const navigate = useNavigate();
   const workout = getWorkout(treinoId || treinoDoDiaId);
   
-  const totalSets = countCompletedSets(treinoId || treinoDoDiaId);
+  const { completedSets, totalSets, totalVolume } = getWorkoutSummaryStats(treinoId || treinoDoDiaId);
 
   const handleConcluir = () => {
     completeTreinoDoDia(XP_PER_WORKOUT);
@@ -58,7 +58,22 @@ const WorkoutSummary = () => {
             </div>
             <div className="flex-1">
               <p className="text-muted-foreground text-sm">Séries Completadas</p>
-              <p className="text-2xl font-bold text-foreground">{totalSets}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {completedSets} <span className="text-lg text-muted-foreground font-normal">/ {totalSets}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Volume Card */}
+          <div className="card-glass p-5 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center">
+              <Dumbbell className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <p className="text-muted-foreground text-sm">Volume Total</p>
+              <p className="text-2xl font-bold text-foreground">
+                {totalVolume.toLocaleString()} <span className="text-lg text-muted-foreground font-normal">kg</span>
+              </p>
             </div>
           </div>
 

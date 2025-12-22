@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Plus, Minus } from "lucide-react";
+import { Check, ChevronDown, Plus, Minus, Trash2 } from "lucide-react";
 
 interface SetRowProps {
   setNumber: number;
@@ -7,9 +7,11 @@ interface SetRowProps {
   rest: string;
   done: boolean;
   showDoneLabel?: boolean;
+  canRemove?: boolean;
   onKgChange: (kg: number) => void;
   onRepsChange: (reps: number) => void;
   onDoneChange: (done: boolean) => void;
+  onRemove?: () => void;
 }
 
 const SetRow = ({
@@ -19,9 +21,11 @@ const SetRow = ({
   rest,
   done,
   showDoneLabel = false,
+  canRemove = false,
   onKgChange,
   onRepsChange,
   onDoneChange,
+  onRemove,
 }: SetRowProps) => {
   return (
     <div className="flex items-center gap-2 py-2">
@@ -95,6 +99,17 @@ const SetRow = ({
           </span>
         )}
       </button>
+
+      {/* Remove button */}
+      {canRemove && onRemove && (
+        <button
+          onClick={onRemove}
+          className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+          aria-label="Remover série"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 };

@@ -185,3 +185,50 @@ export function countCompletedSets(treinoId: string): number {
   }
   return count;
 }
+
+export function isExerciseComplete(treinoId: string, exercicioId: string): boolean {
+  const progress = getExerciseProgress(treinoId, exercicioId);
+  if (!progress || progress.workSets.length === 0) return false;
+  return progress.workSets.every(s => s.done);
+}
+
+export function getExerciseSetProgress(treinoId: string, exercicioId: string): { done: number; total: number } {
+  const progress = getExerciseProgress(treinoId, exercicioId);
+  if (!progress) return { done: 0, total: 0 };
+  const total = progress.workSets.length;
+  const done = progress.workSets.filter(s => s.done).length;
+  return { done, total };
+}
+
+export function clearTreinoProgress(treinoId: string): void {
+  const progresso = getTreinoProgresso();
+  if (progresso[treinoId]) {
+    delete progresso[treinoId];
+    saveTreinoProgresso(progresso);
+  }
+}
+
+export function getWorkoutSummaryStats(treinoId: string): { completedSets: number; totalSets: number; totalVolume: number } {
+  const progresso = getTreinoProgresso();
+  const treinoProgress = progresso[treinoId];
+  
+  if (!treinoProgress) return { completedSets: 0, totalSets: 0, totalVolume: 0 };
+  
+  let completedSets = 0;
+  let totalSets = 0;
+  let totalVolume = 0;
+  
+  for (const exercicioId in treinoProgress) {
+    const exerciseProgress = treinoProgress[exercicioId];
+    totalSets += exerciseProgress.workSets.length;
+    
+    for (const set of exerciseProgress.workSets) {
+      if (set.done) {
+        completedSets++;
+        totalVolume += set.kg * set.reps;
+      }
+    }
+  }
+  
+  return { completedSets, totalSets, totalVolume: Math.round(totalVolume) };
+}

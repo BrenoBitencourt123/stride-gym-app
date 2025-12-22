@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Treino from "./pages/Treino";
 import WorkoutDetail from "./pages/WorkoutDetail";
+import ExerciseDetail from "./pages/ExerciseDetail";
 import Nutricao from "./pages/Nutricao";
 import NotFound from "./pages/NotFound";
 
@@ -21,6 +22,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/treino" element={<Treino />} />
           <Route path="/treino/:slug" element={<WorkoutDetail />} />
+          <Route path="/treino/:slug/:exerciseSlug" element={<ExerciseDetail />} />
           <Route path="/nutricao" element={<Nutricao />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

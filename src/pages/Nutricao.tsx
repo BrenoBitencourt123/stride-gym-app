@@ -1,25 +1,9 @@
-import { useNavigate, useLocation } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 
 const Nutricao = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const getActiveTab = () => {
-    if (location.pathname.startsWith("/treino")) return "treino";
-    if (location.pathname.startsWith("/nutricao")) return "nutricao";
-    return "inicio";
-  };
-
-  const handleTabChange = (tab: "inicio" | "treino" | "nutricao") => {
-    if (tab === "inicio") navigate("/");
-    else if (tab === "treino") navigate("/treino");
-    else if (tab === "nutricao") navigate("/nutricao");
-  };
-
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Starfield background effect */}
+      {/* Background effect */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-card/30" />
       </div>
@@ -36,7 +20,7 @@ const Nutricao = () => {
       </div>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={getActiveTab()} onTabChange={handleTabChange} />
+      <BottomNav />
     </div>
   );
 };

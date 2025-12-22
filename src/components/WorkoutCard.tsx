@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 interface WorkoutCardProps {
   title: string;
@@ -8,12 +8,10 @@ interface WorkoutCardProps {
 }
 
 const WorkoutCard = ({ title, exercises, slug }: WorkoutCardProps) => {
-  const navigate = useNavigate();
-
   return (
-    <button
-      onClick={() => navigate(`/treino/${slug}`)}
-      className="w-full card-glass p-5 flex items-start justify-between gap-4 text-left hover:bg-card/80 transition-colors group"
+    <Link
+      to={`/treino/${slug}`}
+      className="w-full card-glass p-5 flex items-start justify-between gap-4 text-left hover:bg-card/80 transition-colors group block"
     >
       <div className="flex-1">
         <h3 className="text-xl font-semibold text-foreground mb-3">{title}</h3>
@@ -29,7 +27,7 @@ const WorkoutCard = ({ title, exercises, slug }: WorkoutCardProps) => {
         </div>
       </div>
       <ChevronRight className="w-6 h-6 text-muted-foreground mt-1 group-hover:text-foreground transition-colors flex-shrink-0" />
-    </button>
+    </Link>
   );
 };
 

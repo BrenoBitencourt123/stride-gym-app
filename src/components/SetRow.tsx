@@ -1,28 +1,28 @@
-import { Check, ChevronDown, Plus } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronDown, Plus, Minus } from "lucide-react";
 
 interface SetRowProps {
   setNumber: number;
-  initialKg: number;
-  initialReps: number;
-  initialRest: string;
-  initialDone: boolean;
+  kg: number;
+  reps: number;
+  rest: string;
+  done: boolean;
   showDoneLabel?: boolean;
+  onKgChange: (kg: number) => void;
+  onRepsChange: (reps: number) => void;
+  onDoneChange: (done: boolean) => void;
 }
 
 const SetRow = ({
   setNumber,
-  initialKg,
-  initialReps,
-  initialRest,
-  initialDone,
+  kg,
+  reps,
+  rest,
+  done,
   showDoneLabel = false,
+  onKgChange,
+  onRepsChange,
+  onDoneChange,
 }: SetRowProps) => {
-  const [kg, setKg] = useState(initialKg);
-  const [reps, setReps] = useState(initialReps);
-  const [rest, setRest] = useState(initialRest);
-  const [done, setDone] = useState(initialDone);
-
   return (
     <div className="flex items-center gap-2 py-2">
       {/* Set number */}
@@ -31,9 +31,20 @@ const SetRow = ({
 
       {/* Kg input */}
       <div className="flex items-center bg-secondary/50 rounded-lg px-2 py-1.5 gap-1">
-        <span className="text-foreground text-sm w-8 text-center">{kg}</span>
         <button
-          onClick={() => setKg((prev) => prev + 2.5)}
+          onClick={() => onKgChange(Math.max(0, kg - 2.5))}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Minus className="w-3.5 h-3.5" />
+        </button>
+        <input
+          type="number"
+          value={kg}
+          onChange={(e) => onKgChange(Math.max(0, parseFloat(e.target.value) || 0))}
+          className="text-foreground text-sm w-10 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button
+          onClick={() => onKgChange(kg + 2.5)}
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -42,9 +53,20 @@ const SetRow = ({
 
       {/* Reps input */}
       <div className="flex items-center bg-secondary/50 rounded-lg px-2 py-1.5 gap-1">
-        <span className="text-foreground text-sm w-4 text-center">{reps}</span>
         <button
-          onClick={() => setReps((prev) => prev + 1)}
+          onClick={() => onRepsChange(Math.max(1, reps - 1))}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Minus className="w-3.5 h-3.5" />
+        </button>
+        <input
+          type="number"
+          value={reps}
+          onChange={(e) => onRepsChange(Math.max(1, parseInt(e.target.value) || 1))}
+          className="text-foreground text-sm w-6 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button
+          onClick={() => onRepsChange(reps + 1)}
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -59,7 +81,7 @@ const SetRow = ({
 
       {/* Done checkbox */}
       <button
-        onClick={() => setDone(!done)}
+        onClick={() => onDoneChange(!done)}
         className={`flex items-center gap-1 ml-auto rounded-lg px-2 py-1.5 transition-colors ${
           done
             ? "bg-primary/20 border border-primary/40"

@@ -7,14 +7,36 @@ import GoalsSection from "@/components/GoalsSection";
 import StartWorkoutButton from "@/components/StartWorkoutButton";
 import AchievementsCard from "@/components/AchievementsCard";
 import BottomNav from "@/components/BottomNav";
-
-const mockGoals = [
-  { id: "1", icon: "workout" as const, label: "Fazer treino do dia", xp: 150 },
-  { id: "2", icon: "nutrition" as const, label: "Registrar alimentação", xp: 80 },
-  { id: "3", icon: "weight" as const, label: "Registrar peso (semanal)", xp: 120 },
-];
+import { getProfile, getQuests } from "@/lib/storage";
 
 const Index = () => {
+  const profile = getProfile();
+  const quests = getQuests();
+
+  const goals = [
+    { 
+      id: "1", 
+      icon: "workout" as const, 
+      label: "Fazer treino do dia", 
+      xp: 150,
+      completed: quests.treinoDoDiaDone,
+    },
+    { 
+      id: "2", 
+      icon: "nutrition" as const, 
+      label: "Registrar alimentação", 
+      xp: 80,
+      completed: quests.registrarAlimentacaoDone,
+    },
+    { 
+      id: "3", 
+      icon: "weight" as const, 
+      label: "Registrar peso (semanal)", 
+      xp: 120,
+      completed: quests.registrarPesoDone,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background pb-28">
       {/* Starfield background effect */}
@@ -45,7 +67,7 @@ const Index = () => {
 
         {/* Avatar section */}
         <div className="flex flex-col items-center pt-4 pb-6">
-          <AvatarFrame level={12} />
+          <AvatarFrame level={profile.level} />
           
           {/* Title */}
           <h1 className="mt-6 text-2xl font-bold text-foreground">
@@ -55,17 +77,21 @@ const Index = () => {
 
         {/* XP Bar */}
         <div className="mb-6">
-          <XPBar current={1240} max={1500} />
+          <XPBar current={profile.xpAtual} max={profile.xpMeta} />
         </div>
 
         {/* Stats Row */}
         <div className="mb-6">
-          <StatsRow streak={6} multiplier={1.2} shields={2} />
+          <StatsRow 
+            streak={profile.streakDias} 
+            multiplier={profile.multiplier} 
+            shields={profile.shields} 
+          />
         </div>
 
         {/* Goals Section */}
         <div className="mb-4">
-          <GoalsSection goals={mockGoals} />
+          <GoalsSection goals={goals} />
         </div>
 
         {/* Start Workout CTA */}

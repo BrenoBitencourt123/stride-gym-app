@@ -76,7 +76,7 @@ const Nutricao = () => {
       </div>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
+      <div className="fixed bottom-28 left-0 right-0 px-4 z-20">
         <div className="max-w-md mx-auto">
           <Link
             to="/nutricao/criar-dieta"

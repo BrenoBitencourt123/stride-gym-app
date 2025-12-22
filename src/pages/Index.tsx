@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Settings } from "lucide-react";
 import AvatarFrame from "@/components/AvatarFrame";
@@ -8,7 +7,6 @@ import GoalsSection from "@/components/GoalsSection";
 import StartWorkoutButton from "@/components/StartWorkoutButton";
 import AchievementsCard from "@/components/AchievementsCard";
 import BottomNav from "@/components/BottomNav";
-import SettingsModal from "@/components/SettingsModal";
 
 const mockGoals = [
   { id: "1", icon: "workout" as const, label: "Fazer treino do dia", xp: 150 },
@@ -18,7 +16,6 @@ const mockGoals = [
 
 const Index = () => {
   const navigate = useNavigate();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -42,7 +39,7 @@ const Index = () => {
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
         {/* Settings button */}
         <button 
-          onClick={() => setIsSettingsOpen(true)}
+          onClick={() => navigate("/settings")}
           className="absolute top-6 right-4 w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
         >
           <Settings className="w-5 h-5 text-muted-foreground" />
@@ -86,9 +83,6 @@ const Index = () => {
 
       {/* Bottom Navigation */}
       <BottomNav />
-
-      {/* Settings Modal */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 };

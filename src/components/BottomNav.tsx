@@ -1,10 +1,10 @@
-import { Home, Dumbbell, Apple } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { Home, Dumbbell, Apple } from "lucide-react";
 
 const tabs = [
-  { label: "Início", icon: Home, path: "/" },
-  { label: "Treino", icon: Dumbbell, path: "/treino" },
-  { label: "Nutrição", icon: Apple, path: "/nutricao" },
+  { to: "/", label: "Início", icon: Home, end: true },
+  { to: "/treino", label: "Treino", icon: Dumbbell },
+  { to: "/nutricao", label: "Nutrição", icon: Apple },
 ];
 
 const BottomNav = () => {
@@ -13,14 +13,13 @@ const BottomNav = () => {
       <div className="max-w-md mx-auto flex items-center justify-around py-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
-          
           return (
             <NavLink
-              key={tab.path}
-              to={tab.path}
-              end={tab.path === "/"}
+              key={tab.to}
+              to={tab.to}
+              end={tab.end}
               className={({ isActive }) =>
-                `nav-item min-w-[80px] ${isActive ? 'nav-item-active' : 'nav-item-inactive'}`
+                `nav-item min-w-[80px] ${isActive ? "nav-item-active" : "nav-item-inactive"}`
               }
             >
               <Icon className="w-6 h-6" />

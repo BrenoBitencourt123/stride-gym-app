@@ -1,5 +1,5 @@
 import { Home, Dumbbell, Apple } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 type TabType = "inicio" | "treino" | "nutricao";
 
@@ -10,7 +10,6 @@ const tabs = [
 ];
 
 const BottomNav = () => {
-  const navigate = useNavigate();
   const location = useLocation();
 
   const getActiveTab = (): TabType => {
@@ -29,14 +28,14 @@ const BottomNav = () => {
           const isActive = activeTab === tab.id;
           
           return (
-            <button
+            <Link
               key={tab.id}
-              onClick={() => navigate(tab.path)}
+              to={tab.path}
               className={`nav-item min-w-[80px] ${isActive ? 'nav-item-active' : 'nav-item-inactive'}`}
             >
               <Icon className="w-6 h-6" />
               <span className="text-xs font-medium">{tab.label}</span>
-            </button>
+            </Link>
           );
         })}
       </div>

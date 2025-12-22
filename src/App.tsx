@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Treino from "./pages/Treino";
 import WorkoutDetail from "./pages/WorkoutDetail";
 import ExerciseLogging from "./pages/ExerciseLogging";
+import WorkoutSummary from "./pages/WorkoutSummary";
 import Nutricao from "./pages/Nutricao";
 import CriarDieta from "./pages/CriarDieta";
 import AdicionarAlimento from "./pages/AdicionarAlimento";
@@ -24,8 +25,9 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/treino" element={<Treino />} />
-          <Route path="/treino/:slug" element={<WorkoutDetail />} />
-          <Route path="/treino/:slug/:exerciseSlug" element={<ExerciseLogging />} />
+          <Route path="/treino/:treinoId" element={<WorkoutDetail />} />
+          <Route path="/treino/:treinoId/:exercicioId" element={<ExerciseLogging />} />
+          <Route path="/treino/:treinoId/resumo" element={<WorkoutSummary />} />
           <Route path="/nutricao" element={<Nutricao />} />
           <Route path="/nutricao/criar-dieta" element={<CriarDieta />} />
           <Route path="/nutricao/adicionar-alimento" element={<AdicionarAlimento />} />

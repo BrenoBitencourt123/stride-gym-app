@@ -1,4 +1,4 @@
-import { Dumbbell, Apple, Scale } from "lucide-react";
+import { Dumbbell, Apple, Scale, Check } from "lucide-react";
 
 interface Goal {
   id: string;
@@ -26,12 +26,35 @@ const GoalsSection = ({ goals }: GoalsSectionProps) => {
         {goals.map((goal) => {
           const Icon = iconMap[goal.icon];
           return (
-            <div key={goal.id} className="goal-item hover:bg-muted/30 transition-colors cursor-pointer">
+            <div 
+              key={goal.id} 
+              className={`goal-item transition-colors ${
+                goal.completed 
+                  ? "opacity-60" 
+                  : "hover:bg-muted/30 cursor-pointer"
+              }`}
+            >
               <div className="flex items-center gap-3">
-                <Icon className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">{goal.label}</span>
+                {goal.completed ? (
+                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                ) : (
+                  <Icon className="w-5 h-5 text-muted-foreground" />
+                )}
+                <span className={`text-sm font-medium ${
+                  goal.completed 
+                    ? "text-muted-foreground line-through" 
+                    : "text-foreground"
+                }`}>
+                  {goal.label}
+                </span>
               </div>
-              <span className="text-sm font-semibold text-primary">+{goal.xp} XP</span>
+              <span className={`text-sm font-semibold ${
+                goal.completed ? "text-muted-foreground" : "text-primary"
+              }`}>
+                +{goal.xp} XP
+              </span>
             </div>
           );
         })}

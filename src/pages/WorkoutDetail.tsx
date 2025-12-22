@@ -2,66 +2,30 @@ import { ArrowLeft, Play } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import ExerciseCard from "@/components/ExerciseCard";
 import BottomNav from "@/components/BottomNav";
-
-interface Exercise {
-  name: string;
-  sets: string;
-  reps: string;
-  rest: string;
-  slug: string;
-}
-
-interface WorkoutData {
-  title: string;
-  exercises: Exercise[];
-}
-
-const workoutDetails: Record<string, WorkoutData> = {
-  "upper-a": {
-    title: "Upper A",
-    exercises: [
-      { name: "Supino reto", sets: "4", reps: "6–10", rest: "2 min", slug: "supino-reto" },
-      { name: "Remada curvada", sets: "4", reps: "6–10", rest: "2 min", slug: "remada-curvada" },
-      { name: "Desenvolvimento", sets: "3", reps: "8–12", rest: "2 min", slug: "desenvolvimento" },
-      { name: "Bíceps barra", sets: "3", reps: "8–12", rest: "2 min", slug: "biceps-barra" },
-    ],
-  },
-  "lower-a": {
-    title: "Lower A",
-    exercises: [
-      { name: "Agachamento livre", sets: "4", reps: "6–10", rest: "3 min", slug: "agachamento-livre" },
-      { name: "Leg press", sets: "4", reps: "8–12", rest: "2 min", slug: "leg-press" },
-      { name: "Mesa flexora", sets: "3", reps: "10–12", rest: "90s", slug: "mesa-flexora" },
-      { name: "Panturrilha", sets: "4", reps: "12–15", rest: "60s", slug: "panturrilha" },
-      { name: "Abdômen", sets: "3", reps: "15–20", rest: "60s", slug: "abdomen" },
-    ],
-  },
-  "upper-b": {
-    title: "Upper B",
-    exercises: [
-      { name: "Desenv. Arnold", sets: "4", reps: "8–12", rest: "2 min", slug: "desenvolvimento-arnold" },
-      { name: "Barra fixa", sets: "4", reps: "6–10", rest: "2 min", slug: "barra-fixa" },
-      { name: "Elevação lateral", sets: "3", reps: "12–15", rest: "60s", slug: "elevacao-lateral" },
-      { name: "Tríceps testa", sets: "3", reps: "8–12", rest: "90s", slug: "triceps-testa" },
-      { name: "Rosca alternada", sets: "3", reps: "10–12", rest: "60s", slug: "rosca-alternada" },
-    ],
-  },
-  "lower-b": {
-    title: "Lower B",
-    exercises: [
-      { name: "Levantamento terra", sets: "4", reps: "5–8", rest: "3 min", slug: "levantamento-terra" },
-      { name: "Hack machine", sets: "4", reps: "8–12", rest: "2 min", slug: "hack-machine" },
-      { name: "Passada", sets: "3", reps: "10–12", rest: "90s", slug: "passada" },
-      { name: "Panturrilha", sets: "4", reps: "12–15", rest: "60s", slug: "panturrilha" },
-      { name: "Posterior", sets: "3", reps: "10–12", rest: "90s", slug: "posterior" },
-    ],
-  },
-};
+import { getWorkout } from "@/data/workouts";
+import { saveTreinoHoje } from "@/lib/storage";
 
 const WorkoutDetail = () => {
-  const { slug } = useParams();
-  const workout = workoutDetails[slug || ""] || { title: "Treino", exercises: [] };
-  const firstExerciseSlug = workout.exercises.length > 0 ? workout.exercises[0].slug : null;
+  const { treinoId } = useParams();
+  const workout = getWorkout(treinoId || "");
+  
+  if (!workout) {
+    return (
+      <div className="min-h-screen bg-background pb-32 flex items-center justify-center">
+        <p className="text-muted-foreground">Treino não encontrado</p>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  const firstExercise = workout.exercicios[0];
+
+  const handleStartWorkout = () => {
+    saveTreinoHoje({
+      treinoId: workout.id,
+      startedAt: new Date().toISOString(),
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -81,30 +45,31 @@ const WorkoutDetail = () => {
             <ArrowLeft className="w-5 h-5 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{workout.title}</h1>
-            <p className="text-sm text-muted-foreground">{workout.exercises.length} exercícios</p>
+            <h1 className="text-2xl font-bold text-foreground">{workout.titulo}</h1>
+            <p className="text-sm text-muted-foreground">{workout.exercicios.length} exercícios</p>
           </div>
         </div>
 
         {/* Exercise List */}
         <div className="space-y-3 mt-6">
-          {workout.exercises.map((exercise) => (
+          {workout.exercicios.map((exercise) => (
             <ExerciseCard
-              key={exercise.slug}
-              name={exercise.name}
-              sets={exercise.sets}
-              reps={exercise.reps}
-              rest={exercise.rest}
-              slug={exercise.slug}
-              workoutSlug={slug || ""}
+              key={exercise.id}
+              name={exercise.nome}
+              sets={String(exercise.workSetsDefault.length)}
+              reps={exercise.repsRange}
+              rest={`${Math.floor(exercise.descansoSeg / 60)} min`}
+              slug={exercise.id}
+              workoutSlug={treinoId || ""}
             />
           ))}
         </div>
 
         {/* Start Workout CTA */}
-        {firstExerciseSlug && (
+        {firstExercise && (
           <Link
-            to={`/treino/${slug}/${firstExerciseSlug}`}
+            to={`/treino/${treinoId}/${firstExercise.id}`}
+            onClick={handleStartWorkout}
             className="w-full mt-6 cta-button flex items-center justify-center gap-2"
           >
             <Play className="w-5 h-5 fill-current" />

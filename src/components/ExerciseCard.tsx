@@ -1,5 +1,5 @@
 import { Dumbbell, Play } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 interface ExerciseCardProps {
   name: string;
@@ -11,8 +11,6 @@ interface ExerciseCardProps {
 }
 
 const ExerciseCard = ({ name, sets, reps, rest, slug, workoutSlug }: ExerciseCardProps) => {
-  const navigate = useNavigate();
-
   return (
     <div className="card-glass p-4 flex items-center gap-4">
       {/* Icon */}
@@ -29,13 +27,13 @@ const ExerciseCard = ({ name, sets, reps, rest, slug, workoutSlug }: ExerciseCar
       </div>
 
       {/* Start Button */}
-      <button
-        onClick={() => navigate(`/treino/${workoutSlug}/${slug}`)}
+      <Link
+        to={`/treino/${workoutSlug}/${slug}`}
         className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary/20 text-primary text-sm font-medium hover:bg-primary/30 transition-colors flex-shrink-0"
       >
         Iniciar
         <Play className="w-3.5 h-3.5 fill-current" />
-      </button>
+      </Link>
     </div>
   );
 };

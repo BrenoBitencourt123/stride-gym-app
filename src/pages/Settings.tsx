@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, User, Mail, Lock, Ruler, Globe, Palette, Bell, FileText, Shield, AlertTriangle, Info, LogOut } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import BottomNav from "@/components/BottomNav";
 
 const Settings = () => {
-  const navigate = useNavigate();
   const [workoutReminder, setWorkoutReminder] = useState(true);
   const [mealReminder, setMealReminder] = useState(true);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
@@ -21,12 +20,12 @@ const Settings = () => {
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => navigate("/")}
+          <Link
+            to="/"
             className="p-2 -ml-2 rounded-xl hover:bg-card/50 transition-colors"
           >
             <ChevronLeft size={24} className="text-foreground" />
-          </button>
+          </Link>
           <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
         </div>
 

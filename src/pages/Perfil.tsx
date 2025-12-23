@@ -1,11 +1,22 @@
-import { ArrowLeft, Award, Flame, Dumbbell, TrendingUp, Scale, Edit2, ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useState, useRef } from "react";
+import { ArrowLeft, Award, Flame, Dumbbell, TrendingUp, Scale, Edit2, ChevronRight, Cloud, CloudOff, RefreshCw, LogOut, Download, Upload, Check, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import AvatarFrame from "@/components/AvatarFrame";
 import XPBar from "@/components/XPBar";
+import { Button } from "@/components/ui/button";
 import { getProfile, getAchievements, getTotalWorkoutsCompleted, getTotalVolume } from "@/lib/storage";
+import { exportAppState, importAppState } from "@/lib/appState";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const Perfil = () => {
+  const navigate = useNavigate();
+  const { user, syncStatus, isConfigured, logout, triggerSync } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  
   const profile = getProfile();
   const achievements = getAchievements();
   const unlockedCount = achievements.filter(a => a.unlocked).length;
@@ -18,6 +29,100 @@ const Perfil = () => {
     { icon: TrendingUp, label: "Volume total", value: `${(totalVolume / 1000).toFixed(1)}t`, color: "text-green-500" },
     { icon: Award, label: "Conquistas", value: `${unlockedCount}/${achievements.length}`, color: "text-yellow-500" },
   ];
+
+  const getSyncStatusInfo = () => {
+    switch (syncStatus) {
+      case 'synced':
+        return { icon: Check, label: 'Sincronizado', color: 'text-green-500' };
+      case 'syncing':
+        return { icon: Loader2, label: 'Sincronizando...', color: 'text-blue-500', animate: true };
+      case 'pending':
+        return { icon: Cloud, label: 'Pendente', color: 'text-yellow-500' };
+      case 'offline':
+        return { icon: CloudOff, label: 'Offline', color: 'text-muted-foreground' };
+      case 'error':
+        return { icon: CloudOff, label: 'Erro de sync', color: 'text-destructive' };
+      default:
+        return { icon: Cloud, label: 'Não sincronizado', color: 'text-muted-foreground' };
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await triggerSync();
+      toast.success('Sincronização concluída!');
+    } catch (error) {
+      toast.error('Erro ao sincronizar');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Você saiu da conta');
+    } catch (error) {
+      toast.error('Erro ao sair');
+    }
+  };
+
+  const handleExport = () => {
+    try {
+      const json = exportAppState();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `levelup-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Backup exportado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao exportar backup');
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const result = importAppState(text);
+      
+      if (result.success) {
+        toast.success('Backup importado com sucesso! Recarregando...');
+        // Trigger sync if logged in
+        if (user) {
+          await triggerSync();
+        }
+        // Reload to refresh all data
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        toast.error(result.error || 'Erro ao importar backup');
+      }
+    } catch (error) {
+      toast.error('Erro ao ler arquivo');
+    } finally {
+      setImporting(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const syncInfo = getSyncStatusInfo();
+  const SyncIcon = syncInfo.icon;
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -51,7 +156,9 @@ const Perfil = () => {
         <div className="flex flex-col items-center mb-6">
           <AvatarFrame level={profile.level} />
           <h2 className="mt-4 text-xl font-bold text-foreground">Nível {profile.level}</h2>
-          <p className="text-sm text-muted-foreground">Atleta Dedicado</p>
+          <p className="text-sm text-muted-foreground">
+            {user ? user.email : 'Atleta Dedicado'}
+          </p>
         </div>
 
         {/* XP Bar */}
@@ -61,6 +168,46 @@ const Perfil = () => {
             <span className="text-sm text-muted-foreground">{profile.xpAtual} / {profile.xpMeta}</span>
           </div>
           <XPBar current={profile.xpAtual} max={profile.xpMeta} />
+        </div>
+
+        {/* Sync Status Card */}
+        <div className="card-glass p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <SyncIcon className={`w-5 h-5 ${syncInfo.color} ${syncInfo.animate ? 'animate-spin' : ''}`} />
+              <span className={`text-sm font-medium ${syncInfo.color}`}>{syncInfo.label}</span>
+            </div>
+            {user && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSync}
+                disabled={syncing || syncStatus === 'syncing'}
+              >
+                <RefreshCw className={`w-4 h-4 mr-1 ${syncing ? 'animate-spin' : ''}`} />
+                Sincronizar
+              </Button>
+            )}
+          </div>
+          
+          {!user ? (
+            <Button
+              className="w-full"
+              onClick={() => navigate('/login')}
+            >
+              <Cloud className="w-4 h-4 mr-2" />
+              Fazer login para sincronizar
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full text-destructive hover:text-destructive"
+              onClick={handleLogout}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sair da conta
+            </Button>
+          )}
         </div>
 
         {/* Stats Grid */}
@@ -75,6 +222,40 @@ const Perfil = () => {
               </div>
             );
           })}
+        </div>
+
+        {/* Backup Section */}
+        <div className="card-glass p-4 mb-6">
+          <h3 className="text-sm font-semibold text-foreground mb-3">Backup Local</h3>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={handleExport}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Exportar
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={handleImportClick}
+              disabled={importing}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {importing ? 'Importando...' : 'Importar'}
+            </Button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+          <p className="text-xs text-muted-foreground mt-2">
+            Exporte seus dados para um arquivo JSON ou importe um backup anterior.
+          </p>
         </div>
 
         {/* Quick Links */}

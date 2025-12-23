@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/accordion";
 import { toast } from "@/hooks/use-toast";
 import { getUserWorkoutPlan, saveUserWorkoutPlan, resetUserWorkoutPlan, type UserWorkoutPlan, type UserExercise, type UserWorkout } from "@/lib/storage";
+import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 const MUSCLE_GROUPS = [
   "Peito", "Costas", "Ombros", "Bíceps", "Tríceps", "Pernas", "Posterior", "Panturrilha", "Core", "Braços"
@@ -74,6 +75,7 @@ function generateWorkoutId(title: string): string {
 
 const AjustarPlano = () => {
   const navigate = useNavigate();
+  const triggerSync = useSyncTrigger();
   const [plan, setPlan] = useState<UserWorkoutPlan | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string[]>([]);
   
@@ -104,6 +106,7 @@ const AjustarPlano = () => {
   const handleSave = () => {
     if (!plan) return;
     saveUserWorkoutPlan(plan);
+    triggerSync(); // Sync after saving workout plan
     toast({
       title: "Plano salvo!",
       description: "Suas alterações foram salvas com sucesso.",

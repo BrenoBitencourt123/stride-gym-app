@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 interface SelectedItem {
   food: FoodItem;
@@ -21,6 +22,7 @@ interface SelectedItem {
 
 const AdicionarAlimento = () => {
   const navigate = useNavigate();
+  const triggerSync = useSyncTrigger();
   const [searchParams] = useSearchParams();
   
   const mealId = searchParams.get("mealId");
@@ -84,12 +86,14 @@ const AdicionarAlimento = () => {
         addFoodToDiet(targetMeal, item.food.id, item.quantidade, item.food.unidadeBase);
       });
       toast.success(`${selectedItems.length} ${selectedItems.length === 1 ? 'item adicionado' : 'itens adicionados'} à dieta!`);
+      triggerSync();
       navigate("/nutricao/criar-dieta");
     } else {
       selectedItems.forEach(item => {
         addFoodToToday(targetMeal, item.food.id, item.quantidade, item.food.unidadeBase, "extra");
       });
       toast.success(`${selectedItems.length} ${selectedItems.length === 1 ? 'item adicionado' : 'itens adicionados'}!`);
+      triggerSync();
       navigate("/nutricao");
     }
   };

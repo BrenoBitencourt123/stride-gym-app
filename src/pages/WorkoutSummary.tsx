@@ -12,12 +12,14 @@ import {
   ExerciseSetSnapshot,
 } from "@/lib/storage";
 import BottomNav from "@/components/BottomNav";
+import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 const XP_PER_WORKOUT = 150;
 
 const WorkoutSummary = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
+  const triggerSync = useSyncTrigger();
   const workout = getUserWorkout(treinoId || treinoDoDiaId);
   const snapshotSavedRef = useRef(false);
   
@@ -58,6 +60,7 @@ const WorkoutSummary = () => {
 
   const handleConcluir = () => {
     completeTreinoDoDia(XP_PER_WORKOUT);
+    triggerSync(); // Sync after completing workout
     navigate("/");
   };
 

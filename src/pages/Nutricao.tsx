@@ -188,7 +188,8 @@ const Nutricao = () => {
         {/* Ajuste necessário card */}
         <NutritionAdjustCard 
           gaps={gaps} 
-          onFoodAdded={() => setRefreshKey(k => k + 1)} 
+          onFoodAdded={() => setRefreshKey(k => k + 1)}
+          mode="today"
         />
 
         {/* Apply diet button */}

@@ -8,14 +8,16 @@ import {
   getCompletedMealsCount 
 } from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
-import { useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import BottomNav from "@/components/BottomNav";
+import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 const XP_BASE = 80;
 const XP_BONUS = 20; // Extra se bater proteína e calorias
 
 const NutritionSummary = () => {
   const navigate = useNavigate();
+  const triggerSync = useSyncTrigger();
   const goals = getNutritionGoals();
   const today = getNutritionToday();
   const alreadyCompleted = isNutritionCompletedToday();
@@ -61,6 +63,7 @@ const NutritionSummary = () => {
     if (!alreadyCompleted) {
       completeNutritionToday(xpGained);
     }
+    triggerSync(); // Sync after completing nutrition
     navigate("/");
   };
 

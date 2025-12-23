@@ -27,6 +27,7 @@ import {
 } from "@/lib/storage";
 import { foods, FoodItem } from "@/data/foods";
 import { toast } from "sonner";
+import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 const Progresso = () => {
   const [activeTab, setActiveTab] = useState("forca");
@@ -35,6 +36,7 @@ const Progresso = () => {
   const [nutritionPeriod, setNutritionPeriod] = useState<string>("7");
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [newWeight, setNewWeight] = useState("");
+  const triggerSync = useSyncTrigger();
 
   // Exercícios disponíveis
   const exercisesWithHistory = useMemo(() => getExercisesWithHistory(), []);
@@ -106,6 +108,7 @@ const Progresso = () => {
     setShowWeightModal(false);
     setNewWeight("");
     toast.success("Peso registrado!");
+    triggerSync(); // Sync after saving weight
   };
 
   return (

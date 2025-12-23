@@ -17,9 +17,11 @@ import { toast } from "sonner";
 import EditFoodModal from "@/components/nutrition/EditFoodModal";
 import GoalsExplainModal from "@/components/nutrition/GoalsExplainModal";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 const Nutricao = () => {
   const navigate = useNavigate();
+  const triggerSync = useSyncTrigger();
   const [refreshKey, setRefreshKey] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [editingItem, setEditingItem] = useState<{
@@ -118,6 +120,7 @@ const Nutricao = () => {
   const handleToggleConsumed = (mealId: string, entryId: string) => {
     toggleFoodConsumed(mealId, entryId);
     setRefreshKey(k => k + 1);
+    triggerSync(); // Sync when food is consumed
   };
 
   const handleEditItem = (mealId: string, entryId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop") => {

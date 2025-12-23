@@ -111,7 +111,8 @@ export interface TodayEntry {
   unidade: "g" | "un" | "ml" | "scoop";
   source: "diet" | "extra" | "auto";
   createdAt: number;
-  checked?: boolean;
+  planned: boolean;
+  consumed: boolean;
 }
 
 export interface TodayMeal {
@@ -336,7 +337,8 @@ export function getNutritionToday(): NutritionToday {
           unidade: item.unidade,
           source: "diet" as const,
           createdAt: Date.now(),
-          checked: false,
+          planned: true,
+          consumed: false,
         })) || [];
         return { ...m, entries };
       }),
@@ -356,38 +358,41 @@ export function addFoodToToday(mealId: string, foodId: string, quantidade: numbe
   const today = getNutritionToday();
   const meal = today.meals.find(m => m.id === mealId);
   
+  // Extras e auto entram como consumidos automaticamente
+  const isPlanned = source === "diet";
+  const isConsumed = source !== "diet"; // extras e auto já são consumidos
+  
+  const newEntry: TodayEntry = {
+    id: crypto.randomUUID(),
+    foodId,
+    quantidade,
+    unidade,
+    source,
+    createdAt: Date.now(),
+    planned: isPlanned,
+    consumed: isConsumed,
+  };
+  
   if (!meal) {
     // Se a refeição não existe, criar
     today.meals.push({
       id: mealId,
       nome: mealId,
-      entries: [{
-        id: crypto.randomUUID(),
-        foodId,
-        quantidade,
-        unidade,
-        source,
-        createdAt: Date.now(),
-      }],
+      entries: [newEntry],
     });
   } else {
-    meal.entries.push({
-      id: crypto.randomUUID(),
-      foodId,
-      quantidade,
-      unidade,
-      source,
-      createdAt: Date.now(),
-    });
+    meal.entries.push(newEntry);
   }
   
   saveNutritionToday(today);
   
-  // Marcar quest como feita
-  const quests = getQuests();
-  if (!quests.registrarAlimentacaoDone) {
-    quests.registrarAlimentacaoDone = true;
-    saveQuests(quests);
+  // Marcar quest como feita se consumiu algo
+  if (isConsumed) {
+    const quests = getQuests();
+    if (!quests.registrarAlimentacaoDone) {
+      quests.registrarAlimentacaoDone = true;
+      saveQuests(quests);
+    }
   }
 }
 
@@ -470,19 +475,14 @@ export function applyDietToToday(): void {
           unidade: item.unidade,
           source: "diet",
           createdAt: Date.now(),
+          planned: true,
+          consumed: false,
         });
       }
     }
   }
   
   saveNutritionToday(today);
-  
-  // Marcar quest como feita
-  if (today.meals.some(m => m.entries.length > 0)) {
-    const quests = getQuests();
-    quests.registrarAlimentacaoDone = true;
-    saveQuests(quests);
-  }
 }
 
 export function hasDietSaved(): boolean {
@@ -495,22 +495,43 @@ export function isTodayEmpty(): boolean {
   return today.meals.every(m => m.entries.length === 0);
 }
 
-export function toggleFoodChecked(mealId: string, entryId: string): void {
+export function toggleFoodConsumed(mealId: string, entryId: string): void {
   const today = getNutritionToday();
   const meal = today.meals.find(m => m.id === mealId);
   
   if (meal) {
     const entry = meal.entries.find(e => e.id === entryId);
     if (entry) {
-      entry.checked = !entry.checked;
+      entry.consumed = !entry.consumed;
       saveNutritionToday(today);
+      
+      // Marcar quest se consumiu algo
+      if (entry.consumed) {
+        const quests = getQuests();
+        if (!quests.registrarAlimentacaoDone) {
+          quests.registrarAlimentacaoDone = true;
+          saveQuests(quests);
+        }
+      }
     }
   }
 }
 
+// Refeição completa quando todos os itens PLANEJADOS foram consumidos
 export function isMealComplete(mealId: string): boolean {
   const today = getNutritionToday();
   const meal = today.meals.find(m => m.id === mealId);
-  if (!meal || meal.entries.length === 0) return false;
-  return meal.entries.every(e => e.checked === true);
+  if (!meal) return false;
+  
+  const plannedItems = meal.entries.filter(e => e.planned);
+  if (plannedItems.length === 0) return false;
+  
+  return plannedItems.every(e => e.consumed === true);
+}
+
+// Calcula totais planejados (dieta) para uma refeição
+export function getPlannedTotals(): { kcal: number; p: number; c: number; g: number } {
+  // Import circular - precisamos acessar foods de outra forma
+  // Esta função será implementada no componente
+  return { kcal: 0, p: 0, c: 0, g: 0 };
 }

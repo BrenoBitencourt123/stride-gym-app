@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Plus, HelpCircle, Check, CheckCircle2 } from "lucide-react";
+import { Plus, HelpCircle, CheckCircle2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { 
   getNutritionGoals, 
@@ -7,7 +7,7 @@ import {
   hasDietSaved, 
   removeFoodFromToday,
   updateFoodInToday,
-  toggleFoodChecked
+  toggleFoodConsumed
 } from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
 import { useMemo, useState } from "react";
@@ -31,13 +31,13 @@ const Nutricao = () => {
   const today = getNutritionToday();
   const dietExists = hasDietSaved();
 
-  // Calcula totais do dia (apenas itens marcados)
-  const totals = useMemo(() => {
+  // Calcula totais CONSUMIDOS do dia
+  const consumedTotals = useMemo(() => {
     let kcal = 0, p = 0, c = 0, g = 0;
     
     for (const meal of today.meals) {
       for (const entry of meal.entries) {
-        if (!entry.checked) continue; // Só conta os marcados
+        if (!entry.consumed) continue; // Só conta os consumidos
         const food = getFoodById(entry.foodId);
         if (food) {
           const fator = entry.quantidade / food.porcaoBase;
@@ -57,14 +57,40 @@ const Nutricao = () => {
     };
   }, [today, refreshKey]);
 
-  // Calcula kcal por refeição (apenas itens marcados)
-  const getMealKcal = (mealId: string, onlyChecked: boolean = false) => {
+  // Calcula totais PLANEJADOS do dia (dieta)
+  const plannedTotals = useMemo(() => {
+    let kcal = 0, p = 0, c = 0, g = 0;
+    
+    for (const meal of today.meals) {
+      for (const entry of meal.entries) {
+        if (!entry.planned) continue; // Só conta os planejados
+        const food = getFoodById(entry.foodId);
+        if (food) {
+          const fator = entry.quantidade / food.porcaoBase;
+          kcal += food.kcal * fator;
+          p += food.p * fator;
+          c += food.c * fator;
+          g += food.g * fator;
+        }
+      }
+    }
+    
+    return {
+      kcal: Math.round(kcal),
+      p: Math.round(p),
+      c: Math.round(c),
+      g: Math.round(g),
+    };
+  }, [today, refreshKey]);
+
+  // Calcula kcal por refeição
+  const getMealKcal = (mealId: string, onlyConsumed: boolean = false) => {
     const meal = today.meals.find(m => m.id === mealId);
     if (!meal) return 0;
     
     let total = 0;
     for (const entry of meal.entries) {
-      if (onlyChecked && !entry.checked) continue;
+      if (onlyConsumed && !entry.consumed) continue;
       const food = getFoodById(entry.foodId);
       if (food) {
         const fator = entry.quantidade / food.porcaoBase;
@@ -74,15 +100,19 @@ const Nutricao = () => {
     return Math.round(total);
   };
 
-  // Verifica se refeição está completa
+  // Refeição completa quando todos os itens PLANEJADOS foram consumidos
   const isMealComplete = (mealId: string) => {
     const meal = today.meals.find(m => m.id === mealId);
-    if (!meal || meal.entries.length === 0) return false;
-    return meal.entries.every(e => e.checked === true);
+    if (!meal) return false;
+    
+    const plannedItems = meal.entries.filter(e => e.planned);
+    if (plannedItems.length === 0) return false;
+    
+    return plannedItems.every(e => e.consumed === true);
   };
 
-  const handleToggleCheck = (mealId: string, entryId: string) => {
-    toggleFoodChecked(mealId, entryId);
+  const handleToggleConsumed = (mealId: string, entryId: string) => {
+    toggleFoodConsumed(mealId, entryId);
     setRefreshKey(k => k + 1);
   };
 
@@ -109,11 +139,11 @@ const Nutricao = () => {
   // Verifica se tem algum item no dia
   const hasAnyItems = today.meals.some(m => m.entries.length > 0);
 
-  // Progress percentages
-  const kcalPct = Math.min((totals.kcal / goals.kcalTarget) * 100, 100);
-  const pPct = Math.min((totals.p / goals.pTarget) * 100, 100);
-  const cPct = Math.min((totals.c / goals.cTarget) * 100, 100);
-  const gPct = Math.min((totals.g / goals.gTarget) * 100, 100);
+  // Progress percentages (baseado no consumido)
+  const kcalPct = Math.min((consumedTotals.kcal / goals.kcalTarget) * 100, 100);
+  const pPct = Math.min((consumedTotals.p / goals.pTarget) * 100, 100);
+  const cPct = Math.min((consumedTotals.c / goals.cTarget) * 100, 100);
+  const gPct = Math.min((consumedTotals.g / goals.gTarget) * 100, 100);
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -139,12 +169,19 @@ const Nutricao = () => {
             </button>
           </div>
           
-          <div className="flex items-center justify-between mt-1 mb-3">
+          <div className="flex items-center justify-between mt-1 mb-1">
             <h2 className="text-xl font-semibold text-foreground">Calorias</h2>
             <span className="text-lg font-medium text-foreground">
-              {totals.kcal} / {goals.kcalTarget} kcal
+              {consumedTotals.kcal} / {goals.kcalTarget} kcal
             </span>
           </div>
+          
+          {/* Linha sutil do planejado */}
+          {plannedTotals.kcal > 0 && (
+            <p className="text-xs text-muted-foreground mb-2">
+              Planejado: {plannedTotals.kcal} kcal
+            </p>
+          )}
 
           {/* Progress bar */}
           <div className="h-2 rounded-full overflow-hidden bg-muted/30 mb-3">
@@ -159,7 +196,7 @@ const Nutricao = () => {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-pink-500">Proteína</span>
-                <span className="text-muted-foreground">{totals.p}g / {goals.pTarget}g</span>
+                <span className="text-muted-foreground">{consumedTotals.p}g / {goals.pTarget}g</span>
               </div>
               <div className="w-20 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-pink-500 transition-all" style={{ width: `${pPct}%` }} />
@@ -168,7 +205,7 @@ const Nutricao = () => {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-yellow-400">Carbs</span>
-                <span className="text-muted-foreground">{totals.c}g / {goals.cTarget}g</span>
+                <span className="text-muted-foreground">{consumedTotals.c}g / {goals.cTarget}g</span>
               </div>
               <div className="w-20 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-yellow-400 transition-all" style={{ width: `${cPct}%` }} />
@@ -177,7 +214,7 @@ const Nutricao = () => {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-blue-400">Gordura</span>
-                <span className="text-muted-foreground">{totals.g}g / {goals.gTarget}g</span>
+                <span className="text-muted-foreground">{consumedTotals.g}g / {goals.gTarget}g</span>
               </div>
               <div className="w-20 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-400 transition-all" style={{ width: `${gPct}%` }} />
@@ -253,18 +290,21 @@ const Nutricao = () => {
                             className="flex items-center gap-2 text-sm"
                           >
                             <Checkbox
-                              checked={entry.checked || false}
-                              onCheckedChange={() => handleToggleCheck(meal.id, entry.id)}
+                              checked={entry.consumed || false}
+                              onCheckedChange={() => handleToggleConsumed(meal.id, entry.id)}
                               className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                             />
                             <button
                               onClick={() => handleEditItem(meal.id, entry.id, entry.foodId, entry.quantidade, entry.unidade)}
                               className={`flex-1 flex items-center justify-between hover:bg-muted/30 rounded-lg p-1.5 -my-0.5 transition-colors text-left ${
-                                entry.checked ? 'line-through opacity-60' : ''
+                                entry.consumed ? 'line-through opacity-60' : ''
                               }`}
                             >
                               <span className="text-muted-foreground">
                                 {food.nome} — {entry.quantidade}{entry.unidade === "un" ? " un" : entry.unidade === "scoop" ? " scoop" : ` ${entry.unidade}`}
+                                {!entry.planned && (
+                                  <span className="ml-1 text-xs text-primary/70">(extra)</span>
+                                )}
                               </span>
                               <span className="text-muted-foreground">{entryKcal} kcal</span>
                             </button>

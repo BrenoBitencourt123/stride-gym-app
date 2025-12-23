@@ -34,6 +34,9 @@ export const STORAGE_KEYS = {
   TREINO_PROGRESSO: "levelup.treinoProgresso",
   QUESTS: "levelup.quests",
   TREINO_HOJE: "levelup.treinoHoje",
+  NUTRITION_GOALS: "levelup.nutrition.goals",
+  NUTRITION_DIET: "levelup.nutrition.diet",
+  NUTRITION_TODAY: "levelup.nutrition.today",
 } as const;
 
 // Tipos de dados persistidos
@@ -77,6 +80,50 @@ export interface TreinoHoje {
   completedAt?: string;
 }
 
+// ======= NUTRITION TYPES =======
+export interface NutritionGoals {
+  kcalTarget: number;
+  pTarget: number;
+  cTarget: number;
+  gTarget: number;
+}
+
+export interface DietEntry {
+  foodId: string;
+  quantidade: number;
+  unidade: "g" | "un" | "ml" | "scoop";
+}
+
+export interface DietMeal {
+  id: string;
+  nome: string;
+  items: DietEntry[];
+}
+
+export interface NutritionDiet {
+  meals: DietMeal[];
+}
+
+export interface TodayEntry {
+  id: string;
+  foodId: string;
+  quantidade: number;
+  unidade: "g" | "un" | "ml" | "scoop";
+  source: "diet" | "extra";
+  createdAt: number;
+}
+
+export interface TodayMeal {
+  id: string;
+  nome: string;
+  entries: TodayEntry[];
+}
+
+export interface NutritionToday {
+  dateKey: string;
+  meals: TodayMeal[];
+}
+
 // Valores padrão
 export const DEFAULT_PROFILE: Profile = {
   xpAtual: 1240,
@@ -92,6 +139,20 @@ export const DEFAULT_QUESTS: Quests = {
   registrarAlimentacaoDone: false,
   registrarPesoDone: false,
 };
+
+export const DEFAULT_NUTRITION_GOALS: NutritionGoals = {
+  kcalTarget: 2050,
+  pTarget: 160,
+  cTarget: 200,
+  gTarget: 65,
+};
+
+export const DEFAULT_MEALS: TodayMeal[] = [
+  { id: "cafe", nome: "Café da manhã", entries: [] },
+  { id: "almoco", nome: "Almoço", entries: [] },
+  { id: "lanche", nome: "Lanche", entries: [] },
+  { id: "jantar", nome: "Jantar", entries: [] },
+];
 
 // Funções de acesso específicas
 export function getProfile(): Profile {
@@ -231,4 +292,167 @@ export function getWorkoutSummaryStats(treinoId: string): { completedSets: numbe
   }
   
   return { completedSets, totalSets, totalVolume: Math.round(totalVolume) };
+}
+
+// ======= NUTRITION FUNCTIONS =======
+
+export function getNutritionGoals(): NutritionGoals {
+  return load(STORAGE_KEYS.NUTRITION_GOALS, DEFAULT_NUTRITION_GOALS);
+}
+
+export function saveNutritionGoals(goals: NutritionGoals): void {
+  save(STORAGE_KEYS.NUTRITION_GOALS, goals);
+}
+
+export function getNutritionDiet(): NutritionDiet | null {
+  return load<NutritionDiet | null>(STORAGE_KEYS.NUTRITION_DIET, null);
+}
+
+export function saveNutritionDiet(diet: NutritionDiet): void {
+  save(STORAGE_KEYS.NUTRITION_DIET, diet);
+}
+
+function getDateKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+export function getNutritionToday(): NutritionToday {
+  const stored = load<NutritionToday | null>(STORAGE_KEYS.NUTRITION_TODAY, null);
+  const todayKey = getDateKey();
+  
+  // Se não existe ou é outro dia, resetar
+  if (!stored || stored.dateKey !== todayKey) {
+    const fresh: NutritionToday = {
+      dateKey: todayKey,
+      meals: DEFAULT_MEALS.map(m => ({ ...m, entries: [] })),
+    };
+    save(STORAGE_KEYS.NUTRITION_TODAY, fresh);
+    return fresh;
+  }
+  
+  return stored;
+}
+
+export function saveNutritionToday(today: NutritionToday): void {
+  save(STORAGE_KEYS.NUTRITION_TODAY, today);
+}
+
+export function addFoodToToday(mealId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop", source: "diet" | "extra" = "extra"): void {
+  const today = getNutritionToday();
+  const meal = today.meals.find(m => m.id === mealId);
+  
+  if (!meal) {
+    // Se a refeição não existe, criar
+    today.meals.push({
+      id: mealId,
+      nome: mealId,
+      entries: [{
+        id: crypto.randomUUID(),
+        foodId,
+        quantidade,
+        unidade,
+        source,
+        createdAt: Date.now(),
+      }],
+    });
+  } else {
+    meal.entries.push({
+      id: crypto.randomUUID(),
+      foodId,
+      quantidade,
+      unidade,
+      source,
+      createdAt: Date.now(),
+    });
+  }
+  
+  saveNutritionToday(today);
+  
+  // Marcar quest como feita
+  const quests = getQuests();
+  if (!quests.registrarAlimentacaoDone) {
+    quests.registrarAlimentacaoDone = true;
+    saveQuests(quests);
+  }
+}
+
+export function addFoodToDiet(mealId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop"): void {
+  let diet = getNutritionDiet();
+  
+  if (!diet) {
+    diet = {
+      meals: DEFAULT_MEALS.map(m => ({ id: m.id, nome: m.nome, items: [] })),
+    };
+  }
+  
+  const meal = diet.meals.find(m => m.id === mealId);
+  if (meal) {
+    meal.items.push({ foodId, quantidade, unidade });
+  }
+  
+  saveNutritionDiet(diet);
+}
+
+export function removeFoodFromDiet(mealId: string, index: number): void {
+  const diet = getNutritionDiet();
+  if (!diet) return;
+  
+  const meal = diet.meals.find(m => m.id === mealId);
+  if (meal && meal.items[index]) {
+    meal.items.splice(index, 1);
+    saveNutritionDiet(diet);
+  }
+}
+
+export function removeFoodFromToday(mealId: string, entryId: string): void {
+  const today = getNutritionToday();
+  const meal = today.meals.find(m => m.id === mealId);
+  
+  if (meal) {
+    meal.entries = meal.entries.filter(e => e.id !== entryId);
+    saveNutritionToday(today);
+  }
+}
+
+export function applyDietToToday(): void {
+  const diet = getNutritionDiet();
+  if (!diet) return;
+  
+  const today = getNutritionToday();
+  
+  for (const dietMeal of diet.meals) {
+    const todayMeal = today.meals.find(m => m.id === dietMeal.id);
+    if (todayMeal) {
+      for (const item of dietMeal.items) {
+        todayMeal.entries.push({
+          id: crypto.randomUUID(),
+          foodId: item.foodId,
+          quantidade: item.quantidade,
+          unidade: item.unidade,
+          source: "diet",
+          createdAt: Date.now(),
+        });
+      }
+    }
+  }
+  
+  saveNutritionToday(today);
+  
+  // Marcar quest como feita
+  if (today.meals.some(m => m.entries.length > 0)) {
+    const quests = getQuests();
+    quests.registrarAlimentacaoDone = true;
+    saveQuests(quests);
+  }
+}
+
+export function hasDietSaved(): boolean {
+  const diet = getNutritionDiet();
+  return diet !== null && diet.meals.some(m => m.items.length > 0);
+}
+
+export function isTodayEmpty(): boolean {
+  const today = getNutritionToday();
+  return today.meals.every(m => m.entries.length === 0);
 }

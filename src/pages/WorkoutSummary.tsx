@@ -1,12 +1,14 @@
 import { Trophy, ArrowRight, CheckCircle, Dumbbell } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useRef } from "react";
-import { getWorkout, treinoDoDiaId } from "@/data/workouts";
+import { treinoDoDiaId } from "@/data/workouts";
 import { 
+  getUserWorkout,
   completeTreinoDoDia, 
   getWorkoutSummaryStats, 
   getTreinoProgresso,
   saveExerciseSnapshot,
+  saveWorkoutCompleted,
   ExerciseSetSnapshot,
 } from "@/lib/storage";
 import BottomNav from "@/components/BottomNav";
@@ -16,7 +18,7 @@ const XP_PER_WORKOUT = 150;
 const WorkoutSummary = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
-  const workout = getWorkout(treinoId || treinoDoDiaId);
+  const workout = getUserWorkout(treinoId || treinoDoDiaId);
   const snapshotSavedRef = useRef(false);
   
   const { completedSets, totalSets, totalVolume } = getWorkoutSummaryStats(treinoId || treinoDoDiaId);
@@ -49,7 +51,10 @@ const WorkoutSummary = () => {
         }
       }
     }
-  }, [workout, treinoId]);
+    
+    // Save workout completed record
+    saveWorkoutCompleted(workout.id, totalVolume);
+  }, [workout, treinoId, totalVolume]);
 
   const handleConcluir = () => {
     completeTreinoDoDia(XP_PER_WORKOUT);

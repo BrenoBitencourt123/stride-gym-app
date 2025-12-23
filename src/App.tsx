@@ -14,6 +14,8 @@ import AdicionarAlimento from "./pages/AdicionarAlimento";
 import NutritionSummary from "./pages/NutritionSummary";
 import SettingsPage from "./pages/Settings";
 import AjustarPlano from "./pages/AjustarPlano";
+import Conquistas from "./pages/Conquistas";
+import Perfil from "./pages/Perfil";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +38,8 @@ const App = () => (
           <Route path="/nutricao/adicionar-alimento" element={<AdicionarAlimento />} />
           <Route path="/nutricao/resumo" element={<NutritionSummary />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/conquistas" element={<Conquistas />} />
+          <Route path="/perfil" element={<Perfil />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

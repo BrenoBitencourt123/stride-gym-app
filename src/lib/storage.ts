@@ -41,6 +41,8 @@ export const STORAGE_KEYS = {
   EXERCISE_HISTORY: "levelup.exerciseHistory",
   PROGRESSION_SUGGESTIONS: "levelup.progressionSuggestions",
   USER_WORKOUT_PLAN: "levelup.userWorkoutPlan",
+  WEIGHT_HISTORY: "levelup.weightHistory",
+  WORKOUTS_COMPLETED: "levelup.workoutsCompleted",
 } as const;
 
 // Tipos de dados persistidos
@@ -950,4 +952,261 @@ export function isUserLastExercise(workoutId: string, exerciseId: string): boole
   
   const lastExercise = workout.exercicios[workout.exercicios.length - 1];
   return lastExercise?.id === exerciseId;
+}
+
+// ======= WEIGHT HISTORY =======
+
+export interface WeightEntry {
+  weight: number;
+  timestamp: string;
+}
+
+export function getWeightHistory(): WeightEntry[] {
+  return load(STORAGE_KEYS.WEIGHT_HISTORY, []);
+}
+
+export function saveWeight(weight: number): void {
+  const history = getWeightHistory();
+  history.unshift({
+    weight,
+    timestamp: new Date().toISOString(),
+  });
+  save(STORAGE_KEYS.WEIGHT_HISTORY, history.slice(0, 100)); // Keep last 100 entries
+  
+  // Mark quest as done
+  const quests = getQuests();
+  quests.registrarPesoDone = true;
+  saveQuests(quests);
+}
+
+export function hasWeightThisWeek(): boolean {
+  const history = getWeightHistory();
+  if (history.length === 0) return false;
+  
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  const lastEntry = new Date(history[0].timestamp);
+  return lastEntry >= startOfWeek;
+}
+
+// ======= WORKOUTS COMPLETED =======
+
+export interface WorkoutCompleted {
+  workoutId: string;
+  timestamp: string;
+  totalVolume: number;
+}
+
+export function getWorkoutsCompleted(): WorkoutCompleted[] {
+  return load(STORAGE_KEYS.WORKOUTS_COMPLETED, []);
+}
+
+export function saveWorkoutCompleted(workoutId: string, totalVolume: number): void {
+  const completed = getWorkoutsCompleted();
+  completed.unshift({
+    workoutId,
+    timestamp: new Date().toISOString(),
+    totalVolume,
+  });
+  save(STORAGE_KEYS.WORKOUTS_COMPLETED, completed);
+}
+
+export function getTotalWorkoutsCompleted(): number {
+  return getWorkoutsCompleted().length;
+}
+
+export function getTotalVolume(): number {
+  return getWorkoutsCompleted().reduce((sum, w) => sum + w.totalVolume, 0);
+}
+
+// Count PRs (simplified: count unique exercises that have history)
+export function getPRsCount(): number {
+  const history = getExerciseHistory();
+  return Object.keys(history).length;
+}
+
+// ======= ACHIEVEMENTS SYSTEM =======
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  xp: number;
+  unlocked: boolean;
+  progress?: number;
+  target?: number;
+}
+
+export function getAchievements(): Achievement[] {
+  const profile = getProfile();
+  const totalWorkouts = getTotalWorkoutsCompleted();
+  const prsCount = getPRsCount();
+  
+  return [
+    {
+      id: "streak-3",
+      name: "Consistente",
+      description: "Mantenha streak de 3 dias",
+      icon: "flame",
+      color: "from-orange-500/20 to-orange-700/20",
+      xp: 50,
+      unlocked: profile.streakDias >= 3,
+      progress: Math.min(profile.streakDias, 3),
+      target: 3,
+    },
+    {
+      id: "streak-7",
+      name: "Semana de Fogo",
+      description: "Mantenha streak de 7 dias",
+      icon: "flame",
+      color: "from-orange-500/20 to-red-700/20",
+      xp: 150,
+      unlocked: profile.streakDias >= 7,
+      progress: Math.min(profile.streakDias, 7),
+      target: 7,
+    },
+    {
+      id: "streak-30",
+      name: "Máquina Imparável",
+      description: "Mantenha streak de 30 dias",
+      icon: "crown",
+      color: "from-yellow-500/20 to-amber-700/20",
+      xp: 500,
+      unlocked: profile.streakDias >= 30,
+      progress: Math.min(profile.streakDias, 30),
+      target: 30,
+    },
+    {
+      id: "workouts-1",
+      name: "Primeiro Treino",
+      description: "Complete seu primeiro treino",
+      icon: "dumbbell",
+      color: "from-blue-500/20 to-blue-700/20",
+      xp: 50,
+      unlocked: totalWorkouts >= 1,
+      progress: Math.min(totalWorkouts, 1),
+      target: 1,
+    },
+    {
+      id: "workouts-10",
+      name: "Dedicado",
+      description: "Complete 10 treinos",
+      icon: "dumbbell",
+      color: "from-blue-500/20 to-indigo-700/20",
+      xp: 200,
+      unlocked: totalWorkouts >= 10,
+      progress: Math.min(totalWorkouts, 10),
+      target: 10,
+    },
+    {
+      id: "workouts-50",
+      name: "Atleta",
+      description: "Complete 50 treinos",
+      icon: "trophy",
+      color: "from-purple-500/20 to-purple-700/20",
+      xp: 500,
+      unlocked: totalWorkouts >= 50,
+      progress: Math.min(totalWorkouts, 50),
+      target: 50,
+    },
+    {
+      id: "workouts-100",
+      name: "Lenda",
+      description: "Complete 100 treinos",
+      icon: "crown",
+      color: "from-yellow-500/20 to-orange-700/20",
+      xp: 1000,
+      unlocked: totalWorkouts >= 100,
+      progress: Math.min(totalWorkouts, 100),
+      target: 100,
+    },
+    {
+      id: "prs-1",
+      name: "Primeiro PR",
+      description: "Registre seu primeiro exercício",
+      icon: "trending",
+      color: "from-green-500/20 to-green-700/20",
+      xp: 50,
+      unlocked: prsCount >= 1,
+      progress: Math.min(prsCount, 1),
+      target: 1,
+    },
+    {
+      id: "prs-5",
+      name: "Progredindo",
+      description: "Registre 5 exercícios diferentes",
+      icon: "trending",
+      color: "from-green-500/20 to-emerald-700/20",
+      xp: 150,
+      unlocked: prsCount >= 5,
+      progress: Math.min(prsCount, 5),
+      target: 5,
+    },
+    {
+      id: "prs-10",
+      name: "Mestre da Progressão",
+      description: "Registre 10 exercícios diferentes",
+      icon: "star",
+      color: "from-amber-500/20 to-yellow-700/20",
+      xp: 300,
+      unlocked: prsCount >= 10,
+      progress: Math.min(prsCount, 10),
+      target: 10,
+    },
+    {
+      id: "level-5",
+      name: "Nível 5",
+      description: "Alcance o nível 5",
+      icon: "zap",
+      color: "from-cyan-500/20 to-cyan-700/20",
+      xp: 100,
+      unlocked: profile.level >= 5,
+      progress: Math.min(profile.level, 5),
+      target: 5,
+    },
+    {
+      id: "level-10",
+      name: "Nível 10",
+      description: "Alcance o nível 10",
+      icon: "zap",
+      color: "from-indigo-500/20 to-indigo-700/20",
+      xp: 250,
+      unlocked: profile.level >= 10,
+      progress: Math.min(profile.level, 10),
+      target: 10,
+    },
+  ];
+}
+
+// Check if nutrition quest should be marked done (at least 1 consumed item today)
+export function checkNutritionQuestStatus(): boolean {
+  const today = getNutritionToday();
+  for (const meal of today.meals) {
+    for (const entry of meal.entries) {
+      if (entry.consumed) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Sync quests status based on real data
+export function syncQuestsStatus(): void {
+  const quests = getQuests();
+  
+  // Check nutrition
+  quests.registrarAlimentacaoDone = checkNutritionQuestStatus();
+  
+  // Check weight (weekly)
+  quests.registrarPesoDone = hasWeightThisWeek();
+  
+  // Treino do dia is already updated when workout is completed
+  
+  saveQuests(quests);
 }

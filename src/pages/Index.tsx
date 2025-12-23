@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Settings, User, TrendingUp } from "lucide-react";
+import { Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import AvatarFrame from "@/components/AvatarFrame";
 import XPBar from "@/components/XPBar";
@@ -70,14 +70,8 @@ const Index = () => {
 
       {/* Content */}
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
-        {/* Top buttons */}
-        <div className="absolute top-6 right-4 flex items-center gap-2">
-          <Link 
-            to="/perfil"
-            className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
-          >
-            <User className="w-5 h-5 text-muted-foreground" />
-          </Link>
+        {/* Settings button */}
+        <div className="absolute top-6 right-4">
           <Link 
             to="/settings"
             className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"

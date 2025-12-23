@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Settings, User } from "lucide-react";
+import { Settings, User, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
 import AvatarFrame from "@/components/AvatarFrame";
 import XPBar from "@/components/XPBar";
 import StatsRow from "@/components/StatsRow";
@@ -8,7 +9,6 @@ import StartWorkoutButton from "@/components/StartWorkoutButton";
 import AchievementsCard from "@/components/AchievementsCard";
 import BottomNav from "@/components/BottomNav";
 import { getProfile, getQuests, syncQuestsStatus, getAchievements } from "@/lib/storage";
-import { useEffect, useState } from "react";
 
 const Index = () => {
   const [profile, setProfile] = useState(getProfile());

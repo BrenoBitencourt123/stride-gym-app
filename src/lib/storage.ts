@@ -1210,3 +1210,255 @@ export function syncQuestsStatus(): void {
   
   saveQuests(quests);
 }
+
+// ======= PROGRESS ANALYTICS =======
+
+// Calcula e1RM usando fórmula Epley: peso * (1 + reps/30)
+export function calculateE1RM(kg: number, reps: number): number {
+  if (reps <= 0 || kg <= 0) return 0;
+  return Math.round(kg * (1 + reps / 30));
+}
+
+// Retorna dados de e1RM por sessão para um exercício
+export interface E1RMDataPoint {
+  date: string;
+  dateLabel: string;
+  e1rm: number;
+  kg: number;
+  reps: number;
+}
+
+export function getE1RMHistory(exerciseId: string): E1RMDataPoint[] {
+  const history = getExerciseHistory();
+  const snapshots = history[exerciseId];
+  
+  if (!snapshots || snapshots.length === 0) return [];
+  
+  return snapshots
+    .map(snapshot => {
+      // Melhor série (maior e1RM)
+      let best = { kg: 0, reps: 0, e1rm: 0 };
+      for (const set of snapshot.workSets) {
+        const e1rm = calculateE1RM(set.kg, set.reps);
+        if (e1rm > best.e1rm) {
+          best = { kg: set.kg, reps: set.reps, e1rm };
+        }
+      }
+      
+      const date = new Date(snapshot.timestamp);
+      return {
+        date: snapshot.timestamp,
+        dateLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        e1rm: best.e1rm,
+        kg: best.kg,
+        reps: best.reps,
+      };
+    })
+    .reverse(); // Ordem cronológica
+}
+
+// Volume semanal
+export interface WeeklyVolumeDataPoint {
+  weekLabel: string;
+  weekStart: string;
+  volume: number;
+}
+
+export function getWeeklyVolume(days: number = 90): WeeklyVolumeDataPoint[] {
+  const completed = getWorkoutsCompleted();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  
+  // Agrupar por semana
+  const weekMap = new Map<string, number>();
+  
+  for (const workout of completed) {
+    const date = new Date(workout.timestamp);
+    if (date < cutoff) continue;
+    
+    // Início da semana (domingo)
+    const startOfWeek = new Date(date);
+    startOfWeek.setDate(date.getDate() - date.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const weekKey = startOfWeek.toISOString().split("T")[0];
+    
+    weekMap.set(weekKey, (weekMap.get(weekKey) || 0) + workout.totalVolume);
+  }
+  
+  // Converter para array ordenado
+  return Array.from(weekMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([weekStart, volume]) => {
+      const date = new Date(weekStart);
+      return {
+        weekLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        weekStart,
+        volume,
+      };
+    });
+}
+
+// Treinos nos últimos N dias
+export function getWorkoutsInPeriod(days: number): number {
+  const completed = getWorkoutsCompleted();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  
+  return completed.filter(w => new Date(w.timestamp) >= cutoff).length;
+}
+
+// Consistência (% dias com treino nos últimos N dias)
+export function getConsistency(days: number): number {
+  const workouts = getWorkoutsInPeriod(days);
+  // Considera 4 treinos por semana como 100%
+  const expectedWorkouts = Math.round((days / 7) * 4);
+  return Math.min(Math.round((workouts / expectedWorkouts) * 100), 100);
+}
+
+// Lista de exercícios com histórico
+export function getExercisesWithHistory(): { id: string; name: string }[] {
+  const history = getExerciseHistory();
+  const plan = getUserWorkoutPlan();
+  
+  const exerciseMap = new Map<string, string>();
+  
+  // Mapear IDs para nomes do plano do usuário
+  for (const workout of plan.workouts) {
+    for (const exercise of workout.exercicios) {
+      if (history[exercise.id]) {
+        exerciseMap.set(exercise.id, exercise.nome);
+      }
+    }
+  }
+  
+  return Array.from(exerciseMap.entries()).map(([id, name]) => ({ id, name }));
+}
+
+// ======= NUTRITION DAILY LOGS =======
+
+export interface NutritionDailyLog {
+  dateKey: string;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export function getNutritionLogs(): NutritionDailyLog[] {
+  return load("levelup.nutritionLogs", []);
+}
+
+export function saveNutritionLog(log: NutritionDailyLog): void {
+  const logs = getNutritionLogs();
+  // Atualizar ou adicionar
+  const existingIndex = logs.findIndex(l => l.dateKey === log.dateKey);
+  if (existingIndex >= 0) {
+    logs[existingIndex] = log;
+  } else {
+    logs.unshift(log);
+  }
+  // Manter últimos 90 dias
+  save("levelup.nutritionLogs", logs.slice(0, 90));
+}
+
+// Consolidar nutrição do dia atual e salvar log
+export function consolidateNutritionToday(): NutritionDailyLog | null {
+  // Importar foods dinamicamente para evitar circular dependency
+  const today = getNutritionToday();
+  
+  // Calcular totais consumidos (precisamos do foods)
+  // Esta função será chamada do componente que tem acesso ao foods
+  return null;
+}
+
+// Dados para gráfico de nutrição
+export interface NutritionChartData {
+  date: string;
+  dateLabel: string;
+  kcal: number;
+  kcalMeta: number;
+  protein: number;
+  proteinMeta: number;
+  carbs: number;
+  carbsMeta: number;
+  fat: number;
+  fatMeta: number;
+}
+
+export function getNutritionChartData(days: number): NutritionChartData[] {
+  const logs = getNutritionLogs();
+  const goals = getNutritionGoals();
+  
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffKey = cutoff.toISOString().split("T")[0];
+  
+  return logs
+    .filter(l => l.dateKey >= cutoffKey)
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    .map(log => {
+      const date = new Date(log.dateKey);
+      return {
+        date: log.dateKey,
+        dateLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        kcal: log.kcal,
+        kcalMeta: goals.kcalTarget,
+        protein: log.protein,
+        proteinMeta: goals.pTarget,
+        carbs: log.carbs,
+        carbsMeta: goals.cTarget,
+        fat: log.fat,
+        fatMeta: goals.gTarget,
+      };
+    });
+}
+
+// Peso - variação semanal
+export function getWeightVariation(): { current: number; previous: number; delta: number } | null {
+  const history = getWeightHistory();
+  if (history.length === 0) return null;
+  
+  const current = history[0].weight;
+  
+  // Encontrar peso de ~7 dias atrás
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  
+  let previous = current;
+  for (const entry of history) {
+    const entryDate = new Date(entry.timestamp);
+    if (entryDate <= weekAgo) {
+      previous = entry.weight;
+      break;
+    }
+  }
+  
+  return {
+    current,
+    previous,
+    delta: Math.round((current - previous) * 10) / 10,
+  };
+}
+
+// Dados de peso para gráfico
+export interface WeightChartData {
+  date: string;
+  dateLabel: string;
+  weight: number;
+}
+
+export function getWeightChartData(): WeightChartData[] {
+  const history = getWeightHistory();
+  
+  return history
+    .slice(0, 30) // Últimos 30 registros
+    .map(entry => {
+      const date = new Date(entry.timestamp);
+      return {
+        date: entry.timestamp,
+        dateLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        weight: entry.weight,
+      };
+    })
+    .reverse(); // Ordem cronológica
+}

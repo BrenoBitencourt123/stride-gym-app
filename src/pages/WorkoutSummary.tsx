@@ -1,7 +1,6 @@
 import { Trophy, ArrowRight, CheckCircle, Dumbbell } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useRef } from "react";
-import { treinoDoDiaId } from "@/data/workouts";
 import { 
   getUserWorkout,
   completeTreinoDoDia, 
@@ -11,6 +10,8 @@ import {
   saveWorkoutCompleted,
   ExerciseSetSnapshot,
 } from "@/lib/storage";
+import { markWorkoutCompletedThisWeek } from "@/lib/appState";
+import { getWorkoutOfDay } from "@/lib/weekUtils";
 import BottomNav from "@/components/BottomNav";
 import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
@@ -20,10 +21,12 @@ const WorkoutSummary = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
   const triggerSync = useSyncTrigger();
-  const workout = getUserWorkout(treinoId || treinoDoDiaId);
+  const defaultWorkoutId = getWorkoutOfDay() || 'upper-a';
+  const workoutId = treinoId || defaultWorkoutId;
+  const workout = getUserWorkout(workoutId);
   const snapshotSavedRef = useRef(false);
   
-  const { completedSets, totalSets, totalVolume } = getWorkoutSummaryStats(treinoId || treinoDoDiaId);
+  const { completedSets, totalSets, totalVolume } = getWorkoutSummaryStats(workoutId);
 
   // Salvar snapshots de todos os exercícios ao entrar no resumo
   useEffect(() => {
@@ -31,23 +34,23 @@ const WorkoutSummary = () => {
     snapshotSavedRef.current = true;
     
     const progresso = getTreinoProgresso();
-    const workoutProgress = progresso[treinoId || treinoDoDiaId];
+    const workoutProgress = progresso[workoutId];
     
     if (workoutProgress) {
       for (const exercise of workout.exercicios) {
         const exerciseProgress = workoutProgress[exercise.id];
         if (exerciseProgress && exerciseProgress.workSets.length > 0) {
           // Apenas séries válidas (done = true)
-          const completedSets: ExerciseSetSnapshot[] = exerciseProgress.workSets
+          const completedSetsData: ExerciseSetSnapshot[] = exerciseProgress.workSets
             .filter(s => s.done)
             .map(s => ({ kg: s.kg, reps: s.reps }));
           
-          if (completedSets.length > 0) {
+          if (completedSetsData.length > 0) {
             saveExerciseSnapshot(
               exercise.id,
               workout.id,
               exercise.repsRange,
-              completedSets
+              completedSetsData
             );
           }
         }
@@ -56,7 +59,10 @@ const WorkoutSummary = () => {
     
     // Save workout completed record
     saveWorkoutCompleted(workout.id, totalVolume);
-  }, [workout, treinoId, totalVolume]);
+    
+    // Mark workout as completed this week
+    markWorkoutCompletedThisWeek(workout.id, XP_PER_WORKOUT, completedSets, totalVolume);
+  }, [workout, workoutId, totalVolume, completedSets]);
 
   const handleConcluir = () => {
     completeTreinoDoDia(XP_PER_WORKOUT);

@@ -1,11 +1,16 @@
-import { Filter } from "lucide-react";
+import { Filter, CheckCircle, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 import WorkoutCard from "@/components/WorkoutCard";
 import BottomNav from "@/components/BottomNav";
 import { getUserWorkoutPlan } from "@/lib/storage";
+import { getWorkoutOfDay, getWeekStart } from "@/lib/weekUtils";
+import { getWeeklyCompletions } from "@/lib/appState";
 
 const Treino = () => {
   const userPlan = getUserWorkoutPlan();
+  const todayWorkoutId = getWorkoutOfDay();
+  const weekStart = getWeekStart();
+  const weeklyCompletions = getWeeklyCompletions(weekStart);
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -34,14 +39,36 @@ const Treino = () => {
 
         {/* Workout Cards */}
         <div className="space-y-4">
-          {userPlan.workouts.map((workout) => (
-            <WorkoutCard
-              key={workout.id}
-              title={workout.titulo}
-              exercises={workout.exercicios.map(e => e.nome)}
-              slug={workout.id}
-            />
-          ))}
+          {userPlan.workouts.map((workout) => {
+            const isToday = workout.id === todayWorkoutId;
+            const isCompletedThisWeek = !!weeklyCompletions[workout.id];
+
+            return (
+              <div key={workout.id} className="relative">
+                {/* Badges */}
+                <div className="absolute -top-2 right-2 flex gap-2 z-10">
+                  {isToday && (
+                    <span className="px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-medium flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Hoje
+                    </span>
+                  )}
+                  {isCompletedThisWeek && (
+                    <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-xs font-medium flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Concluído
+                    </span>
+                  )}
+                </div>
+
+                <WorkoutCard
+                  title={workout.titulo}
+                  exercises={workout.exercicios.map(e => e.nome)}
+                  slug={workout.id}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
 

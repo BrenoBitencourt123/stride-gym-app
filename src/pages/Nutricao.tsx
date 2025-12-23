@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Plus, HelpCircle, CheckCircle2 } from "lucide-react";
+import { Plus, HelpCircle, CheckCircle2, RotateCcw } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { 
   getNutritionGoals, 
@@ -7,7 +7,8 @@ import {
   hasDietSaved, 
   removeFoodFromToday,
   updateFoodInToday,
-  toggleFoodConsumed
+  toggleFoodConsumed,
+  resetNutritionToday
 } from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
 import { useMemo, useState } from "react";
@@ -139,6 +140,13 @@ const Nutricao = () => {
   // Verifica se tem algum item no dia
   const hasAnyItems = today.meals.some(m => m.entries.length > 0);
 
+  // Resetar checklist do dia
+  const handleResetDay = () => {
+    resetNutritionToday();
+    setRefreshKey(k => k + 1);
+    toast.success("Checklist do dia resetado");
+  };
+
   // Progress percentages (baseado no consumido)
   const kcalPct = Math.min((consumedTotals.kcal / goals.kcalTarget) * 100, 100);
   const pPct = Math.min((consumedTotals.p / goals.pTarget) * 100, 100);
@@ -227,13 +235,22 @@ const Nutricao = () => {
         <div className="card-glass p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">Refeições de hoje</h2>
-            <Link
-              to="/nutricao/adicionar-alimento"
-              className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
-            >
-              <Plus size={16} />
-              <span>Adicionar</span>
-            </Link>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleResetDay}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                title="Resetar checklist do dia"
+              >
+                <RotateCcw size={14} />
+              </button>
+              <Link
+                to="/nutricao/adicionar-alimento"
+                className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
+              >
+                <Plus size={16} />
+                <span>Adicionar</span>
+              </Link>
+            </div>
           </div>
           
           {!hasAnyItems ? (

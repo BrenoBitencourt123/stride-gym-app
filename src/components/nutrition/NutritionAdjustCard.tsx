@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Lightbulb, Plus, Wand2, Sparkles } from "lucide-react";
 import { getFoodById, foods, type FoodItem } from "@/data/foods";
-import { addFoodToToday } from "@/lib/storage";
+import { addFoodToToday, addFoodToDiet } from "@/lib/storage";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -21,6 +21,7 @@ interface MacroGaps {
 interface NutritionAdjustCardProps {
   gaps: MacroGaps;
   onFoodAdded: () => void;
+  mode?: "diet" | "today"; // "diet" = adiciona na dieta, "today" = adiciona no consumo do dia
 }
 
 // Alimentos "curinga" para sugestões
@@ -171,7 +172,7 @@ function generateAutoAdjustCombo(gaps: MacroGaps): ComboItem[] {
   return combo;
 }
 
-const NutritionAdjustCard = ({ gaps, onFoodAdded }: NutritionAdjustCardProps) => {
+const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdjustCardProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAutoModal, setShowAutoModal] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<MealId>("lanche");
@@ -195,8 +196,13 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded }: NutritionAdjustCardProps) =>
   );
   
   const handleAddSuggestion = (foodId: string, qty: number, unidade: "g" | "un" | "ml" | "scoop") => {
-    addFoodToToday("lanche", foodId, qty, unidade, "extra");
-    toast.success("Adicionado ao Lanche!");
+    if (mode === "diet") {
+      addFoodToDiet(selectedMeal, foodId, qty, unidade);
+      toast.success(`Adicionado à dieta (${MEAL_LABELS[selectedMeal]})!`);
+    } else {
+      addFoodToToday(selectedMeal, foodId, qty, unidade, "extra");
+      toast.success(`Adicionado ao ${MEAL_LABELS[selectedMeal]}!`);
+    }
     onFoodAdded();
   };
   
@@ -310,6 +316,26 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded }: NutritionAdjustCardProps) =>
         {/* Suggestions */}
         {isOpen && hasDeficit && suggestions.length > 0 && (
           <div className="mt-4 pt-3 border-t border-border/30">
+            {/* Meal selector for suggestions */}
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground mb-2">Adicionar em:</p>
+              <div className="grid grid-cols-4 gap-1">
+                {(Object.keys(MEAL_LABELS) as MealId[]).map((mealId) => (
+                  <button
+                    key={mealId}
+                    onClick={() => setSelectedMeal(mealId)}
+                    className={`py-1.5 px-1 text-xs rounded-lg transition-colors ${
+                      selectedMeal === mealId
+                        ? "bg-primary text-primary-foreground font-medium"
+                        : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    {MEAL_LABELS[mealId]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
             <p className="text-xs text-muted-foreground mb-3">Sugestões para completar:</p>
             <div className="space-y-2">
               {suggestions.map((s) => (

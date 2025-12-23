@@ -187,7 +187,8 @@ const CriarDieta = () => {
         {/* Ajuste necessário card */}
         <NutritionAdjustCard 
           gaps={gaps} 
-          onFoodAdded={() => setRefreshKey(k => k + 1)} 
+          onFoodAdded={() => setRefreshKey(k => k + 1)}
+          mode="diet"
         />
 
         {/* Seção: Refeições */}

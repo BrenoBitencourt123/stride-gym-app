@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, Plus, Info, Trash2 } from "lucide-react";
+import { ChevronLeft, Plus, Info, HelpCircle } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { 
   getNutritionGoals, 
   getNutritionDiet, 
   saveNutritionDiet, 
   removeFoodFromDiet,
+  updateFoodInDiet,
   DEFAULT_MEALS,
   type NutritionDiet,
   type DietMeal
@@ -13,10 +14,21 @@ import {
 import { getFoodById } from "@/data/foods";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import NutritionAdjustCard from "@/components/nutrition/NutritionAdjustCard";
+import EditFoodModal from "@/components/nutrition/EditFoodModal";
+import GoalsExplainModal from "@/components/nutrition/GoalsExplainModal";
 
 const CriarDieta = () => {
   const navigate = useNavigate();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<{
+    mealId: string;
+    index: number;
+    foodId: string;
+    quantidade: number;
+    unidade: "g" | "un" | "ml" | "scoop";
+  } | null>(null);
   
   const goals = getNutritionGoals();
   const existingDiet = getNutritionDiet();
@@ -51,6 +63,14 @@ const CriarDieta = () => {
     };
   }, [diet, refreshKey]);
 
+  // Calcula gaps (faltas)
+  const gaps = useMemo(() => ({
+    kcal: goals.kcalTarget - totals.kcal,
+    p: goals.pTarget - totals.p,
+    c: goals.cTarget - totals.c,
+    g: goals.gTarget - totals.g,
+  }), [goals, totals]);
+
   // Calcula kcal por refeição
   const getMealKcal = (meal: DietMeal) => {
     let total = 0;
@@ -74,6 +94,26 @@ const CriarDieta = () => {
     removeFoodFromDiet(mealId, index);
     setRefreshKey(k => k + 1);
     toast.success("Alimento removido");
+  };
+
+  const handleEditItem = (mealId: string, index: number, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop") => {
+    setEditingItem({ mealId, index, foodId, quantidade, unidade });
+  };
+
+  const handleSaveEdit = (newQuantity: number) => {
+    if (editingItem) {
+      updateFoodInDiet(editingItem.mealId, editingItem.index, newQuantity);
+      setRefreshKey(k => k + 1);
+      toast.success("Quantidade atualizada");
+    }
+  };
+
+  const handleRemoveFromEdit = () => {
+    if (editingItem) {
+      removeFoodFromDiet(editingItem.mealId, editingItem.index);
+      setRefreshKey(k => k + 1);
+      toast.success("Alimento removido");
+    }
   };
 
   return (
@@ -104,7 +144,15 @@ const CriarDieta = () => {
         {/* Card: Meta diária */}
         <div className="card-glass p-4 mt-6 mb-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-foreground">Meta diária</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-foreground">Meta diária</h2>
+              <button
+                onClick={() => setShowGoalsModal(true)}
+                className="text-muted-foreground hover:text-primary transition-colors"
+              >
+                <HelpCircle size={16} />
+              </button>
+            </div>
             {totals.kcal > 0 && (
               <span className={`px-2 py-1 text-xs font-medium rounded-lg ${
                 Math.abs(totals.kcal - goals.kcalTarget) <= 200 
@@ -136,6 +184,12 @@ const CriarDieta = () => {
           </div>
         </div>
 
+        {/* Ajuste necessário card */}
+        <NutritionAdjustCard 
+          gaps={gaps} 
+          onFoodAdded={() => setRefreshKey(k => k + 1)} 
+        />
+
         {/* Seção: Refeições */}
         <h2 className="text-lg font-semibold text-foreground mb-3">Refeições</h2>
 
@@ -158,7 +212,11 @@ const CriarDieta = () => {
                     const itemKcal = Math.round(food.kcal * fator);
                     
                     return (
-                      <div key={idx} className="flex items-center justify-between text-sm">
+                      <button
+                        key={idx}
+                        onClick={() => handleEditItem(meal.id, idx, item.foodId, item.quantidade, item.unidade)}
+                        className="w-full flex items-center justify-between text-sm hover:bg-muted/20 rounded-lg p-1.5 -mx-1.5 transition-colors text-left"
+                      >
                         <div className="flex items-center gap-2">
                           <span className="text-foreground">{food.nome}</span>
                           <span className="text-muted-foreground">—</span>
@@ -166,16 +224,8 @@ const CriarDieta = () => {
                             {item.quantidade}{item.unidade === "un" ? " un" : item.unidade === "scoop" ? " scoop" : ` ${item.unidade}`}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">{itemKcal} kcal</span>
-                          <button
-                            onClick={() => handleRemoveItem(meal.id, idx)}
-                            className="p-1 hover:bg-destructive/20 rounded transition-colors"
-                          >
-                            <Trash2 size={14} className="text-muted-foreground hover:text-destructive" />
-                          </button>
-                        </div>
-                      </div>
+                        <span className="text-muted-foreground">{itemKcal} kcal</span>
+                      </button>
                     );
                   })}
                 </div>
@@ -214,6 +264,25 @@ const CriarDieta = () => {
 
       {/* Bottom Navigation */}
       <BottomNav />
+
+      {/* Edit food modal */}
+      {editingItem && (
+        <EditFoodModal
+          open={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          foodId={editingItem.foodId}
+          currentQuantity={editingItem.quantidade}
+          currentUnidade={editingItem.unidade}
+          onSave={handleSaveEdit}
+          onRemove={handleRemoveFromEdit}
+        />
+      )}
+
+      {/* Goals explain modal */}
+      <GoalsExplainModal
+        open={showGoalsModal}
+        onClose={() => setShowGoalsModal(false)}
+      />
     </div>
   );
 };

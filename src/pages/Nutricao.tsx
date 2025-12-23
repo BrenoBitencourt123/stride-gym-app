@@ -1,19 +1,32 @@
 import { Link } from "react-router-dom";
-import { Plus, Copy } from "lucide-react";
+import { Plus, Copy, HelpCircle } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { 
   getNutritionGoals, 
   getNutritionToday, 
   hasDietSaved, 
   isTodayEmpty, 
-  applyDietToToday 
+  applyDietToToday,
+  removeFoodFromToday,
+  updateFoodInToday
 } from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import NutritionAdjustCard from "@/components/nutrition/NutritionAdjustCard";
+import EditFoodModal from "@/components/nutrition/EditFoodModal";
+import GoalsExplainModal from "@/components/nutrition/GoalsExplainModal";
 
 const Nutricao = () => {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<{
+    mealId: string;
+    entryId: string;
+    foodId: string;
+    quantidade: number;
+    unidade: "g" | "un" | "ml" | "scoop";
+  } | null>(null);
   
   const goals = getNutritionGoals();
   const today = getNutritionToday();
@@ -45,6 +58,14 @@ const Nutricao = () => {
     };
   }, [today, refreshKey]);
 
+  // Calcula gaps (faltas)
+  const gaps = useMemo(() => ({
+    kcal: goals.kcalTarget - totals.kcal,
+    p: goals.pTarget - totals.p,
+    c: goals.cTarget - totals.c,
+    g: goals.gTarget - totals.g,
+  }), [goals, totals]);
+
   // Calcula kcal por refeição
   const getMealKcal = (mealId: string) => {
     const meal = today.meals.find(m => m.id === mealId);
@@ -67,6 +88,26 @@ const Nutricao = () => {
     toast.success("Dieta aplicada ao dia!");
   };
 
+  const handleEditItem = (mealId: string, entryId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop") => {
+    setEditingItem({ mealId, entryId, foodId, quantidade, unidade });
+  };
+
+  const handleSaveEdit = (newQuantity: number) => {
+    if (editingItem) {
+      updateFoodInToday(editingItem.mealId, editingItem.entryId, newQuantity);
+      setRefreshKey(k => k + 1);
+      toast.success("Quantidade atualizada");
+    }
+  };
+
+  const handleRemoveFromEdit = () => {
+    if (editingItem) {
+      removeFoodFromToday(editingItem.mealId, editingItem.entryId);
+      setRefreshKey(k => k + 1);
+      toast.success("Alimento removido");
+    }
+  };
+
   // Progress percentages
   const kcalPct = Math.min((totals.kcal / goals.kcalTarget) * 100, 100);
   const pPct = Math.min((totals.p / goals.pTarget) * 100, 100);
@@ -87,7 +128,15 @@ const Nutricao = () => {
 
         {/* Card 1: Meta diária */}
         <div className="card-glass p-4 mb-4">
-          <span className="text-sm text-muted-foreground">Meta diária</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Meta diária</span>
+            <button
+              onClick={() => setShowGoalsModal(true)}
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
+              <HelpCircle size={14} />
+            </button>
+          </div>
           
           <div className="flex items-center justify-between mt-1 mb-3">
             <h2 className="text-xl font-semibold text-foreground">Calorias</h2>
@@ -135,6 +184,12 @@ const Nutricao = () => {
             </div>
           </div>
         </div>
+
+        {/* Ajuste necessário card */}
+        <NutritionAdjustCard 
+          gaps={gaps} 
+          onFoodAdded={() => setRefreshKey(k => k + 1)} 
+        />
 
         {/* Apply diet button */}
         {dietExists && todayEmpty && (
@@ -197,12 +252,16 @@ const Nutricao = () => {
                         const entryKcal = Math.round(food.kcal * fator);
                         
                         return (
-                          <div key={entry.id} className="flex items-center justify-between text-sm">
+                          <button
+                            key={entry.id}
+                            onClick={() => handleEditItem(meal.id, entry.id, entry.foodId, entry.quantidade, entry.unidade)}
+                            className="w-full flex items-center justify-between text-sm hover:bg-muted/30 rounded-lg p-1.5 -mx-1.5 transition-colors text-left"
+                          >
                             <span className="text-muted-foreground">
                               {food.nome} — {entry.quantidade}{entry.unidade === "un" ? " un" : entry.unidade === "scoop" ? " scoop" : ` ${entry.unidade}`}
                             </span>
                             <span className="text-muted-foreground">{entryKcal} kcal</span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -241,6 +300,25 @@ const Nutricao = () => {
 
       {/* Bottom Navigation */}
       <BottomNav />
+
+      {/* Edit food modal */}
+      {editingItem && (
+        <EditFoodModal
+          open={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          foodId={editingItem.foodId}
+          currentQuantity={editingItem.quantidade}
+          currentUnidade={editingItem.unidade}
+          onSave={handleSaveEdit}
+          onRemove={handleRemoveFromEdit}
+        />
+      )}
+
+      {/* Goals explain modal */}
+      <GoalsExplainModal
+        open={showGoalsModal}
+        onClose={() => setShowGoalsModal(false)}
+      />
     </div>
   );
 };

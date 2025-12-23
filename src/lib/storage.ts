@@ -405,6 +405,30 @@ export function removeFoodFromDiet(mealId: string, index: number): void {
   }
 }
 
+export function updateFoodInDiet(mealId: string, index: number, newQuantity: number): void {
+  const diet = getNutritionDiet();
+  if (!diet) return;
+  
+  const meal = diet.meals.find(m => m.id === mealId);
+  if (meal && meal.items[index]) {
+    meal.items[index].quantidade = newQuantity;
+    saveNutritionDiet(diet);
+  }
+}
+
+export function updateFoodInToday(mealId: string, entryId: string, newQuantity: number): void {
+  const today = getNutritionToday();
+  const meal = today.meals.find(m => m.id === mealId);
+  
+  if (meal) {
+    const entry = meal.entries.find(e => e.id === entryId);
+    if (entry) {
+      entry.quantidade = newQuantity;
+      saveNutritionToday(today);
+    }
+  }
+}
+
 export function removeFoodFromToday(mealId: string, entryId: string): void {
   const today = getNutritionToday();
   const meal = today.meals.find(m => m.id === mealId);

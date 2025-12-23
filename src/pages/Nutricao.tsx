@@ -150,12 +150,10 @@ const Nutricao = () => {
     toast.success("Checklist do dia resetado");
   };
 
-  // Critério para permitir concluir a nutrição
-  // Atingiu meta se: (90% <= kcal <= 110% da meta) OU (proteína >= meta)
-  const kcalInRange = consumedTotals.kcal >= goals.kcalTarget * 0.9 && 
-                      consumedTotals.kcal <= goals.kcalTarget * 1.1;
-  const proteinMet = consumedTotals.p >= goals.pTarget;
-  const canComplete = (kcalInRange || proteinMet) && hasAnyItems && !nutritionCompleted;
+  // Critério para permitir concluir a nutrição:
+  // Jantar (última refeição) deve estar com "Check!" (todos planejados consumidos)
+  const jantarComplete = isMealComplete("jantar");
+  const canComplete = jantarComplete && hasAnyItems && !nutritionCompleted;
 
   // Progress percentages (baseado no consumido)
   const kcalPct = Math.min((consumedTotals.kcal / goals.kcalTarget) * 100, 100);

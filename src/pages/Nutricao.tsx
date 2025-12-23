@@ -1,20 +1,21 @@
 import { Link } from "react-router-dom";
-import { Plus, Copy, HelpCircle } from "lucide-react";
+import { Plus, HelpCircle, Check, CheckCircle2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { 
   getNutritionGoals, 
   getNutritionToday, 
   hasDietSaved, 
-  isTodayEmpty, 
-  applyDietToToday,
   removeFoodFromToday,
-  updateFoodInToday
+  updateFoodInToday,
+  toggleFoodChecked
 } from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import EditFoodModal from "@/components/nutrition/EditFoodModal";
 import GoalsExplainModal from "@/components/nutrition/GoalsExplainModal";
+import { Checkbox } from "@/components/ui/checkbox";
+
 const Nutricao = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -29,14 +30,14 @@ const Nutricao = () => {
   const goals = getNutritionGoals();
   const today = getNutritionToday();
   const dietExists = hasDietSaved();
-  const todayEmpty = isTodayEmpty();
 
-  // Calcula totais do dia
+  // Calcula totais do dia (apenas itens marcados)
   const totals = useMemo(() => {
     let kcal = 0, p = 0, c = 0, g = 0;
     
     for (const meal of today.meals) {
       for (const entry of meal.entries) {
+        if (!entry.checked) continue; // Só conta os marcados
         const food = getFoodById(entry.foodId);
         if (food) {
           const fator = entry.quantidade / food.porcaoBase;
@@ -56,21 +57,14 @@ const Nutricao = () => {
     };
   }, [today, refreshKey]);
 
-  // Calcula gaps (faltas)
-  const gaps = useMemo(() => ({
-    kcal: goals.kcalTarget - totals.kcal,
-    p: goals.pTarget - totals.p,
-    c: goals.cTarget - totals.c,
-    g: goals.gTarget - totals.g,
-  }), [goals, totals]);
-
-  // Calcula kcal por refeição
-  const getMealKcal = (mealId: string) => {
+  // Calcula kcal por refeição (apenas itens marcados)
+  const getMealKcal = (mealId: string, onlyChecked: boolean = false) => {
     const meal = today.meals.find(m => m.id === mealId);
     if (!meal) return 0;
     
     let total = 0;
     for (const entry of meal.entries) {
+      if (onlyChecked && !entry.checked) continue;
       const food = getFoodById(entry.foodId);
       if (food) {
         const fator = entry.quantidade / food.porcaoBase;
@@ -80,10 +74,16 @@ const Nutricao = () => {
     return Math.round(total);
   };
 
-  const handleApplyDiet = () => {
-    applyDietToToday();
+  // Verifica se refeição está completa
+  const isMealComplete = (mealId: string) => {
+    const meal = today.meals.find(m => m.id === mealId);
+    if (!meal || meal.entries.length === 0) return false;
+    return meal.entries.every(e => e.checked === true);
+  };
+
+  const handleToggleCheck = (mealId: string, entryId: string) => {
+    toggleFoodChecked(mealId, entryId);
     setRefreshKey(k => k + 1);
-    toast.success("Dieta aplicada ao dia!");
   };
 
   const handleEditItem = (mealId: string, entryId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop") => {
@@ -106,6 +106,9 @@ const Nutricao = () => {
     }
   };
 
+  // Verifica se tem algum item no dia
+  const hasAnyItems = today.meals.some(m => m.entries.length > 0);
+
   // Progress percentages
   const kcalPct = Math.min((totals.kcal / goals.kcalTarget) * 100, 100);
   const pPct = Math.min((totals.p / goals.pTarget) * 100, 100);
@@ -113,7 +116,7 @@ const Nutricao = () => {
   const gPct = Math.min((totals.g / goals.gTarget) * 100, 100);
 
   return (
-    <div className="min-h-screen bg-background pb-28">
+    <div className="min-h-screen bg-background pb-44">
       {/* Background effect */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-card/30" />
@@ -127,7 +130,7 @@ const Nutricao = () => {
         {/* Card 1: Meta diária */}
         <div className="card-glass p-4 mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Meta diária</span>
+            <span className="text-sm text-muted-foreground">Consumido hoje</span>
             <button
               onClick={() => setShowGoalsModal(true)}
               className="text-muted-foreground hover:text-primary transition-colors"
@@ -183,21 +186,10 @@ const Nutricao = () => {
           </div>
         </div>
 
-        {/* Apply diet button */}
-        {dietExists && todayEmpty && (
-          <button
-            onClick={handleApplyDiet}
-            className="w-full card-glass flex items-center justify-center gap-2 py-3 rounded-2xl border border-primary/30 hover:border-primary/50 transition-colors mb-4"
-          >
-            <Copy size={18} className="text-primary" />
-            <span className="text-foreground font-medium">Aplicar dieta de hoje</span>
-          </button>
-        )}
-
-        {/* Card 2: Alimentos de hoje */}
+        {/* Card 2: Refeições de hoje */}
         <div className="card-glass p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Alimentos de hoje</h2>
+            <h2 className="text-lg font-semibold text-foreground">Refeições de hoje</h2>
             <Link
               to="/nutricao/adicionar-alimento"
               className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
@@ -207,33 +199,45 @@ const Nutricao = () => {
             </Link>
           </div>
           
-          {todayEmpty ? (
+          {!hasAnyItems ? (
             <div className="bg-muted/20 rounded-2xl border border-border/50 p-6 flex flex-col items-center">
+              <p className="text-muted-foreground text-center text-sm mb-2">
+                Nenhuma dieta cadastrada ainda.
+              </p>
               <Link
-                to="/nutricao/adicionar-alimento"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/50 text-primary hover:bg-primary/10 transition-colors mb-4"
+                to="/nutricao/criar-dieta"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/50 text-primary hover:bg-primary/10 transition-colors"
               >
                 <Plus size={18} />
-                <span className="font-medium">Adicionar alimento</span>
+                <span className="font-medium">Criar minha dieta</span>
               </Link>
-              
-              <p className="text-muted-foreground text-center text-sm">
-                Nenhum alimento registrado hoje
-              </p>
-              <p className="text-muted-foreground text-center text-sm">
-                Toque em "Adicionar alimento" para começar
-              </p>
             </div>
           ) : (
             <div className="space-y-3">
               {today.meals.map((meal) => {
                 if (meal.entries.length === 0) return null;
                 const mealKcal = getMealKcal(meal.id);
+                const mealComplete = isMealComplete(meal.id);
                 
                 return (
-                  <div key={meal.id} className="bg-muted/20 rounded-xl p-3">
+                  <div 
+                    key={meal.id} 
+                    className={`rounded-xl p-3 transition-all ${
+                      mealComplete 
+                        ? 'bg-primary/10 border border-primary/30' 
+                        : 'bg-muted/20'
+                    }`}
+                  >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-foreground">{meal.nome}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">{meal.nome}</span>
+                        {mealComplete && (
+                          <span className="flex items-center gap-1 text-xs text-primary bg-primary/20 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 size={12} />
+                            Check!
+                          </span>
+                        )}
+                      </div>
                       <span className="text-sm text-muted-foreground">{mealKcal} kcal</span>
                     </div>
                     <div className="space-y-1">
@@ -244,16 +248,27 @@ const Nutricao = () => {
                         const entryKcal = Math.round(food.kcal * fator);
                         
                         return (
-                          <button
+                          <div
                             key={entry.id}
-                            onClick={() => handleEditItem(meal.id, entry.id, entry.foodId, entry.quantidade, entry.unidade)}
-                            className="w-full flex items-center justify-between text-sm hover:bg-muted/30 rounded-lg p-1.5 -mx-1.5 transition-colors text-left"
+                            className="flex items-center gap-2 text-sm"
                           >
-                            <span className="text-muted-foreground">
-                              {food.nome} — {entry.quantidade}{entry.unidade === "un" ? " un" : entry.unidade === "scoop" ? " scoop" : ` ${entry.unidade}`}
-                            </span>
-                            <span className="text-muted-foreground">{entryKcal} kcal</span>
-                          </button>
+                            <Checkbox
+                              checked={entry.checked || false}
+                              onCheckedChange={() => handleToggleCheck(meal.id, entry.id)}
+                              className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                            />
+                            <button
+                              onClick={() => handleEditItem(meal.id, entry.id, entry.foodId, entry.quantidade, entry.unidade)}
+                              className={`flex-1 flex items-center justify-between hover:bg-muted/30 rounded-lg p-1.5 -my-0.5 transition-colors text-left ${
+                                entry.checked ? 'line-through opacity-60' : ''
+                              }`}
+                            >
+                              <span className="text-muted-foreground">
+                                {food.nome} — {entry.quantidade}{entry.unidade === "un" ? " un" : entry.unidade === "scoop" ? " scoop" : ` ${entry.unidade}`}
+                              </span>
+                              <span className="text-muted-foreground">{entryKcal} kcal</span>
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -270,19 +285,16 @@ const Nutricao = () => {
             </div>
           )}
         </div>
-
-        {/* Spacer to push CTA up from bottom nav */}
-        <div className="h-16" />
       </div>
 
-      {/* Bottom CTA */}
-      <div className="fixed bottom-28 left-0 right-0 px-4 z-20">
+      {/* Bottom CTA - Fixed but not floating */}
+      <div className="fixed bottom-20 left-0 right-0 px-4 py-3 bg-background/80 backdrop-blur-sm border-t border-border/30 z-20">
         <div className="max-w-md mx-auto">
           <Link
             to="/nutricao/criar-dieta"
-            className="w-full card-glass flex items-center justify-center gap-2 py-4 rounded-2xl border border-border/50 hover:border-primary/50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors"
           >
-            <Plus size={20} className="text-primary" />
+            <Plus size={18} className="text-primary" />
             <span className="text-foreground font-medium">
               {dietExists ? "Ver/editar minha dieta" : "Criar minha dieta"}
             </span>

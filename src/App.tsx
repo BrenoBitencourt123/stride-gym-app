@@ -13,6 +13,7 @@ import CriarDieta from "./pages/CriarDieta";
 import AdicionarAlimento from "./pages/AdicionarAlimento";
 import NutritionSummary from "./pages/NutritionSummary";
 import SettingsPage from "./pages/Settings";
+import AjustarPlano from "./pages/AjustarPlano";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/treino" element={<Treino />} />
+          <Route path="/treino/ajustar" element={<AjustarPlano />} />
           <Route path="/treino/:treinoId" element={<WorkoutDetail />} />
           <Route path="/treino/:treinoId/:exercicioId" element={<ExerciseLogging />} />
           <Route path="/treino/:treinoId/resumo" element={<WorkoutSummary />} />

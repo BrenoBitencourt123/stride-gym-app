@@ -40,6 +40,7 @@ export const STORAGE_KEYS = {
   NUTRITION_COMPLETED: "levelup.nutrition.completed",
   EXERCISE_HISTORY: "levelup.exerciseHistory",
   PROGRESSION_SUGGESTIONS: "levelup.progressionSuggestions",
+  USER_WORKOUT_PLAN: "levelup.userWorkoutPlan",
 } as const;
 
 // Tipos de dados persistidos
@@ -832,4 +833,121 @@ export function getLastWorkoutDate(workoutId: string): string | null {
   }
   
   return null;
+}
+
+// ======= USER WORKOUT PLAN =======
+
+import { workouts as defaultWorkouts, type Workout, type Exercise, type SetData } from "@/data/workouts";
+
+export interface UserExercise {
+  id: string;
+  nome: string;
+  muscleGroup: string;
+  tags: string[];
+  repsRange: string;
+  descansoSeg: number;
+  warmupEnabled: boolean;
+  feederSetsDefault: SetData[];
+  workSetsDefault: SetData[];
+  observacoes?: string;
+}
+
+export interface UserWorkout {
+  id: string;
+  titulo: string;
+  duracaoEstimada: number;
+  exercicios: UserExercise[];
+}
+
+export interface UserWorkoutPlan {
+  workouts: UserWorkout[];
+  updatedAt: string;
+}
+
+// Converte workout padrão para formato de usuário
+function convertDefaultWorkout(workout: Workout): UserWorkout {
+  return {
+    id: workout.id,
+    titulo: workout.titulo,
+    duracaoEstimada: workout.duracaoEstimada,
+    exercicios: workout.exercicios.map((ex) => ({
+      id: ex.id,
+      nome: ex.nome,
+      muscleGroup: ex.tags.find(t => t !== "Principal" && t !== "Acessório") || "Outro",
+      tags: ex.tags,
+      repsRange: ex.repsRange,
+      descansoSeg: ex.descansoSeg,
+      warmupEnabled: ex.warmupEnabled,
+      feederSetsDefault: ex.feederSetsDefault,
+      workSetsDefault: ex.workSetsDefault,
+    })),
+  };
+}
+
+// Obtém plano de treino do usuário (ou padrão se não existir)
+export function getUserWorkoutPlan(): UserWorkoutPlan {
+  const stored = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
+  
+  if (stored) {
+    return stored;
+  }
+  
+  // Retorna plano padrão convertido
+  const defaultPlan: UserWorkoutPlan = {
+    workouts: Object.values(defaultWorkouts).map(convertDefaultWorkout),
+    updatedAt: new Date().toISOString(),
+  };
+  
+  return defaultPlan;
+}
+
+// Salva plano de treino customizado do usuário
+export function saveUserWorkoutPlan(plan: UserWorkoutPlan): void {
+  plan.updatedAt = new Date().toISOString();
+  save(STORAGE_KEYS.USER_WORKOUT_PLAN, plan);
+}
+
+// Reseta plano para o padrão
+export function resetUserWorkoutPlan(): void {
+  localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
+}
+
+// Verifica se existe plano customizado
+export function hasCustomWorkoutPlan(): boolean {
+  return load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null) !== null;
+}
+
+// Obtém um workout específico do plano do usuário
+export function getUserWorkout(id: string): UserWorkout | undefined {
+  const plan = getUserWorkoutPlan();
+  return plan.workouts.find(w => w.id === id);
+}
+
+// Obtém um exercício específico do plano do usuário
+export function getUserExercise(workoutId: string, exerciseId: string): UserExercise | undefined {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return undefined;
+  return workout.exercicios.find(e => e.id === exerciseId);
+}
+
+// Obtém próximo exercício do plano do usuário
+export function getUserNextExercise(workoutId: string, currentExerciseId: string): UserExercise | null {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return null;
+  
+  const currentIndex = workout.exercicios.findIndex(e => e.id === currentExerciseId);
+  if (currentIndex === -1 || currentIndex >= workout.exercicios.length - 1) {
+    return null;
+  }
+  
+  return workout.exercicios[currentIndex + 1];
+}
+
+// Verifica se é o último exercício do workout
+export function isUserLastExercise(workoutId: string, exerciseId: string): boolean {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return true;
+  
+  const lastExercise = workout.exercicios[workout.exercicios.length - 1];
+  return lastExercise?.id === exerciseId;
 }

@@ -111,6 +111,7 @@ export interface TodayEntry {
   unidade: "g" | "un" | "ml" | "scoop";
   source: "diet" | "extra" | "auto";
   createdAt: number;
+  checked?: boolean;
 }
 
 export interface TodayMeal {
@@ -321,11 +322,24 @@ export function getNutritionToday(): NutritionToday {
   const stored = load<NutritionToday | null>(STORAGE_KEYS.NUTRITION_TODAY, null);
   const todayKey = getDateKey();
   
-  // Se não existe ou é outro dia, resetar
+  // Se não existe ou é outro dia, aplicar dieta automaticamente
   if (!stored || stored.dateKey !== todayKey) {
+    const diet = getNutritionDiet();
     const fresh: NutritionToday = {
       dateKey: todayKey,
-      meals: DEFAULT_MEALS.map(m => ({ ...m, entries: [] })),
+      meals: DEFAULT_MEALS.map(m => {
+        const dietMeal = diet?.meals.find(dm => dm.id === m.id);
+        const entries: TodayEntry[] = dietMeal?.items.map(item => ({
+          id: crypto.randomUUID(),
+          foodId: item.foodId,
+          quantidade: item.quantidade,
+          unidade: item.unidade,
+          source: "diet" as const,
+          createdAt: Date.now(),
+          checked: false,
+        })) || [];
+        return { ...m, entries };
+      }),
     };
     save(STORAGE_KEYS.NUTRITION_TODAY, fresh);
     return fresh;
@@ -479,4 +493,24 @@ export function hasDietSaved(): boolean {
 export function isTodayEmpty(): boolean {
   const today = getNutritionToday();
   return today.meals.every(m => m.entries.length === 0);
+}
+
+export function toggleFoodChecked(mealId: string, entryId: string): void {
+  const today = getNutritionToday();
+  const meal = today.meals.find(m => m.id === mealId);
+  
+  if (meal) {
+    const entry = meal.entries.find(e => e.id === entryId);
+    if (entry) {
+      entry.checked = !entry.checked;
+      saveNutritionToday(today);
+    }
+  }
+}
+
+export function isMealComplete(mealId: string): boolean {
+  const today = getNutritionToday();
+  const meal = today.meals.find(m => m.id === mealId);
+  if (!meal || meal.entries.length === 0) return false;
+  return meal.entries.every(e => e.checked === true);
 }

@@ -13,10 +13,8 @@ import {
 import { getFoodById } from "@/data/foods";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import NutritionAdjustCard from "@/components/nutrition/NutritionAdjustCard";
 import EditFoodModal from "@/components/nutrition/EditFoodModal";
 import GoalsExplainModal from "@/components/nutrition/GoalsExplainModal";
-
 const Nutricao = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -184,13 +182,6 @@ const Nutricao = () => {
             </div>
           </div>
         </div>
-
-        {/* Ajuste necessário card */}
-        <NutritionAdjustCard 
-          gaps={gaps} 
-          onFoodAdded={() => setRefreshKey(k => k + 1)}
-          mode="today"
-        />
 
         {/* Apply diet button */}
         {dietExists && todayEmpty && (

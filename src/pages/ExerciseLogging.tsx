@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Play, Plus } from "lucide-react";
+import { ArrowLeft, Check, Play, Plus, Sparkles } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
@@ -8,7 +8,11 @@ import {
   getExerciseProgress, 
   saveExerciseProgress, 
   SetProgress,
-  ExerciseProgress 
+  ExerciseProgress,
+  getLastExercisePerformance,
+  getProgressionSuggestion,
+  saveProgressionSuggestion,
+  ProgressionSuggestion,
 } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -160,6 +164,17 @@ const ExerciseLogging = () => {
     );
   }
 
+  // Dados de progressão
+  const lastPerformance = getLastExercisePerformance(exercicioId || "");
+  const progression = getProgressionSuggestion(exercicioId || "", exercise.repsRange);
+
+  const handleApplySuggestion = () => {
+    if (progression.suggestedNextLoad) {
+      saveProgressionSuggestion(exercicioId || "", progression.suggestedNextLoad);
+      toast.success(`Sugestão salva: ${progression.suggestedNextLoad} kg`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pb-40">
       {/* Background */}
@@ -170,7 +185,7 @@ const ExerciseLogging = () => {
       {/* Content */}
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <Link
               to={`/treino/${treinoId}`}
@@ -183,6 +198,58 @@ const ExerciseLogging = () => {
           <button className="text-primary text-sm font-medium hover:underline">
             Por quê?
           </button>
+        </div>
+
+        {/* Progression Card */}
+        <div className="card-glass p-4 mb-4">
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div className="flex-1">
+              {/* Último treino */}
+              <p className="text-sm text-muted-foreground mb-1">
+                Último treino:{" "}
+                {lastPerformance ? (
+                  <span className="text-foreground font-medium">
+                    {lastPerformance.kg} kg × {lastPerformance.reps}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </p>
+              
+              {/* Meta hoje */}
+              <p className="text-sm text-muted-foreground">
+                Meta hoje: <span className="text-foreground">{progression.metaHoje}</span>
+              </p>
+            </div>
+            
+            {/* Status chip */}
+            <span 
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                progression.status === "ready" 
+                  ? "bg-primary/20 text-primary" 
+                  : progression.status === "maintain"
+                  ? "bg-secondary text-muted-foreground"
+                  : "bg-secondary/50 text-muted-foreground"
+              }`}
+            >
+              <span>{progression.statusIcon}</span>
+              <span>{progression.statusLabel}</span>
+            </span>
+          </div>
+          
+          {/* Sugestão dinâmica */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
+            <p className="text-xs text-muted-foreground">{progression.message}</p>
+            {progression.status === "ready" && progression.suggestedNextLoad && (
+              <button
+                onClick={handleApplySuggestion}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+              >
+                <Sparkles className="w-3 h-3" />
+                Aplicar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Warmup Card */}

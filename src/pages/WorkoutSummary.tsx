@@ -1,7 +1,14 @@
 import { Trophy, ArrowRight, CheckCircle, Dumbbell } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { getWorkout, treinoDoDiaId } from "@/data/workouts";
-import { completeTreinoDoDia, getWorkoutSummaryStats } from "@/lib/storage";
+import { 
+  completeTreinoDoDia, 
+  getWorkoutSummaryStats, 
+  getTreinoProgresso,
+  saveExerciseSnapshot,
+  ExerciseSetSnapshot,
+} from "@/lib/storage";
 import BottomNav from "@/components/BottomNav";
 
 const XP_PER_WORKOUT = 150;
@@ -10,8 +17,39 @@ const WorkoutSummary = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
   const workout = getWorkout(treinoId || treinoDoDiaId);
+  const snapshotSavedRef = useRef(false);
   
   const { completedSets, totalSets, totalVolume } = getWorkoutSummaryStats(treinoId || treinoDoDiaId);
+
+  // Salvar snapshots de todos os exercícios ao entrar no resumo
+  useEffect(() => {
+    if (snapshotSavedRef.current || !workout) return;
+    snapshotSavedRef.current = true;
+    
+    const progresso = getTreinoProgresso();
+    const workoutProgress = progresso[treinoId || treinoDoDiaId];
+    
+    if (workoutProgress) {
+      for (const exercise of workout.exercicios) {
+        const exerciseProgress = workoutProgress[exercise.id];
+        if (exerciseProgress && exerciseProgress.workSets.length > 0) {
+          // Apenas séries válidas (done = true)
+          const completedSets: ExerciseSetSnapshot[] = exerciseProgress.workSets
+            .filter(s => s.done)
+            .map(s => ({ kg: s.kg, reps: s.reps }));
+          
+          if (completedSets.length > 0) {
+            saveExerciseSnapshot(
+              exercise.id,
+              workout.id,
+              exercise.repsRange,
+              completedSets
+            );
+          }
+        }
+      }
+    }
+  }, [workout, treinoId]);
 
   const handleConcluir = () => {
     completeTreinoDoDia(XP_PER_WORKOUT);

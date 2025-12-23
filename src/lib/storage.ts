@@ -38,6 +38,8 @@ export const STORAGE_KEYS = {
   NUTRITION_DIET: "levelup.nutrition.diet",
   NUTRITION_TODAY: "levelup.nutrition.today",
   NUTRITION_COMPLETED: "levelup.nutrition.completed",
+  EXERCISE_HISTORY: "levelup.exerciseHistory",
+  PROGRESSION_SUGGESTIONS: "levelup.progressionSuggestions",
 } as const;
 
 // Tipos de dados persistidos
@@ -632,4 +634,197 @@ export function completeNutritionToday(xpGained: number): void {
     completedAt: new Date().toISOString(),
   };
   save(STORAGE_KEYS.NUTRITION_COMPLETED, completed);
+}
+
+// ======= EXERCISE HISTORY & PROGRESSION =======
+
+export interface ExerciseSetSnapshot {
+  kg: number;
+  reps: number;
+}
+
+export interface ExerciseSnapshot {
+  exerciseId: string;
+  workoutId: string;
+  repsRange: string;
+  workSets: ExerciseSetSnapshot[];
+  timestamp: string;
+}
+
+export interface ExerciseHistoryData {
+  [exerciseId: string]: ExerciseSnapshot[];
+}
+
+export interface ProgressionSuggestion {
+  status: "ready" | "maintain" | "return";
+  statusLabel: string;
+  statusIcon: string;
+  message: string;
+  metaHoje: string;
+  suggestedNextLoad?: number;
+}
+
+export interface ProgressionSuggestions {
+  [exerciseId: string]: {
+    suggestedNextLoad: number;
+    appliedAt: string;
+  };
+}
+
+// Obtém histórico de todos os exercícios
+export function getExerciseHistory(): ExerciseHistoryData {
+  return load(STORAGE_KEYS.EXERCISE_HISTORY, {});
+}
+
+// Salva snapshot de um exercício após concluir treino
+export function saveExerciseSnapshot(
+  exerciseId: string,
+  workoutId: string,
+  repsRange: string,
+  workSets: ExerciseSetSnapshot[]
+): void {
+  const history = getExerciseHistory();
+  
+  const snapshot: ExerciseSnapshot = {
+    exerciseId,
+    workoutId,
+    repsRange,
+    workSets,
+    timestamp: new Date().toISOString(),
+  };
+  
+  if (!history[exerciseId]) {
+    history[exerciseId] = [];
+  }
+  
+  // Adiciona no início (mais recente primeiro)
+  history[exerciseId].unshift(snapshot);
+  
+  // Mantém apenas os últimos 10 snapshots por exercício
+  if (history[exerciseId].length > 10) {
+    history[exerciseId] = history[exerciseId].slice(0, 10);
+  }
+  
+  save(STORAGE_KEYS.EXERCISE_HISTORY, history);
+}
+
+// Retorna o último desempenho de um exercício (melhor set válido)
+export function getLastExercisePerformance(exerciseId: string): { kg: number; reps: number; timestamp: string } | null {
+  const history = getExerciseHistory();
+  const snapshots = history[exerciseId];
+  
+  if (!snapshots || snapshots.length === 0) return null;
+  
+  const lastSnapshot = snapshots[0];
+  
+  // Encontra o melhor set (maior kg × reps)
+  let bestSet = { kg: 0, reps: 0 };
+  for (const set of lastSnapshot.workSets) {
+    if (set.kg * set.reps > bestSet.kg * bestSet.reps) {
+      bestSet = set;
+    }
+  }
+  
+  return {
+    kg: bestSet.kg,
+    reps: bestSet.reps,
+    timestamp: lastSnapshot.timestamp,
+  };
+}
+
+// Calcula sugestão de progressão para um exercício
+export function getProgressionSuggestion(exerciseId: string, repsRange: string): ProgressionSuggestion {
+  const history = getExerciseHistory();
+  const snapshots = history[exerciseId];
+  
+  // Parse repsRange (ex: "6–10" ou "8-12")
+  const rangeMatch = repsRange.match(/(\d+)[–-](\d+)/);
+  const lowerLimit = rangeMatch ? parseInt(rangeMatch[1]) : 6;
+  const upperLimit = rangeMatch ? parseInt(rangeMatch[2]) : 10;
+  
+  // Sem histórico
+  if (!snapshots || snapshots.length === 0) {
+    return {
+      status: "return",
+      statusLabel: "Retorno",
+      statusIcon: "🕒",
+      message: "Primeiro treino deste exercício",
+      metaHoje: `Faça ${lowerLimit}–${upperLimit} reps nas séries válidas`,
+    };
+  }
+  
+  const lastSnapshot = snapshots[0];
+  const workSets = lastSnapshot.workSets;
+  
+  // Verifica se todas as séries atingiram o topo da faixa
+  const allAtTop = workSets.length > 0 && workSets.every(set => set.reps >= upperLimit);
+  
+  // Encontra a carga usada (maior kg)
+  const maxKg = Math.max(...workSets.map(s => s.kg), 0);
+  
+  if (allAtTop) {
+    const suggestedLoad = Math.round(maxKg * 1.025 * 2) / 2; // Arredonda para 0.5kg
+    return {
+      status: "ready",
+      statusLabel: "Pronto p/ subir",
+      statusIcon: "✅",
+      message: `Sugestão: +2,5% → ${suggestedLoad} kg`,
+      metaHoje: `Subir para ${suggestedLoad} kg e fazer ${lowerLimit}+ reps`,
+      suggestedNextLoad: suggestedLoad,
+    };
+  }
+  
+  return {
+    status: "maintain",
+    statusLabel: "Manter",
+    statusIcon: "⏳",
+    message: "Mantenha a carga e tente aumentar reps",
+    metaHoje: `Bater ${upperLimit} reps em todas as séries para subir carga`,
+  };
+}
+
+// Obtém sugestões salvas (quando usuário clica "Aplicar sugestão")
+export function getProgressionSuggestions(): ProgressionSuggestions {
+  return load(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, {});
+}
+
+// Salva sugestão de próxima carga para um exercício
+export function saveProgressionSuggestion(exerciseId: string, suggestedNextLoad: number): void {
+  const suggestions = getProgressionSuggestions();
+  suggestions[exerciseId] = {
+    suggestedNextLoad,
+    appliedAt: new Date().toISOString(),
+  };
+  save(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, suggestions);
+}
+
+// Formata timestamp para data relativa (ex: "há 3 dias")
+export function formatRelativeDate(timestamp: string): string {
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return "hoje";
+  if (diffDays === 1) return "ontem";
+  if (diffDays < 7) return `há ${diffDays} dias`;
+  if (diffDays < 30) return `há ${Math.floor(diffDays / 7)} sem.`;
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+// Obtém o último treino de um workout específico
+export function getLastWorkoutDate(workoutId: string): string | null {
+  const history = getExerciseHistory();
+  
+  // Procura qualquer exercício deste workout
+  for (const exerciseId in history) {
+    const snapshots = history[exerciseId];
+    for (const snapshot of snapshots) {
+      if (snapshot.workoutId === workoutId) {
+        return snapshot.timestamp;
+      }
+    }
+  }
+  
+  return null;
 }

@@ -732,7 +732,7 @@ export function getLastExercisePerformance(exerciseId: string): { kg: number; re
   };
 }
 
-// Calcula sugestão de progressão para um exercício
+// Calcula sugestão de progressão para um exercício (meta dinâmica baseada no último treino)
 export function getProgressionSuggestion(exerciseId: string, repsRange: string): ProgressionSuggestion {
   const history = getExerciseHistory();
   const snapshots = history[exerciseId];
@@ -759,8 +759,9 @@ export function getProgressionSuggestion(exerciseId: string, repsRange: string):
   // Verifica se todas as séries atingiram o topo da faixa
   const allAtTop = workSets.length > 0 && workSets.every(set => set.reps >= upperLimit);
   
-  // Encontra a carga usada (maior kg)
+  // Encontra a carga usada (maior kg) e a maior reps
   const maxKg = Math.max(...workSets.map(s => s.kg), 0);
+  const maxReps = Math.max(...workSets.map(s => s.reps), lowerLimit);
   
   if (allAtTop) {
     const suggestedLoad = Math.round(maxKg * 1.025 * 2) / 2; // Arredonda para 0.5kg
@@ -768,18 +769,22 @@ export function getProgressionSuggestion(exerciseId: string, repsRange: string):
       status: "ready",
       statusLabel: "Pronto p/ subir",
       statusIcon: "✅",
-      message: `Sugestão: +2,5% → ${suggestedLoad} kg`,
-      metaHoje: `Subir para ${suggestedLoad} kg e fazer ${lowerLimit}+ reps`,
+      message: `Sugestão: +2,5% → ${suggestedLoad} kg na próxima`,
+      metaHoje: `Manter ${upperLimit} reps com ${maxKg} kg (confirmar)`,
       suggestedNextLoad: suggestedLoad,
     };
   }
+  
+  // Meta dinâmica: tentar subir reps baseado no último treino
+  const targetReps = Math.min(maxReps + 1, upperLimit);
+  const repsNeeded = targetReps === upperLimit ? upperLimit : `${targetReps}–${upperLimit}`;
   
   return {
     status: "maintain",
     statusLabel: "Manter",
     statusIcon: "⏳",
     message: "Mantenha a carga e tente aumentar reps",
-    metaHoje: `Bater ${upperLimit} reps em todas as séries para subir carga`,
+    metaHoje: `Tentar ${repsNeeded} reps com ${maxKg} kg`,
   };
 }
 

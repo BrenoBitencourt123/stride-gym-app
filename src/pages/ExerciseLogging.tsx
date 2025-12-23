@@ -11,6 +11,7 @@ import {
   ExerciseProgress,
   getLastExercisePerformance,
   getProgressionSuggestion,
+  getProgressionSuggestions,
   saveProgressionSuggestion,
   ProgressionSuggestion,
 } from "@/lib/storage";
@@ -29,7 +30,7 @@ const ExerciseLogging = () => {
   const [workSets, setWorkSets] = useState<SetProgress[]>([]);
   const [showSuggestion, setShowSuggestion] = useState(false);
 
-  // Initialize from storage or defaults
+  // Initialize from storage or defaults, with suggested load support
   useEffect(() => {
     if (!exercise) return;
     
@@ -40,13 +41,22 @@ const ExerciseLogging = () => {
       setFeederSets(savedProgress.feederSets);
       setWorkSets(savedProgress.workSets);
     } else {
-      // Use defaults from workout data
+      // Check for suggested load from previous session
+      const suggestions = getProgressionSuggestions();
+      const suggestion = suggestions[exercicioId || ""];
+      const suggestedLoad = suggestion?.suggestedNextLoad;
+      
+      // Use defaults from workout data, applying suggested load if available
       setWarmupDone(false);
       setFeederSets(
         exercise.feederSetsDefault.map(s => ({ ...s, done: false }))
       );
       setWorkSets(
-        exercise.workSetsDefault.map(s => ({ ...s, done: false }))
+        exercise.workSetsDefault.map(s => ({
+          ...s,
+          kg: suggestedLoad || s.kg, // Apply suggested load if available
+          done: false,
+        }))
       );
     }
   }, [treinoId, exercicioId, exercise]);

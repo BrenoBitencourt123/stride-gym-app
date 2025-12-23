@@ -109,7 +109,7 @@ export interface TodayEntry {
   foodId: string;
   quantidade: number;
   unidade: "g" | "un" | "ml" | "scoop";
-  source: "diet" | "extra";
+  source: "diet" | "extra" | "auto";
   createdAt: number;
 }
 
@@ -338,7 +338,7 @@ export function saveNutritionToday(today: NutritionToday): void {
   save(STORAGE_KEYS.NUTRITION_TODAY, today);
 }
 
-export function addFoodToToday(mealId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop", source: "diet" | "extra" = "extra"): void {
+export function addFoodToToday(mealId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop", source: "diet" | "extra" | "auto" = "extra"): void {
   const today = getNutritionToday();
   const meal = today.meals.find(m => m.id === mealId);
   

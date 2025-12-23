@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Treino from "./pages/Treino";
 import WorkoutDetail from "./pages/WorkoutDetail";
@@ -17,6 +18,7 @@ import AjustarPlano from "./pages/AjustarPlano";
 import Conquistas from "./pages/Conquistas";
 import Perfil from "./pages/Perfil";
 import Progresso from "./pages/Progresso";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,28 +26,30 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/treino" element={<Treino />} />
-          <Route path="/treino/ajustar" element={<AjustarPlano />} />
-          <Route path="/treino/:treinoId" element={<WorkoutDetail />} />
-          <Route path="/treino/:treinoId/:exercicioId" element={<ExerciseLogging />} />
-          <Route path="/treino/:treinoId/resumo" element={<WorkoutSummary />} />
-          <Route path="/nutricao" element={<Nutricao />} />
-          <Route path="/nutricao/criar-dieta" element={<CriarDieta />} />
-          <Route path="/nutricao/adicionar-alimento" element={<AdicionarAlimento />} />
-          <Route path="/nutricao/resumo" element={<NutritionSummary />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/conquistas" element={<Conquistas />} />
-          <Route path="/perfil" element={<Perfil />} />
-          <Route path="/progresso" element={<Progresso />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/treino" element={<Treino />} />
+            <Route path="/treino/ajustar" element={<AjustarPlano />} />
+            <Route path="/treino/:treinoId" element={<WorkoutDetail />} />
+            <Route path="/treino/:treinoId/:exercicioId" element={<ExerciseLogging />} />
+            <Route path="/treino/:treinoId/resumo" element={<WorkoutSummary />} />
+            <Route path="/nutricao" element={<Nutricao />} />
+            <Route path="/nutricao/criar-dieta" element={<CriarDieta />} />
+            <Route path="/nutricao/adicionar-alimento" element={<AdicionarAlimento />} />
+            <Route path="/nutricao/resumo" element={<NutritionSummary />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/conquistas" element={<Conquistas />} />
+            <Route path="/perfil" element={<Perfil />} />
+            <Route path="/progresso" element={<Progresso />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

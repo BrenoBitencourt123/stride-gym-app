@@ -1,53 +1,95 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Search, ScanLine, Minus, Plus } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ChevronLeft, Search, Minus, Plus } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
-
-interface FoodItem {
-  id: string;
-  name: string;
-  portion: string;
-  kcal: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
-
-const mockFoods: FoodItem[] = [
-  { id: "arroz", name: "Arroz cozido", portion: "100 g", kcal: 130, protein: 2, carbs: 28, fat: 0 },
-  { id: "frango", name: "Frango grelhado", portion: "100 g", kcal: 165, protein: 31, carbs: 0, fat: 4 },
-  { id: "ovo", name: "Ovo inteiro", portion: "1 un", kcal: 70, protein: 6, carbs: 0, fat: 5 },
-  { id: "whey", name: "Whey protein", portion: "1 scoop", kcal: 120, protein: 24, carbs: 3, fat: 1 },
-  { id: "banana", name: "Banana", portion: "1 un", kcal: 105, protein: 1, carbs: 27, fat: 0 },
-];
-
-const recentSuggestions = ["Arroz", "Frango", "Whey", "Banana"];
+import { foods, searchFoods, type FoodItem } from "@/data/foods";
+import { addFoodToToday, addFoodToDiet, DEFAULT_MEALS } from "@/lib/storage";
+import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const AdicionarAlimento = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  const mealId = searchParams.get("mealId");
+  const mode = searchParams.get("mode"); // "diet" ou null (today)
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
-  const [portionMultiplier, setPortionMultiplier] = useState(1);
+  const [quantidade, setQuantidade] = useState(0);
+  const [selectedMealId, setSelectedMealId] = useState(mealId || "almoco");
 
-  const filteredFoods = searchQuery
-    ? mockFoods.filter((food) =>
-        food.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : mockFoods;
+  const filteredFoods = useMemo(() => searchFoods(searchQuery), [searchQuery]);
+
+  const recentSuggestions = ["Arroz", "Frango", "Whey", "Banana", "Ovo"];
 
   const handleSelectFood = (food: FoodItem) => {
     setSelectedFood(food);
-    setPortionMultiplier(1);
+    setQuantidade(food.porcaoBase);
   };
 
   const handleAdd = () => {
-    navigate("/nutricao");
+    if (!selectedFood) return;
+    
+    if (mode === "diet") {
+      addFoodToDiet(
+        mealId || selectedMealId, 
+        selectedFood.id, 
+        quantidade, 
+        selectedFood.unidadeBase
+      );
+      toast.success(`${selectedFood.nome} adicionado à dieta!`);
+      navigate("/nutricao/criar-dieta");
+    } else {
+      addFoodToToday(
+        mealId || selectedMealId, 
+        selectedFood.id, 
+        quantidade, 
+        selectedFood.unidadeBase, 
+        "extra"
+      );
+      toast.success(`${selectedFood.nome} adicionado!`);
+      navigate("/nutricao");
+    }
   };
 
-  const adjustedKcal = selectedFood ? Math.round(selectedFood.kcal * portionMultiplier) : 0;
-  const adjustedProtein = selectedFood ? Math.round(selectedFood.protein * portionMultiplier) : 0;
-  const adjustedCarbs = selectedFood ? Math.round(selectedFood.carbs * portionMultiplier) : 0;
-  const adjustedFat = selectedFood ? Math.round(selectedFood.fat * portionMultiplier) : 0;
+  // Calcular macros ajustados
+  const fator = selectedFood ? quantidade / selectedFood.porcaoBase : 0;
+  const adjustedKcal = selectedFood ? Math.round(selectedFood.kcal * fator) : 0;
+  const adjustedProtein = selectedFood ? Math.round(selectedFood.p * fator) : 0;
+  const adjustedCarbs = selectedFood ? Math.round(selectedFood.c * fator) : 0;
+  const adjustedFat = selectedFood ? Math.round(selectedFood.g * fator) : 0;
+
+  // Incremento baseado na unidade
+  const getIncrement = (unidade: string) => {
+    switch (unidade) {
+      case "g": return 10;
+      case "ml": return 50;
+      case "un": return 1;
+      case "scoop": return 1;
+      default: return 10;
+    }
+  };
+
+  const increment = selectedFood ? getIncrement(selectedFood.unidadeBase) : 10;
+
+  const formatQuantidade = () => {
+    if (!selectedFood) return "";
+    switch (selectedFood.unidadeBase) {
+      case "un": return `${quantidade} un`;
+      case "scoop": return `${quantidade} scoop`;
+      case "ml": return `${quantidade} ml`;
+      default: return `${quantidade} g`;
+    }
+  };
+
+  const backUrl = mode === "diet" ? "/nutricao/criar-dieta" : "/nutricao";
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -62,17 +104,33 @@ const AdicionarAlimento = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link
-              to="/nutricao"
+              to={backUrl}
               className="p-2 -ml-2 rounded-xl hover:bg-card/50 transition-colors"
             >
               <ChevronLeft size={24} className="text-foreground" />
             </Link>
             <h1 className="text-2xl font-bold text-foreground">Adicionar alimento</h1>
           </div>
-          <button className="p-2 rounded-xl hover:bg-card/50 transition-colors">
-            <ScanLine size={20} className="text-muted-foreground" />
-          </button>
         </div>
+
+        {/* Meal selector (quando não vem da query) */}
+        {!mealId && (
+          <div className="mb-4">
+            <label className="text-sm text-muted-foreground mb-2 block">Adicionar em:</label>
+            <Select value={selectedMealId} onValueChange={setSelectedMealId}>
+              <SelectTrigger className="w-full bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DEFAULT_MEALS.map(meal => (
+                  <SelectItem key={meal.id} value={meal.id}>
+                    {meal.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Search Input */}
         <div className="relative mb-4">
@@ -87,7 +145,7 @@ const AdicionarAlimento = () => {
         </div>
 
         {/* Recent Suggestions */}
-        {!searchQuery && (
+        {!searchQuery && !selectedFood && (
           <div className="flex flex-wrap gap-2 mb-4">
             {recentSuggestions.map((suggestion) => (
               <button
@@ -102,46 +160,56 @@ const AdicionarAlimento = () => {
         )}
 
         {/* Results List */}
-        <div className="space-y-2 mb-4">
-          {filteredFoods.map((food) => (
-            <button
-              key={food.id}
-              onClick={() => handleSelectFood(food)}
-              className={`w-full card-glass p-4 flex items-center justify-between transition-colors ${
-                selectedFood?.id === food.id ? "border-primary/50" : ""
-              }`}
-            >
-              <div className="text-left">
-                <p className="font-medium text-foreground">{food.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {food.portion} — {food.kcal} kcal
-                </p>
-              </div>
-              <ChevronRight size={18} className="text-muted-foreground" />
-            </button>
-          ))}
-        </div>
+        {!selectedFood && (
+          <div className="space-y-2 mb-4">
+            {filteredFoods.slice(0, 10).map((food) => (
+              <button
+                key={food.id}
+                onClick={() => handleSelectFood(food)}
+                className="w-full card-glass p-4 flex items-center justify-between transition-colors hover:border-primary/50"
+              >
+                <div className="text-left">
+                  <p className="font-medium text-foreground">{food.nome}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {food.porcaoBase}{food.unidadeBase === "un" ? " un" : food.unidadeBase === "scoop" ? " scoop" : ` ${food.unidadeBase}`} — {food.kcal} kcal
+                  </p>
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  <span className="text-pink-500">P</span> {food.p}g · <span className="text-yellow-400">C</span> {food.c}g · <span className="text-blue-400">G</span> {food.g}g
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Selected Food Detail */}
         {selectedFood && (
           <div className="card-glass p-4 mb-24">
-            <h3 className="font-semibold text-foreground mb-3">{selectedFood.name}</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-foreground">{selectedFood.nome}</h3>
+              <button
+                onClick={() => setSelectedFood(null)}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Trocar
+              </button>
+            </div>
 
             {/* Portion control */}
             <div className="flex items-center justify-between mb-4">
-              <span className="text-sm text-muted-foreground">Porção</span>
+              <span className="text-sm text-muted-foreground">Quantidade</span>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setPortionMultiplier(Math.max(0.5, portionMultiplier - 0.5))}
+                  onClick={() => setQuantidade(Math.max(increment, quantidade - increment))}
                   className="p-2 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
                 >
                   <Minus size={16} className="text-foreground" />
                 </button>
-                <span className="text-foreground font-medium w-16 text-center">
-                  {portionMultiplier === 1 ? selectedFood.portion : `${Math.round(portionMultiplier * 100)}%`}
+                <span className="text-foreground font-medium w-20 text-center">
+                  {formatQuantidade()}
                 </span>
                 <button
-                  onClick={() => setPortionMultiplier(portionMultiplier + 0.5)}
+                  onClick={() => setQuantidade(quantidade + increment)}
                   className="p-2 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
                 >
                   <Plus size={16} className="text-foreground" />

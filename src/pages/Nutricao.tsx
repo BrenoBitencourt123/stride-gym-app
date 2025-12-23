@@ -116,7 +116,7 @@ const Nutricao = () => {
   const gPct = Math.min((totals.g / goals.gTarget) * 100, 100);
 
   return (
-    <div className="min-h-screen bg-background pb-44">
+    <div className="min-h-screen bg-background pb-28">
       {/* Background effect */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-card/30" />
@@ -285,21 +285,17 @@ const Nutricao = () => {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Bottom CTA - Fixed but not floating */}
-      <div className="fixed bottom-20 left-0 right-0 px-4 py-3 bg-background/80 backdrop-blur-sm border-t border-border/30 z-20">
-        <div className="max-w-md mx-auto">
-          <Link
-            to="/nutricao/criar-dieta"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors"
-          >
-            <Plus size={18} className="text-primary" />
-            <span className="text-foreground font-medium">
-              {dietExists ? "Ver/editar minha dieta" : "Criar minha dieta"}
-            </span>
-          </Link>
-        </div>
+        {/* Bottom CTA - In content flow */}
+        <Link
+          to="/nutricao/criar-dieta"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors mb-6"
+        >
+          <Plus size={18} className="text-primary" />
+          <span className="text-foreground font-medium">
+            {dietExists ? "Ver/editar minha dieta" : "Criar minha dieta"}
+          </span>
+        </Link>
       </div>
 
       {/* Bottom Navigation */}

@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, User, Chrome, AlertCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Mail, Lock, User, Chrome, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +9,8 @@ import { toast } from 'sonner';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signInGoogle, signInEmail, signUpEmail, isConfigured } = useAuth();
+  const location = useLocation();
+  const { user, signInGoogle, signInEmail, signUpEmail, isConfigured, loading: authLoading } = useAuth();
   
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -19,13 +19,23 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Get the intended destination or default to home
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate(from, { replace: true });
+    }
+  }, [user, authLoading, navigate, from]);
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError('');
     try {
       await signInGoogle();
       toast.success('Login realizado com sucesso!');
-      navigate('/perfil');
+      navigate(from, { replace: true });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro ao fazer login com Google';
       setError(message);
@@ -63,7 +73,7 @@ const Login = () => {
         await signInEmail(email, password);
         toast.success('Login realizado com sucesso!');
       }
-      navigate('/perfil');
+      navigate(from, { replace: true });
     } catch (err: unknown) {
       let message = 'Erro de autenticação';
       if (err instanceof Error) {
@@ -86,6 +96,18 @@ const Login = () => {
     }
   };
 
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
@@ -93,11 +115,8 @@ const Login = () => {
           <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-foreground mb-2">Firebase não configurado</h2>
           <p className="text-muted-foreground mb-4">
-            Para usar a sincronização na nuvem, configure as variáveis de ambiente do Firebase.
+            Para usar o app, configure as variáveis de ambiente do Firebase.
           </p>
-          <Link to="/">
-            <Button variant="outline">Voltar ao app</Button>
-          </Link>
         </div>
       </div>
     );
@@ -112,18 +131,19 @@ const Login = () => {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <Link
-            to="/"
-            className="w-10 h-10 rounded-full bg-secondary/50 flex items-center justify-center hover:bg-secondary transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-          </Link>
-          <h1 className="text-2xl font-bold text-foreground">
+      <div className="relative z-10 max-w-md mx-auto px-4 pt-12">
+        {/* Logo/Brand */}
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+            <User className="w-10 h-10 text-primary-foreground" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground">LevelUp Gym</h2>
+          <h1 className="text-2xl font-bold text-foreground mt-2">
             {isSignUp ? 'Criar Conta' : 'Entrar'}
           </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            {isSignUp ? 'Crie sua conta para começar' : 'Faça login para continuar'}
+          </p>
         </div>
 
         {/* Logo/Brand */}
@@ -240,14 +260,6 @@ const Login = () => {
           </p>
         </div>
 
-        {/* Back to app note */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-muted-foreground">
-            O app funciona offline sem login.
-            <br />
-            O login é apenas para backup e sincronização.
-          </p>
-        </div>
       </div>
     </div>
   );

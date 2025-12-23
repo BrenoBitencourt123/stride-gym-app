@@ -1,7 +1,7 @@
 // Sync logic for local-first with cloud backup
 
 import { getRemoteState, setRemoteState, isFirebaseConfigured } from '@/services/firebase';
-import { getLocalState, setLocalState, AppState } from './appState';
+import { getLocalState, setLocalState, createNewUserState, AppState } from './appState';
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'pending' | 'offline' | 'error';
 
@@ -28,10 +28,27 @@ export async function syncState(uid: string): Promise<{ status: SyncStatus; mess
     const remote = await getRemoteState(uid) as AppState | null;
     
     if (!remote) {
-      // No remote state - push local
-      const success = await setRemoteState(uid, local);
-      if (success) {
-        return { status: 'synced', message: 'Dados enviados para a nuvem' };
+      // No remote state - this is a NEW user
+      // Check if local state is "fresh" (migrated from legacy or default)
+      // If local has significant data, push it; otherwise initialize fresh
+      const hasSignificantData = local.workoutHistory.length > 0 || 
+        Object.keys(local.exerciseHistory).length > 0 ||
+        local.bodyweight.entries.length > 0;
+      
+      if (hasSignificantData) {
+        // Push existing local data
+        const success = await setRemoteState(uid, local);
+        if (success) {
+          return { status: 'synced', message: 'Dados enviados para a nuvem' };
+        }
+      } else {
+        // Initialize new user with Level 1
+        const newState = createNewUserState();
+        setLocalState(newState);
+        const success = await setRemoteState(uid, newState);
+        if (success) {
+          return { status: 'synced', message: 'Conta inicializada' };
+        }
       }
       return { status: 'error', message: 'Erro ao enviar dados' };
     }

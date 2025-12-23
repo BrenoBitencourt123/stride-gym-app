@@ -186,6 +186,20 @@ export interface AppStateAchievements {
   updatedAt: number;
 }
 
+// Weekly workout completions
+export interface WeeklyWorkoutCompletion {
+  completedAt: string;
+  xpGained: number;
+  setsCompleted: number;
+  totalVolume: number;
+}
+
+export interface WeeklyCompletions {
+  [weekStart: string]: {
+    [workoutId: string]: WeeklyWorkoutCompletion;
+  };
+}
+
 export interface AppState {
   version: number;
   updatedAt: number;
@@ -200,12 +214,23 @@ export interface AppState {
   treinoProgresso?: TreinoProgresso;
   quests?: Quests;
   progressionSuggestions?: ProgressionSuggestions;
+  weeklyCompletions?: WeeklyCompletions;
 }
 
 const APP_STATE_KEY = 'levelup.appState';
 const APP_STATE_VERSION = 1;
 
-// Default values
+// Default values for NEW users (start at Level 1)
+const DEFAULT_PROFILE_NEW_USER: Profile = {
+  xpAtual: 0,
+  xpMeta: 500,
+  level: 1,
+  streakDias: 0,
+  multiplier: 1.0,
+  shields: 0,
+};
+
+// Legacy default (for migration)
 const DEFAULT_PROFILE: Profile = {
   xpAtual: 1240,
   xpMeta: 1500,
@@ -400,4 +425,103 @@ export function importAppState(jsonString: string): { success: boolean; error?: 
   } catch {
     return { success: false, error: 'Erro ao processar JSON' };
   }
+}
+
+// ============= NEW USER INITIALIZATION =============
+
+import { getWeekStart } from './weekUtils';
+
+export function createNewUserState(): AppState {
+  const defaultPlan: UserWorkoutPlan = {
+    workouts: [],
+    updatedAt: new Date().toISOString(),
+  };
+
+  return {
+    version: APP_STATE_VERSION,
+    updatedAt: Date.now(),
+    profile: {
+      displayName: 'Atleta',
+      photoURL: undefined,
+      goal: undefined,
+    },
+    progression: {
+      accountLevel: 1,
+      xp: 0,
+      xpToNext: 500,
+      streakDays: 0,
+      shields: 0,
+      multiplier: 1.0,
+    },
+    plan: defaultPlan,
+    workoutHistory: [],
+    exerciseHistory: {},
+    nutrition: {
+      targets: {
+        kcal: 2050,
+        protein: 160,
+        carbs: 200,
+        fats: 65,
+      },
+      dailyLogs: {},
+    },
+    bodyweight: {
+      entries: [],
+    },
+    achievements: {
+      unlocked: [],
+      updatedAt: Date.now(),
+    },
+    treinoProgresso: {},
+    quests: {
+      treinoDoDiaDone: false,
+      registrarAlimentacaoDone: false,
+      registrarPesoDone: false,
+    },
+    progressionSuggestions: {},
+    weeklyCompletions: {},
+  };
+}
+
+// ============= WEEKLY COMPLETION FUNCTIONS =============
+
+export function markWorkoutCompletedThisWeek(
+  workoutId: string,
+  xpGained: number,
+  setsCompleted: number,
+  totalVolume: number
+): void {
+  const state = getLocalState();
+  const weekStart = getWeekStart(new Date());
+
+  if (!state.weeklyCompletions) {
+    state.weeklyCompletions = {};
+  }
+
+  if (!state.weeklyCompletions[weekStart]) {
+    state.weeklyCompletions[weekStart] = {};
+  }
+
+  state.weeklyCompletions[weekStart][workoutId] = {
+    completedAt: new Date().toISOString(),
+    xpGained,
+    setsCompleted,
+    totalVolume,
+  };
+
+  setLocalState(state);
+}
+
+export function isWorkoutCompletedThisWeek(workoutId: string, weekStart?: string): boolean {
+  const state = getLocalState();
+  const week = weekStart || getWeekStart(new Date());
+
+  return !!(state.weeklyCompletions?.[week]?.[workoutId]);
+}
+
+export function getWeeklyCompletions(weekStart?: string): Record<string, { completedAt: string; xpGained: number; setsCompleted: number; totalVolume: number }> {
+  const state = getLocalState();
+  const week = weekStart || getWeekStart(new Date());
+
+  return state.weeklyCompletions?.[week] || {};
 }

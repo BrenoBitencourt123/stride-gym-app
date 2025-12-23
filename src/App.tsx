@@ -16,6 +16,7 @@ import SettingsPage from "./pages/Settings";
 import AjustarPlano from "./pages/AjustarPlano";
 import Conquistas from "./pages/Conquistas";
 import Perfil from "./pages/Perfil";
+import Progresso from "./pages/Progresso";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/conquistas" element={<Conquistas />} />
           <Route path="/perfil" element={<Perfil />} />
+          <Route path="/progresso" element={<Progresso />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getWorkout } from "@/data/workouts";
 import { 
+  getUserWorkout,
   getLastExercisePerformance, 
   getProgressionSuggestion, 
   getLastWorkoutDate,
@@ -15,7 +15,7 @@ interface WorkoutCardProps {
 }
 
 const WorkoutCard = ({ title, exercises, slug }: WorkoutCardProps) => {
-  const workout = getWorkout(slug);
+  const workout = getUserWorkout(slug);
   const mainExercise = workout?.exercicios[0];
   
   // Dados do último treino

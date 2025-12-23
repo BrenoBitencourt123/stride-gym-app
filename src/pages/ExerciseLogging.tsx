@@ -3,8 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import SetRow from "@/components/SetRow";
-import { getWorkout, getExercise, getNextExercise, isLastExercise } from "@/data/workouts";
 import { 
+  getUserWorkout,
+  getUserExercise,
+  getUserNextExercise,
+  isUserLastExercise,
   getExerciseProgress, 
   saveExerciseProgress, 
   SetProgress,
@@ -21,8 +24,8 @@ const ExerciseLogging = () => {
   const { treinoId, exercicioId } = useParams();
   const navigate = useNavigate();
   
-  const workout = getWorkout(treinoId || "");
-  const exercise = getExercise(treinoId || "", exercicioId || "");
+  const workout = getUserWorkout(treinoId || "");
+  const exercise = getUserExercise(treinoId || "", exercicioId || "");
   
   // State
   const [warmupDone, setWarmupDone] = useState(false);
@@ -152,17 +155,17 @@ const ExerciseLogging = () => {
   const handleNextExercise = () => {
     if (!treinoId || !exercicioId) return;
     
-    if (isLastExercise(treinoId, exercicioId)) {
+    if (isUserLastExercise(treinoId, exercicioId)) {
       navigate(`/treino/${treinoId}/resumo`);
     } else {
-      const nextExercise = getNextExercise(treinoId, exercicioId);
+      const nextExercise = getUserNextExercise(treinoId, exercicioId);
       if (nextExercise) {
         navigate(`/treino/${treinoId}/${nextExercise.id}`);
       }
     }
   };
 
-  const isLast = isLastExercise(treinoId || "", exercicioId || "");
+  const isLast = isUserLastExercise(treinoId || "", exercicioId || "");
   const restTime = exercise ? `${Math.floor(exercise.descansoSeg / 60)} min` : "2 min";
 
   if (!exercise || !workout) {

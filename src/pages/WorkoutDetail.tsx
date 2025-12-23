@@ -3,8 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useState } from "react";
 import ExerciseCard from "@/components/ExerciseCard";
 import BottomNav from "@/components/BottomNav";
-import { getWorkout } from "@/data/workouts";
-import { saveTreinoHoje, clearTreinoProgress } from "@/lib/storage";
+import { getUserWorkout, saveTreinoHoje, clearTreinoProgress } from "@/lib/storage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +17,7 @@ import {
 
 const WorkoutDetail = () => {
   const { treinoId } = useParams();
-  const workout = getWorkout(treinoId || "");
+  const workout = getUserWorkout(treinoId || "");
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   

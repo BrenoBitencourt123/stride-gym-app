@@ -347,7 +347,52 @@ export function getNutritionToday(): NutritionToday {
     return fresh;
   }
   
+  // Migração de dados antigos: corrigir entries sem planned/consumed
+  let needsSave = false;
+  for (const meal of stored.meals) {
+    for (const entry of meal.entries) {
+      if (entry.planned === undefined) {
+        entry.planned = entry.source === "diet";
+        needsSave = true;
+      }
+      if (entry.consumed === undefined) {
+        entry.consumed = entry.source !== "diet";
+        needsSave = true;
+      }
+    }
+  }
+  
+  if (needsSave) {
+    save(STORAGE_KEYS.NUTRITION_TODAY, stored);
+  }
+  
   return stored;
+}
+
+// Resetar checklist do dia e reaplicar dieta
+export function resetNutritionToday(): void {
+  const diet = getNutritionDiet();
+  const todayKey = getDateKey();
+  
+  const fresh: NutritionToday = {
+    dateKey: todayKey,
+    meals: DEFAULT_MEALS.map(m => {
+      const dietMeal = diet?.meals.find(dm => dm.id === m.id);
+      const entries: TodayEntry[] = dietMeal?.items.map(item => ({
+        id: crypto.randomUUID(),
+        foodId: item.foodId,
+        quantidade: item.quantidade,
+        unidade: item.unidade,
+        source: "diet" as const,
+        createdAt: Date.now(),
+        planned: true,
+        consumed: false,
+      })) || [];
+      return { ...m, entries };
+    }),
+  };
+  
+  save(STORAGE_KEYS.NUTRITION_TODAY, fresh);
 }
 
 export function saveNutritionToday(today: NutritionToday): void {

@@ -11,6 +11,7 @@ import WorkoutSummary from "./pages/WorkoutSummary";
 import Nutricao from "./pages/Nutricao";
 import CriarDieta from "./pages/CriarDieta";
 import AdicionarAlimento from "./pages/AdicionarAlimento";
+import NutritionSummary from "./pages/NutritionSummary";
 import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -31,6 +32,7 @@ const App = () => (
           <Route path="/nutricao" element={<Nutricao />} />
           <Route path="/nutricao/criar-dieta" element={<CriarDieta />} />
           <Route path="/nutricao/adicionar-alimento" element={<AdicionarAlimento />} />
+          <Route path="/nutricao/resumo" element={<NutritionSummary />} />
           <Route path="/settings" element={<SettingsPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

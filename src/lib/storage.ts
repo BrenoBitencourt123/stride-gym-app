@@ -37,6 +37,7 @@ export const STORAGE_KEYS = {
   NUTRITION_GOALS: "levelup.nutrition.goals",
   NUTRITION_DIET: "levelup.nutrition.diet",
   NUTRITION_TODAY: "levelup.nutrition.today",
+  NUTRITION_COMPLETED: "levelup.nutrition.completed",
 } as const;
 
 // Tipos de dados persistidos
@@ -579,4 +580,56 @@ export function getPlannedTotals(): { kcal: number; p: number; c: number; g: num
   // Import circular - precisamos acessar foods de outra forma
   // Esta função será implementada no componente
   return { kcal: 0, p: 0, c: 0, g: 0 };
+}
+
+// ======= NUTRITION COMPLETION =======
+
+// getDateKey já está definida acima - reutilizamos
+
+export interface NutritionCompleted {
+  dateKey: string;
+  completedAt: string;
+}
+
+// Verifica se a nutrição já foi concluída hoje
+export function isNutritionCompletedToday(): boolean {
+  const completed = load<NutritionCompleted | null>(STORAGE_KEYS.NUTRITION_COMPLETED, null);
+  if (!completed) return false;
+  return completed.dateKey === getDateKey();
+}
+
+// Conta refeições completas (todos planejados consumidos)
+export function getCompletedMealsCount(): number {
+  const today = getNutritionToday();
+  let count = 0;
+  
+  for (const meal of today.meals) {
+    const plannedItems = meal.entries.filter(e => e.planned);
+    if (plannedItems.length > 0 && plannedItems.every(e => e.consumed)) {
+      count++;
+    }
+  }
+  
+  return count;
+}
+
+// Completa a nutrição do dia: marca quest + soma XP (1x por dia)
+export function completeNutritionToday(xpGained: number): void {
+  // Evitar XP duplicado
+  if (isNutritionCompletedToday()) return;
+  
+  // Marcar quest como feita
+  const quests = getQuests();
+  quests.registrarAlimentacaoDone = true;
+  saveQuests(quests);
+  
+  // Adicionar XP
+  addXP(xpGained);
+  
+  // Marcar nutrição de hoje como completa
+  const completed: NutritionCompleted = {
+    dateKey: getDateKey(),
+    completedAt: new Date().toISOString(),
+  };
+  save(STORAGE_KEYS.NUTRITION_COMPLETED, completed);
 }

@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { Plus, HelpCircle, CheckCircle2, RotateCcw } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, HelpCircle, CheckCircle2, RotateCcw, Check } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { 
   getNutritionGoals, 
@@ -8,7 +8,8 @@ import {
   removeFoodFromToday,
   updateFoodInToday,
   toggleFoodConsumed,
-  resetNutritionToday
+  resetNutritionToday,
+  isNutritionCompletedToday
 } from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
 import { useMemo, useState } from "react";
@@ -18,6 +19,7 @@ import GoalsExplainModal from "@/components/nutrition/GoalsExplainModal";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const Nutricao = () => {
+  const navigate = useNavigate();
   const [refreshKey, setRefreshKey] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [editingItem, setEditingItem] = useState<{
@@ -31,6 +33,7 @@ const Nutricao = () => {
   const goals = getNutritionGoals();
   const today = getNutritionToday();
   const dietExists = hasDietSaved();
+  const nutritionCompleted = isNutritionCompletedToday();
 
   // Calcula totais CONSUMIDOS do dia
   const consumedTotals = useMemo(() => {
@@ -146,6 +149,13 @@ const Nutricao = () => {
     setRefreshKey(k => k + 1);
     toast.success("Checklist do dia resetado");
   };
+
+  // Critério para permitir concluir a nutrição
+  // Atingiu meta se: (90% <= kcal <= 110% da meta) OU (proteína >= meta)
+  const kcalInRange = consumedTotals.kcal >= goals.kcalTarget * 0.9 && 
+                      consumedTotals.kcal <= goals.kcalTarget * 1.1;
+  const proteinMet = consumedTotals.p >= goals.pTarget;
+  const canComplete = (kcalInRange || proteinMet) && hasAnyItems && !nutritionCompleted;
 
   // Progress percentages (baseado no consumido)
   const kcalPct = Math.min((consumedTotals.kcal / goals.kcalTarget) * 100, 100);
@@ -342,6 +352,21 @@ const Nutricao = () => {
             </div>
           )}
         </div>
+
+        {/* Botão Finalizar nutrição ou badge de concluído */}
+        {nutritionCompleted ? (
+          <div className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/20 border border-primary/50 mb-4">
+            <Check size={18} className="text-primary" />
+            <span className="text-primary font-medium">Nutrição de hoje concluída ✓</span>
+          </div>
+        ) : canComplete ? (
+          <button
+            onClick={() => navigate("/nutricao/resumo")}
+            className="w-full cta-button flex items-center justify-center gap-2 mb-4"
+          >
+            <span className="font-semibold">Finalizar nutrição de hoje</span>
+          </button>
+        ) : null}
 
         {/* Bottom CTA - In content flow */}
         <Link

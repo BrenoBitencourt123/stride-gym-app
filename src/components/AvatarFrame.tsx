@@ -17,22 +17,22 @@ const AvatarFrame = ({ level, size = "lg" }: AvatarFrameProps) => {
 
   return (
     <div className="relative flex flex-col items-center">
-      {/* Frame image */}
       <div className={`relative ${config.frame}`}>
-        <img
-          src={framePrata}
-          alt="Frame"
-          className="w-full h-full object-contain pointer-events-none"
-        />
-        
-        {/* Avatar centered in the circle */}
-        <div className={`absolute ${config.avatarTop} left-1/2 -translate-x-1/2 ${config.avatar}`}>
+        {/* Avatar behind the frame, slightly lower */}
+        <div className={`absolute ${config.avatarTop} left-1/2 -translate-x-1/2 translate-y-[3px] ${config.avatar}`}>
           <img
             src={avatarImg}
             alt="Avatar"
             className="w-full h-full rounded-full object-cover"
           />
         </div>
+        
+        {/* Frame image on top */}
+        <img
+          src={framePrata}
+          alt="Frame"
+          className="w-full h-full object-contain pointer-events-none relative z-10"
+        />
         
         {/* Level text on the banner */}
         <span className={`absolute ${config.levelBottom} left-1/2 -translate-x-1/2 font-bold text-foreground ${config.levelText} tracking-wide`}>

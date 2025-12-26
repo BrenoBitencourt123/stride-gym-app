@@ -8,6 +8,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Treino from "./pages/Treino";
 import WorkoutDetail from "./pages/WorkoutDetail";
+import ActiveWorkout from "./pages/ActiveWorkout";
 import ExerciseLogging from "./pages/ExerciseLogging";
 import WorkoutSummary from "./pages/WorkoutSummary";
 import Nutricao from "./pages/Nutricao";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/treino" element={<ProtectedRoute><Treino /></ProtectedRoute>} />
             <Route path="/treino/ajustar" element={<ProtectedRoute><AjustarPlano /></ProtectedRoute>} />
             <Route path="/treino/:treinoId" element={<ProtectedRoute><WorkoutDetail /></ProtectedRoute>} />
+            <Route path="/treino/:treinoId/ativo" element={<ProtectedRoute><ActiveWorkout /></ProtectedRoute>} />
             <Route path="/treino/:treinoId/:exercicioId" element={<ProtectedRoute><ExerciseLogging /></ProtectedRoute>} />
             <Route path="/treino/:treinoId/resumo" element={<ProtectedRoute><WorkoutSummary /></ProtectedRoute>} />
             <Route path="/nutricao" element={<ProtectedRoute><Nutricao /></ProtectedRoute>} />

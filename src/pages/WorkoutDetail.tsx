@@ -1,9 +1,8 @@
-import { ArrowLeft, Play, RotateCcw } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, Play, RotateCcw, Clock, Dumbbell } from "lucide-react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import ExerciseCard from "@/components/ExerciseCard";
 import BottomNav from "@/components/BottomNav";
-import { getUserWorkout, saveTreinoHoje, clearTreinoProgress } from "@/lib/storage";
+import { getUserWorkout, saveTreinoHoje, clearTreinoProgress, getTreinoHoje } from "@/lib/storage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +16,9 @@ import {
 
 const WorkoutDetail = () => {
   const { treinoId } = useParams();
+  const navigate = useNavigate();
   const workout = getUserWorkout(treinoId || "");
+  const treinoHoje = getTreinoHoje();
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   
@@ -30,13 +31,18 @@ const WorkoutDetail = () => {
     );
   }
 
-  const firstExercise = workout.exercicios[0];
+  const hasActiveWorkout = treinoHoje && !treinoHoje.completedAt && treinoHoje.treinoId === treinoId;
 
   const handleStartWorkout = () => {
     saveTreinoHoje({
       treinoId: workout.id,
       startedAt: new Date().toISOString(),
     });
+    navigate(`/treino/${treinoId}/ativo`);
+  };
+
+  const handleResumeWorkout = () => {
+    navigate(`/treino/${treinoId}/ativo`);
   };
 
   const handleResetWorkout = () => {
@@ -57,7 +63,7 @@ const WorkoutDetail = () => {
       {/* Content */}
       <div className="relative z-10 max-w-md mx-auto px-4 pt-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <Link
               to="/treino"
@@ -67,44 +73,81 @@ const WorkoutDetail = () => {
             </Link>
             <div>
               <h1 className="text-2xl font-bold text-foreground">{workout.titulo}</h1>
-              <p className="text-sm text-muted-foreground">{workout.exercicios.length} exercícios</p>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Dumbbell className="w-4 h-4" />
+                  {workout.exercicios.length} exercícios
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  ~{workout.duracaoEstimada} min
+                </span>
+              </div>
             </div>
           </div>
           <button
             onClick={() => setShowResetDialog(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-secondary/50 text-muted-foreground text-sm hover:bg-secondary hover:text-foreground transition-colors"
+            className="p-2 rounded-full bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >
-            <RotateCcw className="w-4 h-4" />
-            <span className="hidden sm:inline">Reiniciar</span>
+            <RotateCcw className="w-5 h-5" />
           </button>
         </div>
 
         {/* Exercise List */}
-        <div className="space-y-3 mt-6" key={resetKey}>
-          {workout.exercicios.map((exercise) => (
-            <ExerciseCard
+        <div className="space-y-2" key={resetKey}>
+          {workout.exercicios.map((exercise, index) => (
+            <div
               key={exercise.id}
-              name={exercise.nome}
-              sets={String(exercise.workSetsDefault.length)}
-              reps={exercise.repsRange}
-              rest={`${Math.floor(exercise.descansoSeg / 60)} min`}
-              slug={exercise.id}
-              workoutSlug={treinoId || ""}
-            />
+              className="card-glass p-4 flex items-center gap-4"
+            >
+              {/* Index number */}
+              <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-bold text-foreground">{index + 1}</span>
+              </div>
+
+              {/* Exercise info */}
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-foreground">{exercise.nome}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {exercise.workSetsDefault.length} séries • {exercise.repsRange} reps
+                </p>
+              </div>
+
+              {/* Tags */}
+              <div className="flex flex-wrap gap-1">
+                {exercise.tags.slice(0, 1).map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 rounded-full bg-secondary text-muted-foreground text-xs"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 
-        {/* Start Workout CTA */}
-        {firstExercise && (
-          <Link
-            to={`/treino/${treinoId}/${firstExercise.id}`}
-            onClick={handleStartWorkout}
-            className="w-full mt-6 cta-button flex items-center justify-center gap-2"
-          >
-            <Play className="w-5 h-5 fill-current" />
-            Iniciar treino
-          </Link>
-        )}
+        {/* Start/Resume Workout CTA */}
+        <div className="mt-6">
+          {hasActiveWorkout ? (
+            <button
+              onClick={handleResumeWorkout}
+              className="w-full flex items-center justify-center gap-2 py-4 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-colors"
+            >
+              <Play className="w-5 h-5 fill-current" />
+              Retomar treino
+            </button>
+          ) : (
+            <button
+              onClick={handleStartWorkout}
+              className="w-full flex items-center justify-center gap-2 py-4 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-colors"
+            >
+              <Play className="w-5 h-5 fill-current" />
+              Iniciar treino
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Reset Confirmation Dialog */}

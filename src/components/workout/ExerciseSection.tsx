@@ -1,13 +1,7 @@
-import { useState } from "react";
+import { useState, memo, useCallback } from "react";
 import { MoreVertical, Plus, Timer } from "lucide-react";
 import { ActiveExercise, ActiveSet, SetType } from "@/pages/ActiveWorkout";
 import ActiveSetRow from "./ActiveSetRow";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface ExerciseSectionProps {
   exercise: ActiveExercise;
@@ -26,7 +20,7 @@ function formatRestTime(seconds: number): string {
   return `${mins}min ${secs}s`;
 }
 
-const ExerciseSection = ({
+const ExerciseSection = memo(({
   exercise,
   exerciseIndex,
   onSetChange,
@@ -36,6 +30,14 @@ const ExerciseSection = ({
   onSetTypeClick,
 }: ExerciseSectionProps) => {
   const [showNotes, setShowNotes] = useState(!!exercise.notes);
+
+  const handleNotesChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onNotesChange(exerciseIndex, e.target.value);
+  }, [exerciseIndex, onNotesChange]);
+
+  const handleAddSet = useCallback(() => {
+    onAddSet(exerciseIndex);
+  }, [exerciseIndex, onAddSet]);
 
   return (
     <div className="card-glass overflow-hidden">
@@ -50,7 +52,7 @@ const ExerciseSection = ({
               <input
                 type="text"
                 value={exercise.notes}
-                onChange={(e) => onNotesChange(exerciseIndex, e.target.value)}
+                onChange={handleNotesChange}
                 placeholder="Adicionar notas aqui..."
                 className="mt-2 w-full bg-transparent text-sm text-muted-foreground placeholder:text-muted-foreground/50 outline-none border-none"
               />
@@ -64,19 +66,10 @@ const ExerciseSection = ({
             )}
           </div>
           
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                <MoreVertical className="w-5 h-5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>Reordenar</DropdownMenuItem>
-              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>Substituir exercício</DropdownMenuItem>
-              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>Criar supersérie</DropdownMenuItem>
-              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive">Remover exercício</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Simple menu button - dropdown removed to fix re-render loop */}
+          <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
+            <MoreVertical className="w-5 h-5" />
+          </button>
         </div>
         
         {/* Rest time badge */}
@@ -103,7 +96,7 @@ const ExerciseSection = ({
       <div className="divide-y divide-border/30">
         {exercise.sets.map((set, setIndex) => (
           <ActiveSetRow
-            key={setIndex}
+            key={`${exercise.id}-set-${setIndex}`}
             set={set}
             setIndex={setIndex}
             canRemove={exercise.sets.length > 1}
@@ -116,7 +109,7 @@ const ExerciseSection = ({
 
       {/* Add Set Button */}
       <button
-        onClick={() => onAddSet(exerciseIndex)}
+        onClick={handleAddSet}
         className="w-full px-4 py-3 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors border-t border-border/30"
       >
         <Plus className="w-4 h-4" />
@@ -124,6 +117,8 @@ const ExerciseSection = ({
       </button>
     </div>
   );
-};
+});
+
+ExerciseSection.displayName = 'ExerciseSection';
 
 export default ExerciseSection;

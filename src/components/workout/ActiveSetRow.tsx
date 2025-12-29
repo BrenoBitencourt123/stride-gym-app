@@ -1,3 +1,4 @@
+import { memo, useCallback } from "react";
 import { Check, Minus, Plus, Trash2 } from "lucide-react";
 import { ActiveSet, SetType } from "@/pages/ActiveWorkout";
 
@@ -23,14 +24,43 @@ function getSetLabel(type: SetType, index: number): { label: string; className: 
   }
 }
 
-const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClick }: ActiveSetRowProps) => {
+const ActiveSetRow = memo(({ set, setIndex, canRemove, onChange, onRemove, onTypeClick }: ActiveSetRowProps) => {
   const setLabel = getSetLabel(set.type, setIndex);
+
+  const decreaseKg = useCallback(() => {
+    onChange("kg", Math.max(0, set.kg - 2.5));
+  }, [onChange, set.kg]);
+
+  const increaseKg = useCallback(() => {
+    onChange("kg", set.kg + 2.5);
+  }, [onChange, set.kg]);
+
+  const decreaseReps = useCallback(() => {
+    onChange("reps", Math.max(1, set.reps - 1));
+  }, [onChange, set.reps]);
+
+  const increaseReps = useCallback(() => {
+    onChange("reps", set.reps + 1);
+  }, [onChange, set.reps]);
+
+  const handleKgChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange("kg", Math.max(0, parseFloat(e.target.value) || 0));
+  }, [onChange]);
+
+  const handleRepsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange("reps", Math.max(1, parseInt(e.target.value) || 1));
+  }, [onChange]);
+
+  const toggleDone = useCallback(() => {
+    onChange("done", !set.done);
+  }, [onChange, set.done]);
 
   return (
     <div className={`px-4 py-2 transition-colors ${set.done ? "bg-primary/5" : ""}`}>
       <div className="grid grid-cols-[40px_1fr_1fr_1fr_40px] gap-2 items-center">
         {/* Set number/type badge */}
         <button
+          type="button"
           onClick={onTypeClick}
           className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${setLabel.className}`}
         >
@@ -46,22 +76,25 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
         <div className="flex items-center justify-center">
           <div className="flex items-center bg-secondary/50 rounded-lg px-1.5 py-1 gap-0.5">
             <button
-              onClick={() => onChange("kg", Math.max(0, set.kg - 2.5))}
-              className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+              type="button"
+              onClick={decreaseKg}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
             >
-              <Minus className="w-3 h-3" />
+              <Minus className="w-4 h-4" />
             </button>
             <input
               type="number"
+              inputMode="decimal"
               value={set.kg}
-              onChange={(e) => onChange("kg", Math.max(0, parseFloat(e.target.value) || 0))}
-              className="text-foreground text-sm w-10 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              onChange={handleKgChange}
+              className="text-foreground text-sm w-12 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <button
-              onClick={() => onChange("kg", set.kg + 2.5)}
-              className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+              type="button"
+              onClick={increaseKg}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -70,22 +103,25 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
         <div className="flex items-center justify-center">
           <div className="flex items-center bg-secondary/50 rounded-lg px-1.5 py-1 gap-0.5">
             <button
-              onClick={() => onChange("reps", Math.max(1, set.reps - 1))}
-              className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+              type="button"
+              onClick={decreaseReps}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
             >
-              <Minus className="w-3 h-3" />
+              <Minus className="w-4 h-4" />
             </button>
             <input
               type="number"
+              inputMode="numeric"
               value={set.reps}
-              onChange={(e) => onChange("reps", Math.max(1, parseInt(e.target.value) || 1))}
-              className="text-foreground text-sm w-6 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              onChange={handleRepsChange}
+              className="text-foreground text-sm w-8 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <button
-              onClick={() => onChange("reps", set.reps + 1)}
-              className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+              type="button"
+              onClick={increaseReps}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -93,7 +129,8 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
         {/* Done checkbox */}
         <div className="flex items-center justify-center">
           <button
-            onClick={() => onChange("done", !set.done)}
+            type="button"
+            onClick={toggleDone}
             className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
               set.done
                 ? "bg-primary/20 border border-primary/40"
@@ -106,6 +143,8 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
       </div>
     </div>
   );
-};
+});
+
+ActiveSetRow.displayName = 'ActiveSetRow';
 
 export default ActiveSetRow;

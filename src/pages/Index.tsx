@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Settings, HelpCircle, Dumbbell, Apple, Footprints, Scale, Check, Award, Mountain, Hourglass, Gift } from "lucide-react";
+import { Settings, HelpCircle, Dumbbell, Apple, Footprints, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
 import { getProfile, getQuests, syncQuestsStatus, getAchievements, saveTreinoHoje, getUserWorkout, getWeightHistory } from "@/lib/storage";
 import { getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
 import { isWorkoutCompletedThisWeek } from "@/lib/appState";
 import { Progress } from "@/components/ui/progress";
+import { getOnboardingData, getObjectiveLabel } from "@/lib/onboarding";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -24,15 +25,21 @@ const Index = () => {
   const totalCount = achievements.length;
   const nextRewardIn = Math.max(1, 3 - (unlockedCount % 3));
 
-  // Weight goal data
+  // Onboarding data
+  const onboardingData = getOnboardingData();
+  const hasOnboarding = !!onboardingData?.plan;
+
+  // Weight goal data - use onboarding target if available
   const weightHistory = getWeightHistory();
-  const currentWeight = weightHistory.length > 0 ? weightHistory[weightHistory.length - 1].weight : 0;
-  const goalWeight = 70; // Meta de peso
-  const startWeight = 76; // Peso inicial
-  const remaining = Math.max(0, currentWeight - goalWeight);
-  const progressPercent = startWeight > goalWeight 
-    ? Math.min(100, ((startWeight - currentWeight) / (startWeight - goalWeight)) * 100)
-    : 0;
+  const currentWeight = weightHistory.length > 0 
+    ? weightHistory[weightHistory.length - 1].weight 
+    : (onboardingData?.profile?.weightKg || 0);
+  const goalWeight = onboardingData?.objective?.targetWeightKg || 70;
+  const startWeight = onboardingData?.profile?.weightKg || 76;
+  const remaining = Math.abs(currentWeight - goalWeight);
+  const progressPercent = startWeight !== goalWeight 
+    ? Math.min(100, Math.abs((startWeight - currentWeight) / (startWeight - goalWeight)) * 100)
+    : 100;
 
   // Workout of the day
   const workoutIdOfDay = getWorkoutOfDay();
@@ -114,26 +121,47 @@ const Index = () => {
 
         {/* Goal Card */}
         <div className="bg-card border border-border rounded-2xl p-5 mb-6">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Objetivo Ativo</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Objetivo Ativo</p>
+            <Link 
+              to="/settings/objetivo" 
+              className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              Ajustar
+              <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
           <div className="flex items-center gap-2 mb-3">
-            <h2 className="text-lg font-semibold text-foreground">Perder peso</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              {hasOnboarding ? getObjectiveLabel(onboardingData.objective.objective) : 'Perder peso'}
+            </h2>
             <HelpCircle className="w-4 h-4 text-muted-foreground" />
           </div>
           
           <p className="text-3xl font-bold text-foreground mb-1">
-            Faltam {remaining.toFixed(1)} kg
+            {onboardingData?.objective?.objective === 'maintain' 
+              ? 'Manter peso atual'
+              : `Faltam ${remaining.toFixed(1)} kg`
+            }
           </p>
           <p className="text-sm text-muted-foreground mb-4">
-            Hoje o foco é consistência: treino + passos.
+            {hasOnboarding 
+              ? `Meta: ${onboardingData.plan.targetKcal} kcal/dia`
+              : 'Hoje o foco é consistência: treino + passos.'
+            }
           </p>
 
           {/* Progress bar */}
-          <div className="mb-2">
-            <Progress value={progressPercent} className="h-2" />
-          </div>
-          <p className="text-xs text-muted-foreground mb-4">
-            {(startWeight - currentWeight).toFixed(1)} / {(startWeight - goalWeight).toFixed(1)} kg
-          </p>
+          {onboardingData?.objective?.objective !== 'maintain' && (
+            <>
+              <div className="mb-2">
+                <Progress value={progressPercent} className="h-2" />
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                {Math.abs(startWeight - currentWeight).toFixed(1)} / {Math.abs(startWeight - goalWeight).toFixed(1)} kg
+              </p>
+            </>
+          )}
 
           {/* Start Workout Button */}
           {isRest ? (

@@ -1,16 +1,22 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { isOnboardingComplete } from '@/lib/onboarding';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  skipOnboarding?: boolean;
 }
 
-const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProps) => {
   const { user, loading, isConfigured } = useAuth();
   const location = useLocation();
 
   // Se Firebase não está configurado, permitir acesso (desenvolvimento)
   if (!isConfigured) {
+    // Em desenvolvimento, ainda verificar onboarding
+    if (!skipOnboarding && !isOnboardingComplete()) {
+      return <Navigate to="/onboarding" state={{ from: location }} replace />;
+    }
     return <>{children}</>;
   }
 
@@ -29,6 +35,11 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   // Redireciona para login se não autenticado
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Verifica se onboarding está completo (exceto em rotas específicas)
+  if (!skipOnboarding && !isOnboardingComplete()) {
+    return <Navigate to="/onboarding" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;

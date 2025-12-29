@@ -147,6 +147,51 @@ export const HELP: Record<string, HelpEntry> = {
     ],
     example: "Se a meta é 2200 kcal e 160g proteína, e você bate isso na maioria dos dias, está no caminho certo.",
   },
+  "nutri.meta": {
+    title: "Meta do dia",
+    body: "É o alvo de calorias que o app calculou para você atingir seu objetivo (perder gordura, manter ou ganhar massa).",
+    tips: [
+      "A meta vem do seu TDEE ajustado. Ela pode mudar após check-ins.",
+      "Se errar um dia, não compense no outro. Volte ao normal.",
+    ],
+    example: "Meta 2200 kcal. Se hoje comeu 2400, amanhã retome 2200 normalmente.",
+  },
+  "nutri.plano": {
+    title: "Plano do dia",
+    body: "É o total de calorias da sua dieta montada. Idealmente deve ficar próximo da meta para facilitar a execução.",
+    tips: [
+      "Diferença pequena (±100 kcal) é normal e segura.",
+      "Se o plano está muito abaixo da meta, adicione alimentos para completar.",
+    ],
+    example: "Meta 2200 kcal, plano 2150 kcal = diferença de -50 kcal. OK!",
+  },
+  "nutri.consumido": {
+    title: "Consumido",
+    body: "É a soma de tudo que você marcou como comido hoje. Toque nos itens das refeições para marcar como consumido.",
+    tips: [
+      "Só conta o que você marcou ✓ na lista.",
+      "Extras que você adicionou também contam se estiverem marcados.",
+    ],
+    example: "Marcou café e almoço = consumido mostra a soma deles. Jantar não marcado ainda não conta.",
+  },
+  "nutri.metaSegura": {
+    title: "Meta segura",
+    body: "Significa que seu plano está perto o suficiente da meta (±200 kcal). Isso facilita bater as metas sem ajustes grandes.",
+    tips: [
+      "Se aparecer 'Ajuste necessário', considere adicionar ou remover alimentos.",
+      "Pequenas diferenças são normais e não afetam o resultado.",
+    ],
+    example: "Meta 2200 kcal, plano 2100 kcal = dentro da margem. Meta segura!",
+  },
+  "nutri.ajuste": {
+    title: "Ajuste necessário",
+    body: "Seu plano está longe da meta. Use as sugestões ou botões para adicionar alimentos e aproximar do alvo.",
+    tips: [
+      "Veja qual macro está faltando mais (proteína, carbo ou gordura).",
+      "Use 'Ajustar automaticamente' para o app sugerir um combo pronto.",
+    ],
+    example: "Faltam 300 kcal e 40g de proteína → adicione frango ou whey para resolver os dois.",
+  },
 
   // ========== ONBOARDING ==========
   "onboard.bmr": {

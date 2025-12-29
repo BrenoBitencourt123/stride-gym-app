@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import { MoreVertical, Plus, Timer } from "lucide-react";
 import { ActiveExercise, ActiveSet, SetType } from "@/pages/ActiveWorkout";
 import ActiveSetRow from "./ActiveSetRow";
@@ -19,6 +19,52 @@ function formatRestTime(seconds: number): string {
   if (secs === 0) return `${mins}min`;
   return `${mins}min ${secs}s`;
 }
+
+// Memoized set row wrapper to prevent re-renders
+const MemoizedSetRow = memo(({ 
+  exerciseId,
+  exerciseIndex,
+  set, 
+  setIndex, 
+  canRemove,
+  onSetChange,
+  onRemoveSet,
+  onSetTypeClick,
+}: {
+  exerciseId: string;
+  exerciseIndex: number;
+  set: ActiveSet;
+  setIndex: number;
+  canRemove: boolean;
+  onSetChange: (exerciseIndex: number, setIndex: number, field: keyof ActiveSet, value: number | boolean | SetType) => void;
+  onRemoveSet: (exerciseIndex: number, setIndex: number) => void;
+  onSetTypeClick: (exerciseIndex: number, setIndex: number) => void;
+}) => {
+  const handleChange = useCallback((field: keyof ActiveSet, value: number | boolean | SetType) => {
+    onSetChange(exerciseIndex, setIndex, field, value);
+  }, [onSetChange, exerciseIndex, setIndex]);
+
+  const handleRemove = useCallback(() => {
+    onRemoveSet(exerciseIndex, setIndex);
+  }, [onRemoveSet, exerciseIndex, setIndex]);
+
+  const handleTypeClick = useCallback(() => {
+    onSetTypeClick(exerciseIndex, setIndex);
+  }, [onSetTypeClick, exerciseIndex, setIndex]);
+
+  return (
+    <ActiveSetRow
+      set={set}
+      setIndex={setIndex}
+      canRemove={canRemove}
+      onChange={handleChange}
+      onRemove={handleRemove}
+      onTypeClick={handleTypeClick}
+    />
+  );
+});
+
+MemoizedSetRow.displayName = "MemoizedSetRow";
 
 const ExerciseSection = ({
   exercise,
@@ -96,14 +142,16 @@ const ExerciseSection = ({
       {/* Sets */}
       <div className="divide-y divide-border/30">
         {exercise.sets.map((set, setIndex) => (
-          <ActiveSetRow
+          <MemoizedSetRow
             key={`${exercise.id}-set-${setIndex}`}
+            exerciseId={exercise.id}
+            exerciseIndex={exerciseIndex}
             set={set}
             setIndex={setIndex}
             canRemove={exercise.sets.length > 1}
-            onChange={(field, value) => onSetChange(exerciseIndex, setIndex, field, value)}
-            onRemove={() => onRemoveSet(exerciseIndex, setIndex)}
-            onTypeClick={() => onSetTypeClick(exerciseIndex, setIndex)}
+            onSetChange={onSetChange}
+            onRemoveSet={onRemoveSet}
+            onSetTypeClick={onSetTypeClick}
           />
         ))}
       </div>

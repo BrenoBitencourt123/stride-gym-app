@@ -12,7 +12,8 @@ import {
   isCheckinAvailable, 
   getNextCheckinDueDate,
   initializePlanHistoryFromOnboarding,
-  getLatestWeight
+  getLatestWeight,
+  getWeighingFrequency
 } from "@/lib/progress";
 import WeightLogModal from "@/components/WeightLogModal";
 import WeeklyCheckinModal from "@/components/WeeklyCheckinModal";
@@ -49,6 +50,7 @@ const Index = () => {
   const latestWeight = getLatestWeight();
   const checkinAvailable = isCheckinAvailable();
   const nextCheckinDate = getNextCheckinDueDate();
+  const weighingFrequency = getWeighingFrequency();
 
   // Weight goal data - use onboarding target if available
   const weightHistory = getWeightHistory();
@@ -228,33 +230,61 @@ const Index = () => {
               <div className="flex items-center gap-2">
                 <Scale className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-semibold text-foreground">Progresso</h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                  {weighingFrequency === 'weekly' ? 'Semanal' : 'Diário'}
+                </span>
               </div>
-              <button
-                onClick={() => setShowWeightModal(true)}
-                className="text-xs text-primary hover:text-primary/80 transition-colors"
-              >
-                Registrar peso
-              </button>
+              {weighingFrequency === 'weekly' ? (
+                <button
+                  onClick={() => setShowWeightModal(true)}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  + Peso extra
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowWeightModal(true)}
+                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                >
+                  Registrar peso
+                </button>
+              )}
             </div>
 
-            {/* Stats grid */}
+            {/* Stats grid - adapts to mode */}
             <div className="grid grid-cols-2 gap-3 mb-4">
-              {/* 7-day average */}
-              <div className="bg-muted/30 rounded-lg p-3">
-                <p className="text-xs text-muted-foreground mb-1">Média 7 dias</p>
-                {weightStats.currentAvg7 !== null ? (
-                  <p className="text-xl font-bold text-foreground">{weightStats.currentAvg7} kg</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {weightStats.logsNeeded > 0 
-                      ? `Faltam ${weightStats.logsNeeded} registros` 
-                      : 'Sem dados'
-                    }
-                  </p>
-                )}
-              </div>
+              {weighingFrequency === 'daily' ? (
+                <>
+                  {/* Daily mode: 7-day average */}
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Média 7 dias</p>
+                    {weightStats.currentAvg7 !== null ? (
+                      <p className="text-xl font-bold text-foreground">{weightStats.currentAvg7} kg</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {weightStats.logsNeeded > 0 
+                          ? `Faltam ${weightStats.logsNeeded} registros` 
+                          : 'Sem dados'
+                        }
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Weekly mode: last check-in weight */}
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Último check-in</p>
+                    {weightStats.weeklyModeStats.currentWeight !== null ? (
+                      <p className="text-xl font-bold text-foreground">{weightStats.weeklyModeStats.currentWeight} kg</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Nenhum ainda</p>
+                    )}
+                  </div>
+                </>
+              )}
               
-              {/* Trend */}
+              {/* Trend - same for both modes */}
               <div className="bg-muted/30 rounded-lg p-3">
                 <p className="text-xs text-muted-foreground mb-1">Tendência</p>
                 {weightStats.trendKg !== null && TrendIcon ? (
@@ -266,6 +296,10 @@ const Index = () => {
                     <TrendIcon className="w-5 h-5" />
                     {weightStats.trendKg > 0 ? "+" : ""}{weightStats.trendKg} kg
                   </div>
+                ) : weighingFrequency === 'weekly' && weightStats.weeklyModeStats.checkinsNeeded > 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    +{weightStats.weeklyModeStats.checkinsNeeded} check-in(s)
+                  </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">Aguardando dados</p>
                 )}
@@ -281,7 +315,7 @@ const Index = () => {
                     ? 'Check-in disponível!' 
                     : nextCheckinDate 
                       ? `Próximo: ${nextCheckinDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
-                      : 'Registre mais pesos'
+                      : 'Registre seu primeiro peso'
                   }
                 </span>
               </div>

@@ -64,17 +64,17 @@ const ExerciseSection = ({
             )}
           </div>
           
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
                 <MoreVertical className="w-5 h-5" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Reordenar</DropdownMenuItem>
-              <DropdownMenuItem>Substituir exercício</DropdownMenuItem>
-              <DropdownMenuItem>Criar supersérie</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">Remover exercício</DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>Reordenar</DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>Substituir exercício</DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>Criar supersérie</DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive">Remover exercício</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

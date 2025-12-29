@@ -155,30 +155,28 @@ const ActiveWorkout = () => {
     return () => clearInterval(interval);
   }, [startTime]);
 
-  // Save progress whenever exercises change
-  const saveAllProgress = useCallback(() => {
-    if (!treinoId) return;
-
-    exercises.forEach((ex) => {
-      const warmupSets = ex.sets.filter((s) => s.type === "warmup");
-      const workSets = ex.sets.filter((s) => s.type !== "warmup");
-
-      const progress: ExerciseProgress = {
-        warmupDone: warmupSets.every((s) => s.done),
-        feederSets: warmupSets.map((s) => ({ kg: s.kg, reps: s.reps, done: s.done })),
-        workSets: workSets.map((s) => ({ kg: s.kg, reps: s.reps, done: s.done })),
-        updatedAt: new Date().toISOString(),
-      };
-
-      saveExerciseProgress(treinoId, ex.id, progress);
-    });
-  }, [treinoId, exercises]);
-
+  // Save progress whenever exercises change (debounced to avoid loops)
   useEffect(() => {
-    if (exercises.length > 0) {
-      saveAllProgress();
-    }
-  }, [exercises, saveAllProgress]);
+    if (!treinoId || exercises.length === 0) return;
+
+    const timeoutId = setTimeout(() => {
+      exercises.forEach((ex) => {
+        const warmupSets = ex.sets.filter((s) => s.type === "warmup");
+        const workSets = ex.sets.filter((s) => s.type !== "warmup");
+
+        const progress: ExerciseProgress = {
+          warmupDone: warmupSets.every((s) => s.done),
+          feederSets: warmupSets.map((s) => ({ kg: s.kg, reps: s.reps, done: s.done })),
+          workSets: workSets.map((s) => ({ kg: s.kg, reps: s.reps, done: s.done })),
+          updatedAt: new Date().toISOString(),
+        };
+
+        saveExerciseProgress(treinoId, ex.id, progress);
+      });
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [treinoId, exercises]);
 
   // Metrics calculation
   const metrics = useMemo(() => {

@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, HelpCircle, CheckCircle2, RotateCcw, Check } from "lucide-react";
+import { Plus, CheckCircle2, RotateCcw, Check } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import HelpIcon from "@/components/HelpIcon";
 import { 
   getNutritionGoals, 
   getNutritionToday, 
@@ -180,12 +181,7 @@ const Nutricao = () => {
         <div className="card-glass p-4 mb-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Consumido hoje</span>
-            <button
-              onClick={() => setShowGoalsModal(true)}
-              className="text-muted-foreground hover:text-primary transition-colors"
-            >
-              <HelpCircle size={14} />
-            </button>
+            <HelpIcon helpKey="nutri.goals" size={14} />
           </div>
           
           <div className="flex items-center justify-between mt-1 mb-1">

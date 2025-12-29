@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Scale, TrendingDown, TrendingUp, Minus } from "lucide-react";
-import { upsertWeightLog, getLocalDateISO, getTodayLog, getWeightStats } from "@/lib/progress";
+import { 
+  upsertWeightLog, 
+  getLocalDateISO, 
+  getTodayLog, 
+  getWeightStats,
+  getWeighingFrequency 
+} from "@/lib/progress";
 import { getQuests, saveQuests } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -20,6 +26,7 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const stats = getWeightStats();
+  const frequency = getWeighingFrequency();
 
   const handleSave = () => {
     // Parse weight - accept comma or period
@@ -65,13 +72,17 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
     : Minus
     : null;
 
+  // Show different stats based on frequency mode
+  const showDailyStats = frequency === 'daily' && stats.currentAvg7 !== null;
+  const showWeeklyStats = frequency === 'weekly' && stats.weeklyModeStats.currentWeight !== null;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[340px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Scale className="w-5 h-5 text-primary" />
-            Registrar Peso
+            {frequency === 'weekly' ? 'Registrar Peso Extra' : 'Registrar Peso'}
           </DialogTitle>
         </DialogHeader>
         
@@ -91,8 +102,8 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
             />
           </div>
           
-          {/* Stats display */}
-          {stats.currentAvg7 !== null && (
+          {/* Stats display - Daily mode */}
+          {showDailyStats && (
             <div className="bg-muted/30 rounded-lg p-3 space-y-2">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Média 7 dias</span>
@@ -115,11 +126,42 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
             </div>
           )}
           
-          {/* Progress indicator */}
-          {stats.logsNeeded > 0 && (
+          {/* Stats display - Weekly mode */}
+          {showWeeklyStats && (
+            <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Último check-in</span>
+                <span className="font-medium">{stats.weeklyModeStats.currentWeight} kg</span>
+              </div>
+              
+              {stats.weeklyModeStats.trendKg !== null && TrendIcon && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Tendência</span>
+                  <span className={`flex items-center gap-1 font-medium ${
+                    stats.weeklyModeStats.trendKg < 0 ? "text-green-500" : 
+                    stats.weeklyModeStats.trendKg > 0 ? "text-orange-500" : 
+                    "text-muted-foreground"
+                  }`}>
+                    <TrendIcon className="w-4 h-4" />
+                    {stats.weeklyModeStats.trendKg > 0 ? "+" : ""}{stats.weeklyModeStats.trendKg} kg
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Progress indicator - only for daily mode */}
+          {frequency === 'daily' && stats.logsNeeded > 0 && (
             <p className="text-xs text-muted-foreground text-center">
               Faltam <span className="font-medium text-primary">{stats.logsNeeded}</span> registros 
               para calcular a média de 7 dias
+            </p>
+          )}
+          
+          {/* Info for weekly mode */}
+          {frequency === 'weekly' && (
+            <p className="text-xs text-muted-foreground text-center">
+              Este registro é opcional. O check-in semanal é o principal.
             </p>
           )}
           

@@ -1,5 +1,6 @@
 // Weight tracking, weekly check-ins, and calorie adjustment system
 // Implements conservative, safe adjustments with guardrails
+// Supports both weekly (recommended) and daily weighing modes
 
 import { load, save } from './storage';
 import { 
@@ -15,17 +16,22 @@ const PROGRESS_KEY = 'levelup.progress.v1';
 
 // ========== TYPES ==========
 
+export type WeighingFrequency = 'weekly' | 'daily';
+
 export interface WeightLog {
   dateISO: string;      // YYYY-MM-DD
   weightKg: number;
   createdAtISO: string; // Full ISO timestamp
+  isWeeklyCheckin?: boolean; // For weekly mode: marks this as the weekly check-in entry
 }
 
 export interface WeeklyCheckin {
   weekStartISO: string;
   weekEndISO: string;
-  avg7: number;
+  avg7?: number;          // Used in daily mode
+  weightKg?: number;      // Used in weekly mode (single measurement)
   prevAvg7?: number;
+  prevWeightKg?: number;  // Previous weekly check-in weight
   trendKg?: number;
   suggestedDeltaCalories?: number;
   appliedDeltaCalories?: number;
@@ -48,6 +54,7 @@ export interface ProgressData {
   weeklyCheckins: WeeklyCheckin[];
   planHistory: NutritionPlanHistoryEntry[];
   lastCheckinAppliedISO?: string;
+  weighingFrequency: WeighingFrequency;
   version: number;
 }
 
@@ -56,7 +63,8 @@ const MIN_CALORIES_MALE = 1500;
 const MIN_CALORIES_FEMALE = 1200;
 const MAX_CALORIES = 5000;
 const MAX_ADJUSTMENT_PER_CHECKIN = 150;
-const MIN_LOGS_FOR_CHECKIN = 4;
+const MIN_LOGS_FOR_DAILY_CHECKIN = 4;
+const MIN_CHECKINS_FOR_WEEKLY_ADJUST = 2;
 const CHECKIN_INTERVAL_DAYS = 7;
 
 // ========== DATA ACCESS ==========
@@ -66,6 +74,7 @@ function getDefaultProgressData(): ProgressData {
     weightLogs: [],
     weeklyCheckins: [],
     planHistory: [],
+    weighingFrequency: 'weekly', // Default to weekly (recommended)
     version: 1,
   };
 }
@@ -134,12 +143,25 @@ export function getTodayLog(): WeightLog | null {
   return data.weightLogs.find(l => l.dateISO === todayISO) || null;
 }
 
+// ========== WEIGHING FREQUENCY ==========
+
+export function getWeighingFrequency(): WeighingFrequency {
+  const data = getProgressData();
+  return data.weighingFrequency || 'weekly';
+}
+
+export function setWeighingFrequency(frequency: WeighingFrequency): void {
+  const data = getProgressData();
+  data.weighingFrequency = frequency;
+  saveProgressData(data);
+}
+
 // ========== AVERAGE & TREND CALCULATIONS ==========
 
 export function compute7DayAverage(endingDateISO?: string): number | null {
   const logs = getLastNDaysLogs(7, endingDateISO);
   
-  if (logs.length < MIN_LOGS_FOR_CHECKIN) {
+  if (logs.length < MIN_LOGS_FOR_DAILY_CHECKIN) {
     return null; // Not enough data
   }
   
@@ -155,8 +177,61 @@ export function computePrevious7DayAverage(endingDateISO?: string): number | nul
   return compute7DayAverage(getLocalDateISO(prevEndDate));
 }
 
-export function computeTrend(currentAvg7: number, prevAvg7: number): number {
-  return Math.round((currentAvg7 - prevAvg7) * 10) / 10;
+export function computeTrend(currentValue: number, prevValue: number): number {
+  return Math.round((currentValue - prevValue) * 10) / 10;
+}
+
+// Get last N weekly check-ins (for weekly mode trend calculation)
+export function getLastNWeeklyCheckins(n: number): WeeklyCheckin[] {
+  const data = getProgressData();
+  return data.weeklyCheckins.slice(-n);
+}
+
+// Compute weekly mode trend using last 2-4 check-ins
+export function computeWeeklyModeTrend(): { 
+  currentWeight: number | null; 
+  prevWeight: number | null; 
+  trendKg: number | null;
+  checkinsCount: number;
+  checkinsNeeded: number;
+} {
+  const checkins = getLastNWeeklyCheckins(4);
+  const checkinsWithWeight = checkins.filter(c => c.weightKg !== undefined);
+  
+  if (checkinsWithWeight.length === 0) {
+    return { 
+      currentWeight: null, 
+      prevWeight: null, 
+      trendKg: null, 
+      checkinsCount: 0,
+      checkinsNeeded: MIN_CHECKINS_FOR_WEEKLY_ADJUST
+    };
+  }
+  
+  const currentWeight = checkinsWithWeight[checkinsWithWeight.length - 1].weightKg!;
+  
+  if (checkinsWithWeight.length < MIN_CHECKINS_FOR_WEEKLY_ADJUST) {
+    return { 
+      currentWeight, 
+      prevWeight: null, 
+      trendKg: null, 
+      checkinsCount: checkinsWithWeight.length,
+      checkinsNeeded: MIN_CHECKINS_FOR_WEEKLY_ADJUST - checkinsWithWeight.length
+    };
+  }
+  
+  // For trend: compare current with average of previous check-ins (smoothing)
+  const prevCheckins = checkinsWithWeight.slice(0, -1);
+  const prevAvg = prevCheckins.reduce((acc, c) => acc + c.weightKg!, 0) / prevCheckins.length;
+  const trendKg = Math.round((currentWeight - prevAvg) * 10) / 10;
+  
+  return { 
+    currentWeight, 
+    prevWeight: Math.round(prevAvg * 10) / 10, 
+    trendKg,
+    checkinsCount: checkinsWithWeight.length,
+    checkinsNeeded: 0
+  };
 }
 
 export function getWeightStats(): {
@@ -165,14 +240,27 @@ export function getWeightStats(): {
   trendKg: number | null;
   logsLast7Days: number;
   logsNeeded: number;
+  // Weekly mode stats
+  weeklyModeStats: {
+    currentWeight: number | null;
+    prevWeight: number | null;
+    trendKg: number | null;
+    checkinsCount: number;
+    checkinsNeeded: number;
+  };
+  frequency: WeighingFrequency;
 } {
+  const frequency = getWeighingFrequency();
   const logsLast7 = getLastNDaysLogs(7);
   const currentAvg7 = compute7DayAverage();
   const prevAvg7 = computePrevious7DayAverage();
+  const weeklyModeStats = computeWeeklyModeTrend();
   
   let trendKg: number | null = null;
-  if (currentAvg7 !== null && prevAvg7 !== null) {
+  if (frequency === 'daily' && currentAvg7 !== null && prevAvg7 !== null) {
     trendKg = computeTrend(currentAvg7, prevAvg7);
+  } else if (frequency === 'weekly') {
+    trendKg = weeklyModeStats.trendKg;
   }
   
   return {
@@ -180,7 +268,9 @@ export function getWeightStats(): {
     prevAvg7,
     trendKg,
     logsLast7Days: logsLast7.length,
-    logsNeeded: Math.max(0, MIN_LOGS_FOR_CHECKIN - logsLast7.length),
+    logsNeeded: frequency === 'daily' ? Math.max(0, MIN_LOGS_FOR_DAILY_CHECKIN - logsLast7.length) : 0,
+    weeklyModeStats,
+    frequency,
   };
 }
 
@@ -210,9 +300,33 @@ export function isCheckinDue(): boolean {
 }
 
 export function isCheckinAvailable(): boolean {
-  // Check-in available if: due date passed AND enough weight logs
+  const frequency = getWeighingFrequency();
+  
+  // Check-in available if due date passed
+  if (!isCheckinDue()) return false;
+  
+  if (frequency === 'daily') {
+    // Daily mode: need enough weight logs
+    const stats = getWeightStats();
+    return stats.logsNeeded === 0;
+  }
+  
+  // Weekly mode: always available when due (no data requirements for recording)
+  return true;
+}
+
+// Check if adjustment is available (different from check-in availability)
+export function isAdjustmentAvailable(): boolean {
+  const frequency = getWeighingFrequency();
   const stats = getWeightStats();
-  return isCheckinDue() && stats.logsNeeded === 0;
+  
+  if (frequency === 'daily') {
+    // Daily mode: need trend data
+    return stats.trendKg !== null;
+  }
+  
+  // Weekly mode: need at least 2 check-ins for trend
+  return stats.weeklyModeStats.checkinsNeeded === 0;
 }
 
 // ========== CALORIE ADJUSTMENT LOGIC ==========
@@ -348,12 +462,16 @@ export function applyCalorieAdjustment(delta: number, reason: 'auto_adjust' | 'm
 }
 
 export function recordCheckin(
-  avg7: number,
-  prevAvg7: number | null,
-  trendKg: number | null,
-  suggestedDelta: number,
-  appliedDelta: number | null,
-  notes?: string
+  params: {
+    avg7?: number;
+    weightKg?: number;
+    prevAvg7?: number | null;
+    prevWeightKg?: number | null;
+    trendKg: number | null;
+    suggestedDelta: number;
+    appliedDelta: number | null;
+    notes?: string;
+  }
 ): void {
   const data = getProgressData();
   const now = new Date();
@@ -364,13 +482,15 @@ export function recordCheckin(
   const checkin: WeeklyCheckin = {
     weekStartISO: getLocalDateISO(weekStart),
     weekEndISO: weekEnd,
-    avg7,
-    prevAvg7: prevAvg7 ?? undefined,
-    trendKg: trendKg ?? undefined,
-    suggestedDeltaCalories: suggestedDelta,
-    appliedDeltaCalories: appliedDelta ?? undefined,
-    appliedAtISO: appliedDelta !== null ? new Date().toISOString() : undefined,
-    notes,
+    avg7: params.avg7,
+    weightKg: params.weightKg,
+    prevAvg7: params.prevAvg7 ?? undefined,
+    prevWeightKg: params.prevWeightKg ?? undefined,
+    trendKg: params.trendKg ?? undefined,
+    suggestedDeltaCalories: params.suggestedDelta,
+    appliedDeltaCalories: params.appliedDelta ?? undefined,
+    appliedAtISO: params.appliedDelta !== null ? new Date().toISOString() : undefined,
+    notes: params.notes,
   };
   
   data.weeklyCheckins.push(checkin);
@@ -379,6 +499,22 @@ export function recordCheckin(
   data.lastCheckinAppliedISO = new Date().toISOString();
   
   saveProgressData(data);
+}
+
+// Record a weekly mode check-in with weight
+export function recordWeeklyCheckinWithWeight(weightKg: number): void {
+  const data = getProgressData();
+  const dateISO = getLocalDateISO();
+  
+  // First, upsert the weight log
+  upsertWeightLog(dateISO, weightKg);
+  
+  // Mark this log as a weekly check-in
+  const logIdx = data.weightLogs.findIndex(l => l.dateISO === dateISO);
+  if (logIdx >= 0) {
+    data.weightLogs[logIdx].isWeeklyCheckin = true;
+    saveProgressData(data);
+  }
 }
 
 // ========== PLAN HISTORY ==========

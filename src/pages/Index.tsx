@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Settings, HelpCircle, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus, CalendarCheck } from "lucide-react";
+import { Settings, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus, CalendarCheck } from "lucide-react";
 import { useEffect, useState } from "react";
+import HelpIcon from "@/components/HelpIcon";
 import BottomNav from "@/components/BottomNav";
 import { getProfile, getQuests, syncQuestsStatus, getAchievements, saveTreinoHoje, getUserWorkout, getWeightHistory } from "@/lib/storage";
 import { getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
@@ -169,7 +170,7 @@ const Index = () => {
             <h2 className="text-lg font-semibold text-foreground">
               {hasOnboarding ? getObjectiveLabel(onboardingData.objective.objective) : 'Perder peso'}
             </h2>
-            <HelpCircle className="w-4 h-4 text-muted-foreground" />
+            <HelpIcon helpKey="home.plan" size={16} />
           </div>
           
           <p className="text-3xl font-bold text-foreground mb-1">
@@ -384,7 +385,7 @@ const Index = () => {
                     }`}>
                       {goal.label}
                     </span>
-                    <HelpCircle className="w-3.5 h-3.5 text-muted-foreground/50" />
+                    <HelpIcon helpKey="home.goals" size={14} />
                   </div>
                   <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
                     goal.completed 

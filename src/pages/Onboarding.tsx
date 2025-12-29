@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, AlertTriangle, Calendar, User, Activity, Target, Sparkles } from "lucide-react";
+import HelpIcon from "@/components/HelpIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -356,12 +357,18 @@ const Onboarding = () => {
               {/* BMR & TDEE */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">TMB</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">TMB</p>
+                    <HelpIcon helpKey="onboard.bmr" size={12} />
+                  </div>
                   <p className="text-xl font-bold text-foreground">{planPreview.bmr}</p>
                   <p className="text-xs text-muted-foreground">kcal/dia</p>
                 </div>
                 <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">TDEE</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">TDEE</p>
+                    <HelpIcon helpKey="onboard.tdee" size={12} />
+                  </div>
                   <p className="text-xl font-bold text-foreground">{planPreview.tdee}</p>
                   <p className="text-xs text-muted-foreground">kcal/dia</p>
                 </div>

@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, Plus, Info, HelpCircle } from "lucide-react";
+import { ChevronLeft, Plus, Info } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import HelpIcon from "@/components/HelpIcon";
 import { 
   getNutritionGoals, 
   getNutritionDiet, 
@@ -146,12 +147,7 @@ const CriarDieta = () => {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold text-foreground">Meta diária</h2>
-              <button
-                onClick={() => setShowGoalsModal(true)}
-                className="text-muted-foreground hover:text-primary transition-colors"
-              >
-                <HelpCircle size={16} />
-              </button>
+              <HelpIcon helpKey="nutri.goals" size={16} />
             </div>
             {totals.kcal > 0 && (
               <span className={`px-2 py-1 text-xs font-medium rounded-lg ${

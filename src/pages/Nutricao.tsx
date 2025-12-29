@@ -177,61 +177,85 @@ const Nutricao = () => {
         {/* Header */}
         <h1 className="text-2xl font-bold text-foreground mb-6">Nutrição</h1>
 
-        {/* Card 1: Meta diária */}
+        {/* Card 1: Meta × Plano × Consumido */}
         <div className="card-glass p-4 mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Consumido hoje</span>
-            <HelpIcon helpKey="nutri.goals" size={14} />
-          </div>
+          <h2 className="text-lg font-semibold text-foreground mb-3">Resumo do dia</h2>
           
-          <div className="flex items-center justify-between mt-1 mb-1">
-            <h2 className="text-xl font-semibold text-foreground">Calorias</h2>
-            <span className="text-lg font-medium text-foreground">
-              {consumedTotals.kcal} / {goals.kcalTarget} kcal
-            </span>
+          {/* 3 linhas: Meta, Plano, Consumido */}
+          <div className="space-y-2 mb-4">
+            {/* Meta do dia */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">Meta do dia</span>
+                <HelpIcon helpKey="nutri.meta" size={14} />
+              </div>
+              <span className="text-sm font-medium text-foreground">{goals.kcalTarget} kcal</span>
+            </div>
+            
+            {/* Plano do dia */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">Plano do dia</span>
+                <HelpIcon helpKey="nutri.plano" size={14} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground">{plannedTotals.kcal} kcal</span>
+                {plannedTotals.kcal > 0 && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                    Math.abs(plannedTotals.kcal - goals.kcalTarget) <= 200 
+                      ? "bg-green-500/20 text-green-400" 
+                      : "bg-yellow-500/20 text-yellow-400"
+                  }`}>
+                    {plannedTotals.kcal >= goals.kcalTarget ? "+" : ""}{plannedTotals.kcal - goals.kcalTarget}
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            {/* Consumido */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold text-foreground">Consumido</span>
+                <HelpIcon helpKey="nutri.consumido" size={14} />
+              </div>
+              <span className="text-sm font-bold text-primary">{consumedTotals.kcal} / {goals.kcalTarget} kcal</span>
+            </div>
           </div>
-          
-          {/* Linha sutil do planejado */}
-          {plannedTotals.kcal > 0 && (
-            <p className="text-xs text-muted-foreground mb-2">
-              Planejado: {plannedTotals.kcal} kcal
-            </p>
-          )}
 
-          {/* Progress bar */}
-          <div className="h-2 rounded-full overflow-hidden bg-muted/30 mb-3">
+          {/* Progress bar principal */}
+          <div className="h-2.5 rounded-full overflow-hidden bg-muted/30 mb-4">
             <div 
               className="h-full bg-primary transition-all duration-300" 
               style={{ width: `${kcalPct}%` }} 
             />
           </div>
 
-          {/* Macro breakdown */}
-          <div className="space-y-2">
+          {/* Macro breakdown com progress bars */}
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-pink-500">Proteína</span>
+                <span className="text-pink-500 font-medium">Proteína</span>
                 <span className="text-muted-foreground">{consumedTotals.p}g / {goals.pTarget}g</span>
               </div>
-              <div className="w-20 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+              <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-pink-500 transition-all" style={{ width: `${pPct}%` }} />
               </div>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-yellow-400">Carbs</span>
+                <span className="text-yellow-400 font-medium">Carbs</span>
                 <span className="text-muted-foreground">{consumedTotals.c}g / {goals.cTarget}g</span>
               </div>
-              <div className="w-20 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+              <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-yellow-400 transition-all" style={{ width: `${cPct}%` }} />
               </div>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-blue-400">Gordura</span>
+                <span className="text-blue-400 font-medium">Gordura</span>
                 <span className="text-muted-foreground">{consumedTotals.g}g / {goals.gTarget}g</span>
               </div>
-              <div className="w-20 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+              <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-400 transition-all" style={{ width: `${gPct}%` }} />
               </div>
             </div>
@@ -275,6 +299,17 @@ const Nutricao = () => {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Hint quando consumido = 0 */}
+              {consumedTotals.kcal === 0 && hasAnyItems && (
+                <div className="bg-primary/10 border border-primary/30 rounded-xl p-3 flex items-start gap-2">
+                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-primary text-xs">💡</span>
+                  </div>
+                  <p className="text-sm text-foreground/80">
+                    Toque nos itens para marcar como consumido. O total atualiza automaticamente.
+                  </p>
+                </div>
+              )}
               {today.meals.map((meal) => {
                 if (meal.entries.length === 0) return null;
                 const mealKcal = getMealKcal(meal.id);

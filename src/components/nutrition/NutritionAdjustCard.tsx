@@ -3,6 +3,8 @@ import { ChevronDown, ChevronUp, Lightbulb, Plus, Wand2, Sparkles } from "lucide
 import { getFoodById, foods, type FoodItem } from "@/data/foods";
 import { addFoodToToday, addFoodToDiet } from "@/lib/storage";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import HelpIcon from "@/components/HelpIcon";
 import {
   Dialog,
   DialogContent,
@@ -173,6 +175,7 @@ function generateAutoAdjustCombo(gaps: MacroGaps): ComboItem[] {
 }
 
 const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdjustCardProps) => {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [showAutoModal, setShowAutoModal] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<MealId>("lanche");
@@ -194,6 +197,37 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
     }),
     { kcal: 0, p: 0, c: 0, g: 0 }
   );
+
+  // Determina o que falta mais para mostrar recomendações simples
+  const getActionableRecommendations = () => {
+    const recs: { text: string; macro: "p" | "c" | "g" | "kcal"; value: number }[] = [];
+    
+    if (gaps.kcal > 100) {
+      recs.push({ text: `Falta energia: +${gaps.kcal} kcal`, macro: "kcal", value: gaps.kcal });
+    }
+    if (gaps.p > 10) {
+      recs.push({ text: `Falta proteína: +${gaps.p}g`, macro: "p", value: gaps.p });
+    }
+    if (gaps.c > 20) {
+      recs.push({ text: `Falta carbo: +${gaps.c}g`, macro: "c", value: gaps.c });
+    }
+    if (gaps.g > 8) {
+      recs.push({ text: `Falta gordura: +${gaps.g}g`, macro: "g", value: gaps.g });
+    }
+    
+    return recs.slice(0, 3);
+  };
+
+  const recommendations = getActionableRecommendations();
+
+  const handleNavigateToAdd = (macroFilter?: "p" | "c" | "g") => {
+    const params = new URLSearchParams();
+    params.set("mode", mode);
+    if (macroFilter) {
+      params.set("filter", macroFilter);
+    }
+    navigate(`/nutricao/adicionar-alimento?${params.toString()}`);
+  };
   
   const handleAddSuggestion = (foodId: string, qty: number, unidade: "g" | "un" | "ml" | "scoop") => {
     if (mode === "diet") {
@@ -232,6 +266,7 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
           <div className="flex items-center gap-2">
             <Lightbulb size={18} className="text-yellow-400" />
             <span className="font-medium text-foreground">Ajuste necessário</span>
+            <HelpIcon helpKey="nutri.ajuste" size={14} />
           </div>
           {isOpen ? (
             <ChevronUp size={18} className="text-muted-foreground" />
@@ -240,76 +275,74 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
           )}
         </button>
         
-        {/* Gap summary */}
-        <div className="flex flex-wrap gap-2 mt-2 text-xs">
-          {hasDeficit ? (
-            <>
-              {gaps.kcal > 50 && (
-                <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
-                  Faltam {gaps.kcal} kcal
-                </span>
-              )}
-              {gaps.p > 5 && (
-                <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-400">
-                  P {formatGap(gaps.p, "g")}
-                </span>
-              )}
-              {gaps.c > 10 && (
-                <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
-                  C {formatGap(gaps.c, "g")}
-                </span>
-              )}
-              {gaps.g > 5 && (
-                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
-                  G {formatGap(gaps.g, "g")}
-                </span>
-              )}
-            </>
-          ) : hasExcess ? (
-            <>
-              {gaps.kcal < -100 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                  Excesso {Math.abs(gaps.kcal)} kcal
-                </span>
-              )}
-              {gaps.p < -20 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                  P {formatGap(gaps.p, "g")}
-                </span>
-              )}
-              {gaps.c < -30 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                  C {formatGap(gaps.c, "g")}
-                </span>
-              )}
-              {gaps.g < -15 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                  G {formatGap(gaps.g, "g")}
-                </span>
-              )}
-            </>
-          ) : null}
-        </div>
-        
-        {/* Action buttons - always visible when open and has deficit */}
-        {isOpen && hasDeficit && autoCombo.length > 0 && (
-          <div className="flex gap-2 mt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => setIsOpen(true)}
-            >
-              Ver sugestões
-            </Button>
-            <Button
-              size="sm"
-              className="flex-1 text-xs gap-1.5"
-              onClick={() => setShowAutoModal(true)}
-            >
-              <Wand2 size={14} />
-              Ajustar automaticamente
-            </Button>
+        {/* Recomendações simples e acionáveis (sempre visíveis) */}
+        {hasDeficit && recommendations.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {recommendations.map((rec, idx) => (
+              <div 
+                key={idx}
+                className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2"
+              >
+                <span className="text-sm text-foreground">{rec.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Botões de ação rápida (sempre visíveis quando há déficit) */}
+        {hasDeficit && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {gaps.p > 10 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1 text-pink-400 border-pink-400/30 hover:bg-pink-400/10"
+                onClick={() => handleNavigateToAdd("p")}
+              >
+                <Plus size={14} />
+                Proteína
+              </Button>
+            )}
+            {gaps.c > 20 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1 text-yellow-400 border-yellow-400/30 hover:bg-yellow-400/10"
+                onClick={() => handleNavigateToAdd("c")}
+              >
+                <Plus size={14} />
+                Carbo
+              </Button>
+            )}
+            {gaps.g > 8 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1 text-blue-400 border-blue-400/30 hover:bg-blue-400/10"
+                onClick={() => handleNavigateToAdd("g")}
+              >
+                <Plus size={14} />
+                Gordura
+              </Button>
+            )}
+            {autoCombo.length > 0 && (
+              <Button
+                size="sm"
+                className="text-xs gap-1.5 ml-auto"
+                onClick={() => setShowAutoModal(true)}
+              >
+                <Wand2 size={14} />
+                Ajustar auto
+              </Button>
+            )}
+          </div>
+        )}
+
+        {hasExcess && (
+          <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-400">
+              Você está acima da meta. Considere reduzir porções ou remover itens.
+            </p>
           </div>
         )}
         

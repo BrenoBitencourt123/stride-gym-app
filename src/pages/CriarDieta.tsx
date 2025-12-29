@@ -150,13 +150,16 @@ const CriarDieta = () => {
               <HelpIcon helpKey="nutri.goals" size={16} />
             </div>
             {totals.kcal > 0 && (
-              <span className={`px-2 py-1 text-xs font-medium rounded-lg ${
-                Math.abs(totals.kcal - goals.kcalTarget) <= 200 
-                  ? "bg-green-500/20 text-green-400" 
-                  : "bg-yellow-500/20 text-yellow-400"
-              }`}>
-                {Math.abs(totals.kcal - goals.kcalTarget) <= 200 ? "Meta segura" : "Ajuste necessário"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className={`px-2 py-1 text-xs font-medium rounded-lg ${
+                  Math.abs(totals.kcal - goals.kcalTarget) <= 200 
+                    ? "bg-green-500/20 text-green-400" 
+                    : "bg-yellow-500/20 text-yellow-400"
+                }`}>
+                  {Math.abs(totals.kcal - goals.kcalTarget) <= 200 ? "Meta segura" : "Ajuste necessário"}
+                </span>
+                <HelpIcon helpKey={Math.abs(totals.kcal - goals.kcalTarget) <= 200 ? "nutri.metaSegura" : "nutri.ajuste"} size={14} />
+              </div>
             )}
           </div>
 

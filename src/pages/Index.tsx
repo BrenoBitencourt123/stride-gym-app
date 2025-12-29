@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Settings, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus, CalendarCheck } from "lucide-react";
+import { Settings, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { useEffect, useState } from "react";
 import HelpIcon from "@/components/HelpIcon";
 import BottomNav from "@/components/BottomNav";
@@ -16,8 +16,6 @@ import {
   getLatestWeight,
   getWeighingFrequency
 } from "@/lib/progress";
-import WeightLogModal from "@/components/WeightLogModal";
-import WeeklyCheckinModal from "@/components/WeeklyCheckinModal";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -25,7 +23,6 @@ const Index = () => {
   const [quests, setQuests] = useState(getQuests());
   const [achievements, setAchievements] = useState(getAchievements());
   const [showWeightModal, setShowWeightModal] = useState(false);
-  const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -89,10 +86,6 @@ const Index = () => {
   const handleWeightSaved = () => {
     setRefreshKey(k => k + 1);
     setQuests(getQuests());
-  };
-
-  const handleCheckinApplied = () => {
-    setRefreshKey(k => k + 1);
   };
 
   // Trend icon
@@ -224,114 +217,45 @@ const Index = () => {
           )}
         </div>
 
-        {/* Progress Card */}
+        {/* Progress Micro-Summary */}
         {hasOnboarding && (
-          <div className="bg-card border border-border rounded-2xl p-5 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Scale className="w-5 h-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">Progresso</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
-                  {weighingFrequency === 'weekly' ? 'Semanal' : 'Diário'}
-                </span>
+          <Link 
+            to="/progresso?tab=peso"
+            className="block bg-card border border-border rounded-xl p-3 mb-6 hover:bg-card/80 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Scale className="w-4 h-4 text-primary" />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                    {weighingFrequency === 'weekly' ? 'Semanal' : 'Diário'}
+                  </span>
+                  {weightStats.trendKg !== null && TrendIcon && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${
+                      weightStats.trendKg < 0 ? "text-green-500" : 
+                      weightStats.trendKg > 0 ? "text-orange-500" : 
+                      "text-muted-foreground"
+                    }`}>
+                      <TrendIcon className="w-3 h-3" />
+                      {weightStats.trendKg > 0 ? "+" : ""}{weightStats.trendKg} kg
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {checkinAvailable 
+                      ? '• Check-in disponível' 
+                      : nextCheckinDate 
+                        ? `• ${nextCheckinDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
+                        : ''
+                    }
+                  </span>
+                </div>
               </div>
-              {weighingFrequency === 'weekly' ? (
-                <button
-                  onClick={() => setShowWeightModal(true)}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  + Peso extra
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowWeightModal(true)}
-                  className="text-xs text-primary hover:text-primary/80 transition-colors"
-                >
-                  Registrar peso
-                </button>
-              )}
-            </div>
-
-            {/* Stats grid - adapts to mode */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {weighingFrequency === 'daily' ? (
-                <>
-                  {/* Daily mode: 7-day average */}
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Média 7 dias</p>
-                    {weightStats.currentAvg7 !== null ? (
-                      <p className="text-xl font-bold text-foreground">{weightStats.currentAvg7} kg</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        {weightStats.logsNeeded > 0 
-                          ? `Faltam ${weightStats.logsNeeded} registros` 
-                          : 'Sem dados'
-                        }
-                      </p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Weekly mode: last check-in weight */}
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Último check-in</p>
-                    {weightStats.weeklyModeStats.currentWeight !== null ? (
-                      <p className="text-xl font-bold text-foreground">{weightStats.weeklyModeStats.currentWeight} kg</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Nenhum ainda</p>
-                    )}
-                  </div>
-                </>
-              )}
-              
-              {/* Trend - same for both modes */}
-              <div className="bg-muted/30 rounded-lg p-3">
-                <p className="text-xs text-muted-foreground mb-1">Tendência</p>
-                {weightStats.trendKg !== null && TrendIcon ? (
-                  <div className={`flex items-center gap-1 text-xl font-bold ${
-                    weightStats.trendKg < 0 ? "text-green-500" : 
-                    weightStats.trendKg > 0 ? "text-orange-500" : 
-                    "text-muted-foreground"
-                  }`}>
-                    <TrendIcon className="w-5 h-5" />
-                    {weightStats.trendKg > 0 ? "+" : ""}{weightStats.trendKg} kg
-                  </div>
-                ) : weighingFrequency === 'weekly' && weightStats.weeklyModeStats.checkinsNeeded > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    +{weightStats.weeklyModeStats.checkinsNeeded} check-in(s)
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Aguardando dados</p>
-                )}
+              <div className="flex items-center gap-1 text-xs text-primary">
+                <span>Ver progresso</span>
+                <ChevronRight className="w-3 h-3" />
               </div>
             </div>
-
-            {/* Check-in status */}
-            <div className="flex items-center justify-between pt-3 border-t border-border/50">
-              <div className="flex items-center gap-2">
-                <CalendarCheck className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  {checkinAvailable 
-                    ? 'Check-in disponível!' 
-                    : nextCheckinDate 
-                      ? `Próximo: ${nextCheckinDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
-                      : 'Registre seu primeiro peso'
-                  }
-                </span>
-              </div>
-              <button
-                onClick={() => setShowCheckinModal(true)}
-                className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                  checkinAvailable 
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                    : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-                }`}
-              >
-                {checkinAvailable ? 'Fazer check-in' : 'Ver detalhes'}
-              </button>
-            </div>
-          </div>
+          </Link>
         )}
 
         {/* Missions Section */}
@@ -444,18 +368,6 @@ const Index = () => {
 
       {/* Bottom Navigation */}
       <BottomNav />
-
-      {/* Modals */}
-      <WeightLogModal 
-        open={showWeightModal} 
-        onClose={() => setShowWeightModal(false)} 
-        onSaved={handleWeightSaved}
-      />
-      <WeeklyCheckinModal
-        open={showCheckinModal}
-        onClose={() => setShowCheckinModal(false)}
-        onApplied={handleCheckinApplied}
-      />
     </div>
   );
 };

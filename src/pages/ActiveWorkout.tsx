@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronDown, MoreVertical, Plus, Timer, Dumbbell, CheckCircle2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
@@ -48,7 +48,15 @@ export interface ActiveExercise {
 const ActiveWorkout = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
-  const workout = getUserWorkout(treinoId || "");
+  
+  // Memoize workout to prevent new object reference on every render
+  const workout = useMemo(() => {
+    if (!treinoId) return null;
+    return getUserWorkout(treinoId);
+  }, [treinoId]);
+  
+  // Track if we've already initialized for this workout
+  const initializedRef = useRef<string | null>(null);
   
   const [exercises, setExercises] = useState<ActiveExercise[]>([]);
   const [startTime, setStartTime] = useState<Date | null>(null);
@@ -60,9 +68,13 @@ const ActiveWorkout = () => {
   const [showRestTimer, setShowRestTimer] = useState(false);
   const [restDuration, setRestDuration] = useState(120);
 
-  // Initialize workout
+  // Initialize workout - runs only ONCE per treinoId
   useEffect(() => {
-    if (!workout) return;
+    if (!workout || !treinoId) return;
+    
+    // Prevent re-initialization if already done for this workout
+    if (initializedRef.current === treinoId) return;
+    initializedRef.current = treinoId;
 
     const treinoHoje = getTreinoHoje();
     
@@ -80,7 +92,7 @@ const ActiveWorkout = () => {
 
     // Initialize exercises from workout data and saved progress
     const initialExercises: ActiveExercise[] = workout.exercicios.map((ex) => {
-      const savedProgress = getExerciseProgress(treinoId || "", ex.id);
+      const savedProgress = getExerciseProgress(treinoId, ex.id);
       
       if (savedProgress) {
         // Convert saved progress to active sets

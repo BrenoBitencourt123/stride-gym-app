@@ -1,4 +1,4 @@
-import { useState, memo, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { MoreVertical, Plus, Timer } from "lucide-react";
 import { ActiveExercise, ActiveSet, SetType } from "@/pages/ActiveWorkout";
 import ActiveSetRow from "./ActiveSetRow";
@@ -20,7 +20,7 @@ function formatRestTime(seconds: number): string {
   return `${mins}min ${secs}s`;
 }
 
-const ExerciseSection = memo(({
+const ExerciseSection = ({
   exercise,
   exerciseIndex,
   onSetChange,
@@ -58,6 +58,7 @@ const ExerciseSection = memo(({
               />
             ) : (
               <button
+                type="button"
                 onClick={() => setShowNotes(true)}
                 className="mt-1 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors"
               >
@@ -66,8 +67,8 @@ const ExerciseSection = memo(({
             )}
           </div>
           
-          {/* Simple menu button - dropdown removed to fix re-render loop */}
-          <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
+          {/* Simple menu button */}
+          <button type="button" className="p-1 text-muted-foreground hover:text-foreground transition-colors">
             <MoreVertical className="w-5 h-5" />
           </button>
         </div>
@@ -109,6 +110,7 @@ const ExerciseSection = memo(({
 
       {/* Add Set Button */}
       <button
+        type="button"
         onClick={handleAddSet}
         className="w-full px-4 py-3 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors border-t border-border/30"
       >
@@ -117,8 +119,6 @@ const ExerciseSection = memo(({
       </button>
     </div>
   );
-});
-
-ExerciseSection.displayName = 'ExerciseSection';
+};
 
 export default ExerciseSection;

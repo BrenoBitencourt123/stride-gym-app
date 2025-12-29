@@ -1,5 +1,5 @@
-import { memo, useCallback } from "react";
-import { Check, Minus, Plus, Trash2 } from "lucide-react";
+import { useCallback } from "react";
+import { Check, Minus, Plus } from "lucide-react";
 import { ActiveSet, SetType } from "@/pages/ActiveWorkout";
 
 interface ActiveSetRowProps {
@@ -24,7 +24,7 @@ function getSetLabel(type: SetType, index: number): { label: string; className: 
   }
 }
 
-const ActiveSetRow = memo(({ set, setIndex, canRemove, onChange, onRemove, onTypeClick }: ActiveSetRowProps) => {
+const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClick }: ActiveSetRowProps) => {
   const setLabel = getSetLabel(set.type, setIndex);
 
   const decreaseKg = useCallback(() => {
@@ -143,8 +143,6 @@ const ActiveSetRow = memo(({ set, setIndex, canRemove, onChange, onRemove, onTyp
       </div>
     </div>
   );
-});
-
-ActiveSetRow.displayName = 'ActiveSetRow';
+};
 
 export default ActiveSetRow;

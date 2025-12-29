@@ -22,6 +22,8 @@ import Perfil from "./pages/Perfil";
 import Progresso from "./pages/Progresso";
 import Login from "./pages/Login";
 import RestDay from "./pages/RestDay";
+import Onboarding from "./pages/Onboarding";
+import ObjectiveOnboarding from "./pages/ObjectiveOnboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,8 +36,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* Public route */}
+            {/* Public routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/onboarding" element={<Onboarding />} />
             
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
@@ -50,6 +53,7 @@ const App = () => (
             <Route path="/nutricao/adicionar-alimento" element={<ProtectedRoute><AdicionarAlimento /></ProtectedRoute>} />
             <Route path="/nutricao/resumo" element={<ProtectedRoute><NutritionSummary /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/settings/objetivo" element={<ProtectedRoute><ObjectiveOnboarding /></ProtectedRoute>} />
             <Route path="/conquistas" element={<ProtectedRoute><Conquistas /></ProtectedRoute>} />
             <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
             <Route path="/progresso" element={<ProtectedRoute><Progresso /></ProtectedRoute>} />

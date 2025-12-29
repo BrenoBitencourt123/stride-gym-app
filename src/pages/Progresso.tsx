@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
-import { ArrowLeft, TrendingUp, Dumbbell, Award, Calendar, Scale, Plus, Minus } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { ArrowLeft, TrendingUp, TrendingDown, Dumbbell, Award, Calendar, Scale, Plus, Minus, CalendarCheck, Settings2, ChevronRight } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import BottomNav from "@/components/BottomNav";
+import WeightLogModal from "@/components/WeightLogModal";
+import WeeklyCheckinModal from "@/components/WeeklyCheckinModal";
+import HelpIcon from "@/components/HelpIcon";
 import {
   getE1RMHistory,
   getWeeklyVolume,
@@ -25,18 +28,52 @@ import {
   getWeightVariation,
   saveWeight,
 } from "@/lib/storage";
+import {
+  getWeightStats,
+  isCheckinAvailable,
+  getNextCheckinDueDate,
+  getWeighingFrequency,
+  getPlanHistory,
+} from "@/lib/progress";
 import { foods, FoodItem } from "@/data/foods";
 import { toast } from "sonner";
 import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 const Progresso = () => {
-  const [activeTab, setActiveTab] = useState("forca");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'forca';
+  
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedExercise, setSelectedExercise] = useState<string>("");
   const [period, setPeriod] = useState<string>("30");
   const [nutritionPeriod, setNutritionPeriod] = useState<string>("7");
   const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [newWeight, setNewWeight] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const triggerSync = useSyncTrigger();
+
+  // Update tab when URL changes
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['forca', 'nutricao', 'peso'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  // Weight progress data
+  const weightStats = useMemo(() => getWeightStats(), [refreshKey]);
+  const checkinAvailable = useMemo(() => isCheckinAvailable(), [refreshKey]);
+  const nextCheckinDate = useMemo(() => getNextCheckinDueDate(), [refreshKey]);
+  const weighingFrequency = useMemo(() => getWeighingFrequency(), [refreshKey]);
+  const planHistory = useMemo(() => getPlanHistory(), [refreshKey]);
+
+  // Trend icon
+  const TrendIcon = weightStats.trendKg !== null 
+    ? weightStats.trendKg < 0 ? TrendingDown 
+    : weightStats.trendKg > 0 ? TrendingUp 
+    : null
+    : null;
 
   // Exercícios disponíveis
   const exercisesWithHistory = useMemo(() => getExercisesWithHistory(), []);
@@ -411,7 +448,100 @@ const Progresso = () => {
 
           {/* Peso Tab */}
           <TabsContent value="peso" className="space-y-4">
-            {/* Weight Stats */}
+            {/* Progress Card - Full version from Home */}
+            <div className="card-glass p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Scale className="w-5 h-5 text-primary" />
+                  <h2 className="text-lg font-semibold text-foreground">Progresso</h2>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                    {weighingFrequency === 'weekly' ? 'Semanal' : 'Diário'}
+                  </span>
+                  <HelpIcon helpKey="home.progress" size={14} />
+                </div>
+                <button
+                  onClick={() => setShowWeightModal(true)}
+                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                >
+                  + Peso extra
+                </button>
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {weighingFrequency === 'daily' ? (
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Média 7 dias</p>
+                    {weightStats.currentAvg7 !== null ? (
+                      <p className="text-xl font-bold text-foreground">{weightStats.currentAvg7} kg</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {weightStats.logsNeeded > 0 
+                          ? `Faltam ${weightStats.logsNeeded} registros` 
+                          : 'Sem dados'
+                        }
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Último check-in</p>
+                    {weightStats.weeklyModeStats.currentWeight !== null ? (
+                      <p className="text-xl font-bold text-foreground">{weightStats.weeklyModeStats.currentWeight} kg</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Nenhum ainda</p>
+                    )}
+                  </div>
+                )}
+                
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Tendência</p>
+                  {weightStats.trendKg !== null && TrendIcon ? (
+                    <div className={`flex items-center gap-1 text-xl font-bold ${
+                      weightStats.trendKg < 0 ? "text-green-500" : 
+                      weightStats.trendKg > 0 ? "text-orange-500" : 
+                      "text-muted-foreground"
+                    }`}>
+                      <TrendIcon className="w-5 h-5" />
+                      {weightStats.trendKg > 0 ? "+" : ""}{weightStats.trendKg} kg
+                    </div>
+                  ) : weighingFrequency === 'weekly' && weightStats.weeklyModeStats.checkinsNeeded > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      +{weightStats.weeklyModeStats.checkinsNeeded} check-in(s)
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Aguardando dados</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Check-in status */}
+              <div className="flex items-center justify-between pt-3 border-t border-border/50">
+                <div className="flex items-center gap-2">
+                  <CalendarCheck className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    {checkinAvailable 
+                      ? 'Check-in disponível!' 
+                      : nextCheckinDate 
+                        ? `Próximo: ${nextCheckinDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
+                        : 'Registre seu primeiro peso'
+                    }
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowCheckinModal(true)}
+                  className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                    checkinAvailable 
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                      : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  {checkinAvailable ? 'Fazer check-in' : 'Ver detalhes'}
+                </button>
+              </div>
+            </div>
+
+            {/* Weight Stats Card */}
             {weightVariation && (
               <div className="card-glass p-4">
                 <div className="flex items-center justify-between">
@@ -475,6 +605,44 @@ const Progresso = () => {
               )}
             </div>
 
+            {/* Plan History / Adjustments */}
+            {planHistory.length > 1 && (
+              <div className="card-glass p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-3">Histórico de ajustes</h3>
+                <div className="space-y-2">
+                  {planHistory.slice(0, 5).map((entry, idx) => {
+                    const date = new Date(entry.atISO);
+                    const prevEntry = planHistory[idx + 1];
+                    const calorieDelta = prevEntry ? entry.calories - prevEntry.calories : 0;
+                    
+                    return (
+                      <div key={idx} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                        <div>
+                          <span className="text-sm text-foreground">
+                            {entry.calories} kcal
+                          </span>
+                          {calorieDelta !== 0 && (
+                            <span className={`ml-2 text-xs ${calorieDelta > 0 ? 'text-orange-500' : 'text-green-500'}`}>
+                              ({calorieDelta > 0 ? '+' : ''}{calorieDelta})
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs text-muted-foreground">
+                            {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                          </span>
+                          <span className="ml-2 text-xs text-muted-foreground/70">
+                            {entry.reason === 'onboarding' ? 'Inicial' : 
+                             entry.reason === 'auto_adjust' ? 'Check-in' : 'Manual'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Weight History List */}
             {weightHistory.length > 0 && (
               <div className="card-glass p-4">
@@ -508,57 +676,19 @@ const Progresso = () => {
         </Tabs>
       </div>
 
-      {/* Weight Modal */}
-      <Dialog open={showWeightModal} onOpenChange={setShowWeightModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Registrar peso</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex items-center justify-center gap-4">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  const current = parseFloat(newWeight) || (weightVariation?.current || 70);
-                  setNewWeight(String(Math.max(0, current - 0.5)));
-                }}
-              >
-                <Minus className="w-4 h-4" />
-              </Button>
-              <div className="text-center">
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={newWeight}
-                  onChange={(e) => setNewWeight(e.target.value)}
-                  placeholder={String(weightVariation?.current || 70)}
-                  className="w-24 text-center text-2xl font-bold"
-                />
-                <Label className="text-sm text-muted-foreground">kg</Label>
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  const current = parseFloat(newWeight) || (weightVariation?.current || 70);
-                  setNewWeight(String(current + 0.5));
-                }}
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowWeightModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveWeight}>
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Weight Log Modal */}
+      <WeightLogModal
+        open={showWeightModal}
+        onClose={() => setShowWeightModal(false)}
+        onSaved={() => setRefreshKey(k => k + 1)}
+      />
+
+      {/* Weekly Checkin Modal */}
+      <WeeklyCheckinModal
+        open={showCheckinModal}
+        onClose={() => setShowCheckinModal(false)}
+        onApplied={() => setRefreshKey(k => k + 1)}
+      />
 
       {/* Bottom Navigation */}
       <BottomNav />

@@ -159,11 +159,24 @@ const Nutricao = () => {
   const jantarComplete = isMealComplete("jantar");
   const canComplete = jantarComplete && hasAnyItems && !nutritionCompleted;
 
-  // Progress percentages (baseado no consumido)
-  const kcalPct = Math.min((consumedTotals.kcal / goals.kcalTarget) * 100, 100);
-  const pPct = Math.min((consumedTotals.p / goals.pTarget) * 100, 100);
-  const cPct = Math.min((consumedTotals.c / goals.cTarget) * 100, 100);
-  const gPct = Math.min((consumedTotals.g / goals.gTarget) * 100, 100);
+  // Progress percentages - agora baseados no PLANO DO DIA como referência
+  const planHasValues = plannedTotals.kcal > 0;
+  const kcalPct = planHasValues 
+    ? Math.min((consumedTotals.kcal / plannedTotals.kcal) * 100, 100) 
+    : 0;
+  const pPct = plannedTotals.p > 0 
+    ? Math.min((consumedTotals.p / plannedTotals.p) * 100, 100) 
+    : 0;
+  const cPct = plannedTotals.c > 0 
+    ? Math.min((consumedTotals.c / plannedTotals.c) * 100, 100) 
+    : 0;
+  const gPct = plannedTotals.g > 0 
+    ? Math.min((consumedTotals.g / plannedTotals.g) * 100, 100) 
+    : 0;
+
+  // Cálculo de divergência entre Meta e Plano
+  const metaPlanDiff = goals.kcalTarget - plannedTotals.kcal;
+  const showDivergenceWarning = planHasValues && Math.abs(metaPlanDiff) > 100;
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -177,49 +190,24 @@ const Nutricao = () => {
         {/* Header */}
         <h1 className="text-2xl font-bold text-foreground mb-6">Nutrição</h1>
 
-        {/* Card 1: Meta × Plano × Consumido */}
+        {/* Card 1: Resumo simplificado - Consumido / Plano */}
         <div className="card-glass p-4 mb-4">
-          <h2 className="text-lg font-semibold text-foreground mb-3">Resumo do dia</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-foreground">Resumo do dia</h2>
+            <Link 
+              to="/settings/objetivo" 
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Ver metas calculadas →
+            </Link>
+          </div>
           
-          {/* 3 linhas: Meta, Plano, Consumido */}
-          <div className="space-y-2 mb-4">
-            {/* Meta do dia */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-muted-foreground">Meta do dia</span>
-                <HelpIcon helpKey="nutri.meta" size={14} />
-              </div>
-              <span className="text-sm font-medium text-foreground">{goals.kcalTarget} kcal</span>
-            </div>
-            
-            {/* Plano do dia */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-muted-foreground">Plano do dia</span>
-                <HelpIcon helpKey="nutri.plano" size={14} />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-foreground">{plannedTotals.kcal} kcal</span>
-                {plannedTotals.kcal > 0 && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${
-                    Math.abs(plannedTotals.kcal - goals.kcalTarget) <= 200 
-                      ? "bg-green-500/20 text-green-400" 
-                      : "bg-yellow-500/20 text-yellow-400"
-                  }`}>
-                    {plannedTotals.kcal >= goals.kcalTarget ? "+" : ""}{plannedTotals.kcal - goals.kcalTarget}
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            {/* Consumido */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold text-foreground">Consumido</span>
-                <HelpIcon helpKey="nutri.consumido" size={14} />
-              </div>
-              <span className="text-sm font-bold text-primary">{consumedTotals.kcal} / {goals.kcalTarget} kcal</span>
-            </div>
+          {/* Consumido / Plano do dia */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">Consumido hoje</span>
+            <span className="text-sm font-bold text-primary">
+              {consumedTotals.kcal} / {planHasValues ? plannedTotals.kcal : goals.kcalTarget} kcal
+            </span>
           </div>
 
           {/* Progress bar principal */}
@@ -230,12 +218,14 @@ const Nutricao = () => {
             />
           </div>
 
-          {/* Macro breakdown com progress bars */}
+          {/* Macro breakdown com progress bars - referência é o PLANO */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-pink-500 font-medium">Proteína</span>
-                <span className="text-muted-foreground">{consumedTotals.p}g / {goals.pTarget}g</span>
+                <span className="text-muted-foreground">
+                  {consumedTotals.p}g / {planHasValues ? plannedTotals.p : goals.pTarget}g
+                </span>
               </div>
               <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-pink-500 transition-all" style={{ width: `${pPct}%` }} />
@@ -244,7 +234,9 @@ const Nutricao = () => {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-yellow-400 font-medium">Carbs</span>
-                <span className="text-muted-foreground">{consumedTotals.c}g / {goals.cTarget}g</span>
+                <span className="text-muted-foreground">
+                  {consumedTotals.c}g / {planHasValues ? plannedTotals.c : goals.cTarget}g
+                </span>
               </div>
               <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-yellow-400 transition-all" style={{ width: `${cPct}%` }} />
@@ -253,7 +245,9 @@ const Nutricao = () => {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-blue-400 font-medium">Gordura</span>
-                <span className="text-muted-foreground">{consumedTotals.g}g / {goals.gTarget}g</span>
+                <span className="text-muted-foreground">
+                  {consumedTotals.g}g / {planHasValues ? plannedTotals.g : goals.gTarget}g
+                </span>
               </div>
               <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-400 transition-all" style={{ width: `${gPct}%` }} />
@@ -261,6 +255,43 @@ const Nutricao = () => {
             </div>
           </div>
         </div>
+
+        {/* Aviso de divergência Meta vs Plano */}
+        {showDivergenceWarning && (
+          <div className={`rounded-xl p-3 mb-4 flex items-start gap-3 ${
+            metaPlanDiff > 0 
+              ? 'bg-yellow-500/10 border border-yellow-500/30' 
+              : 'bg-orange-500/10 border border-orange-500/30'
+          }`}>
+            <span className="text-lg mt-0.5">{metaPlanDiff > 0 ? '📉' : '📈'}</span>
+            <div className="flex-1">
+              <p className="text-sm text-foreground mb-2">
+                {metaPlanDiff > 0 
+                  ? `Seu plano está ~${Math.abs(metaPlanDiff)} kcal abaixo da meta. Quer completar?`
+                  : `Seu plano está ~${Math.abs(metaPlanDiff)} kcal acima da meta. Quer ajustar?`
+                }
+              </p>
+              <Link
+                to={metaPlanDiff > 0 
+                  ? "/nutricao/adicionar-alimento?mealId=lanche" 
+                  : "/nutricao/criar-dieta"
+                }
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                {metaPlanDiff > 0 ? (
+                  <>
+                    <Plus size={14} />
+                    Adicionar lanche
+                  </>
+                ) : (
+                  <>
+                    Ajustar refeições
+                  </>
+                )}
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Card 2: Refeições de hoje */}
         <div className="card-glass p-4 mb-6">

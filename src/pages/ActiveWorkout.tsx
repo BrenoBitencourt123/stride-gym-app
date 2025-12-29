@@ -199,8 +199,8 @@ const ActiveWorkout = () => {
     return { completedSets, totalSets, totalVolume };
   }, [exercises]);
 
-  // Handlers
-  const handleSetChange = (exerciseIndex: number, setIndex: number, field: keyof ActiveSet, value: number | boolean | SetType) => {
+  // Handlers - memoized to prevent re-renders
+  const handleSetChange = useCallback((exerciseIndex: number, setIndex: number, field: keyof ActiveSet, value: number | boolean | SetType) => {
     setExercises((prev) => {
       const updated = [...prev];
       const exercise = { ...updated[exerciseIndex] };
@@ -217,9 +217,9 @@ const ActiveWorkout = () => {
       updated[exerciseIndex] = exercise;
       return updated;
     });
-  };
+  }, []);
 
-  const handleAddSet = (exerciseIndex: number) => {
+  const handleAddSet = useCallback((exerciseIndex: number) => {
     setExercises((prev) => {
       const updated = [...prev];
       const exercise = { ...updated[exerciseIndex] };
@@ -238,9 +238,9 @@ const ActiveWorkout = () => {
       updated[exerciseIndex] = exercise;
       return updated;
     });
-  };
+  }, []);
 
-  const handleRemoveSet = (exerciseIndex: number, setIndex: number) => {
+  const handleRemoveSet = useCallback((exerciseIndex: number, setIndex: number) => {
     setExercises((prev) => {
       const updated = [...prev];
       const exercise = { ...updated[exerciseIndex] };
@@ -254,28 +254,30 @@ const ActiveWorkout = () => {
       updated[exerciseIndex] = exercise;
       return updated;
     });
-  };
+  }, []);
 
-  const handleNotesChange = (exerciseIndex: number, notes: string) => {
+  const handleNotesChange = useCallback((exerciseIndex: number, notes: string) => {
     setExercises((prev) => {
       const updated = [...prev];
       updated[exerciseIndex] = { ...updated[exerciseIndex], notes };
       return updated;
     });
-  };
+  }, []);
 
-  const handleSetTypeClick = (exerciseIndex: number, setIndex: number) => {
+  const handleSetTypeClick = useCallback((exerciseIndex: number, setIndex: number) => {
     setSelectedSetInfo({ exerciseIndex, setIndex });
     setShowSetTypeSelector(true);
-  };
+  }, []);
 
-  const handleSetTypeSelect = (type: SetType) => {
-    if (selectedSetInfo) {
-      handleSetChange(selectedSetInfo.exerciseIndex, selectedSetInfo.setIndex, "type", type);
-    }
+  const handleSetTypeSelect = useCallback((type: SetType) => {
+    setSelectedSetInfo((info) => {
+      if (info) {
+        handleSetChange(info.exerciseIndex, info.setIndex, "type", type);
+      }
+      return null;
+    });
     setShowSetTypeSelector(false);
-    setSelectedSetInfo(null);
-  };
+  }, [handleSetChange]);
 
   const handleFinish = () => {
     if (metrics.completedSets === 0) {

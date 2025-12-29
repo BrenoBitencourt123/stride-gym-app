@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Settings, HelpCircle, Dumbbell, Apple, Footprints, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight } from "lucide-react";
+import { Settings, HelpCircle, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus, CalendarCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
 import { getProfile, getQuests, syncQuestsStatus, getAchievements, saveTreinoHoje, getUserWorkout, getWeightHistory } from "@/lib/storage";
@@ -7,18 +7,33 @@ import { getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
 import { isWorkoutCompletedThisWeek } from "@/lib/appState";
 import { Progress } from "@/components/ui/progress";
 import { getOnboardingData, getObjectiveLabel } from "@/lib/onboarding";
+import { 
+  getWeightStats, 
+  isCheckinAvailable, 
+  getNextCheckinDueDate,
+  initializePlanHistoryFromOnboarding,
+  getLatestWeight
+} from "@/lib/progress";
+import WeightLogModal from "@/components/WeightLogModal";
+import WeeklyCheckinModal from "@/components/WeeklyCheckinModal";
 
 const Index = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(getProfile());
   const [quests, setQuests] = useState(getQuests());
   const [achievements, setAchievements] = useState(getAchievements());
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     syncQuestsStatus();
     setQuests(getQuests());
     setAchievements(getAchievements());
     setProfile(getProfile());
+    
+    // Initialize plan history from onboarding if needed
+    initializePlanHistoryFromOnboarding();
   }, []);
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
@@ -29,11 +44,18 @@ const Index = () => {
   const onboardingData = getOnboardingData();
   const hasOnboarding = !!onboardingData?.plan;
 
+  // Weight progress data
+  const weightStats = getWeightStats();
+  const latestWeight = getLatestWeight();
+  const checkinAvailable = isCheckinAvailable();
+  const nextCheckinDate = getNextCheckinDueDate();
+
   // Weight goal data - use onboarding target if available
   const weightHistory = getWeightHistory();
-  const currentWeight = weightHistory.length > 0 
-    ? weightHistory[weightHistory.length - 1].weight 
-    : (onboardingData?.profile?.weightKg || 0);
+  const currentWeight = latestWeight?.weightKg || 
+    (weightHistory.length > 0 
+      ? weightHistory[weightHistory.length - 1].weight 
+      : (onboardingData?.profile?.weightKg || 0));
   const goalWeight = onboardingData?.objective?.targetWeightKg || 70;
   const startWeight = onboardingData?.profile?.weightKg || 76;
   const remaining = Math.abs(currentWeight - goalWeight);
@@ -61,6 +83,22 @@ const Index = () => {
     }
   };
 
+  const handleWeightSaved = () => {
+    setRefreshKey(k => k + 1);
+    setQuests(getQuests());
+  };
+
+  const handleCheckinApplied = () => {
+    setRefreshKey(k => k + 1);
+  };
+
+  // Trend icon
+  const TrendIcon = weightStats.trendKg !== null 
+    ? weightStats.trendKg < 0 ? TrendingDown 
+    : weightStats.trendKg > 0 ? TrendingUp 
+    : Minus
+    : null;
+
   const goals = [
     { 
       id: "1", 
@@ -78,17 +116,11 @@ const Index = () => {
     },
     { 
       id: "3", 
-      icon: Footprints, 
-      label: "Passos ou cardio leve", 
-      xp: 70,
-      completed: false, // TODO: track steps
-    },
-    { 
-      id: "4", 
       icon: Scale, 
-      label: "Registrar peso (semanal)", 
-      xp: 120,
+      label: "Registrar peso", 
+      xp: 50,
       completed: quests.registrarPesoDone,
+      onClick: () => setShowWeightModal(true),
     },
   ];
 
@@ -189,6 +221,84 @@ const Index = () => {
           )}
         </div>
 
+        {/* Progress Card */}
+        {hasOnboarding && (
+          <div className="bg-card border border-border rounded-2xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Scale className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Progresso</h2>
+              </div>
+              <button
+                onClick={() => setShowWeightModal(true)}
+                className="text-xs text-primary hover:text-primary/80 transition-colors"
+              >
+                Registrar peso
+              </button>
+            </div>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* 7-day average */}
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-xs text-muted-foreground mb-1">Média 7 dias</p>
+                {weightStats.currentAvg7 !== null ? (
+                  <p className="text-xl font-bold text-foreground">{weightStats.currentAvg7} kg</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {weightStats.logsNeeded > 0 
+                      ? `Faltam ${weightStats.logsNeeded} registros` 
+                      : 'Sem dados'
+                    }
+                  </p>
+                )}
+              </div>
+              
+              {/* Trend */}
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-xs text-muted-foreground mb-1">Tendência</p>
+                {weightStats.trendKg !== null && TrendIcon ? (
+                  <div className={`flex items-center gap-1 text-xl font-bold ${
+                    weightStats.trendKg < 0 ? "text-green-500" : 
+                    weightStats.trendKg > 0 ? "text-orange-500" : 
+                    "text-muted-foreground"
+                  }`}>
+                    <TrendIcon className="w-5 h-5" />
+                    {weightStats.trendKg > 0 ? "+" : ""}{weightStats.trendKg} kg
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aguardando dados</p>
+                )}
+              </div>
+            </div>
+
+            {/* Check-in status */}
+            <div className="flex items-center justify-between pt-3 border-t border-border/50">
+              <div className="flex items-center gap-2">
+                <CalendarCheck className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {checkinAvailable 
+                    ? 'Check-in disponível!' 
+                    : nextCheckinDate 
+                      ? `Próximo: ${nextCheckinDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
+                      : 'Registre mais pesos'
+                  }
+                </span>
+              </div>
+              <button
+                onClick={() => setShowCheckinModal(true)}
+                className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                  checkinAvailable 
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                    : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                }`}
+              >
+                {checkinAvailable ? 'Fazer check-in' : 'Ver detalhes'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Missions Section */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
@@ -217,11 +327,13 @@ const Index = () => {
             {goals.map((goal) => {
               const Icon = goal.icon;
               return (
-                <div 
+                <button 
                   key={goal.id} 
-                  className={`flex items-center justify-between px-4 py-3.5 border-b border-border/50 last:border-0 transition-colors ${
+                  onClick={goal.onClick}
+                  className={`w-full flex items-center justify-between px-4 py-3.5 border-b border-border/50 last:border-0 transition-colors ${
                     goal.completed ? "opacity-60" : "hover:bg-muted/30"
                   }`}
+                  disabled={goal.completed}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -247,7 +359,7 @@ const Index = () => {
                   }`}>
                     +{goal.xp} XP
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -297,6 +409,18 @@ const Index = () => {
 
       {/* Bottom Navigation */}
       <BottomNav />
+
+      {/* Modals */}
+      <WeightLogModal 
+        open={showWeightModal} 
+        onClose={() => setShowWeightModal(false)} 
+        onSaved={handleWeightSaved}
+      />
+      <WeeklyCheckinModal
+        open={showCheckinModal}
+        onClose={() => setShowCheckinModal(false)}
+        onApplied={handleCheckinApplied}
+      />
     </div>
   );
 };

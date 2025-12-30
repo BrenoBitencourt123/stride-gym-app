@@ -1,13 +1,22 @@
 import { useState, useMemo, useEffect } from "react";
-import { ArrowLeft, TrendingUp, TrendingDown, Dumbbell, Award, Calendar, Scale, Plus, Minus, CalendarCheck, Settings2, ChevronRight } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, Dumbbell, Award, Calendar, Scale, CalendarCheck } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  ReferenceLine,
+} from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import BottomNav from "@/components/BottomNav";
 import WeightLogModal from "@/components/WeightLogModal";
 import WeeklyCheckinModal from "@/components/WeeklyCheckinModal";
@@ -26,7 +35,6 @@ import {
   getWeightChartData,
   getWeightHistory,
   getWeightVariation,
-  saveWeight,
 } from "@/lib/storage";
 import {
   getWeightStats,
@@ -41,25 +49,48 @@ import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 const Progresso = () => {
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'forca';
-  
+  const initialTab = searchParams.get("tab") || "forca";
+
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedExercise, setSelectedExercise] = useState<string>("");
   const [period, setPeriod] = useState<string>("30");
   const [nutritionPeriod, setNutritionPeriod] = useState<string>("7");
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
-  const [newWeight, setNewWeight] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+
   const triggerSync = useSyncTrigger();
 
   // Update tab when URL changes
   useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && ['forca', 'nutricao', 'peso'].includes(tab)) {
+    const tab = searchParams.get("tab");
+    if (tab && ["forca", "nutricao", "peso"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
+
+  // ✅ Recarrega dados quando o app volta pro foco (mobile) ou quando a aba volta a ficar visível
+  useEffect(() => {
+    const bump = () => setRefreshKey((k) => k + 1);
+
+    const onVisibility = () => {
+      if (!document.hidden) bump();
+    };
+
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // se em algum lugar do app você dispara evento de sync, isso também ajuda
+    window.addEventListener("sync", bump as any);
+    window.addEventListener("app:sync", bump as any);
+
+    return () => {
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("sync", bump as any);
+      window.removeEventListener("app:sync", bump as any);
+    };
+  }, []);
 
   // Weight progress data
   const weightStats = useMemo(() => getWeightStats(), [refreshKey]);
@@ -69,15 +100,18 @@ const Progresso = () => {
   const planHistory = useMemo(() => getPlanHistory(), [refreshKey]);
 
   // Trend icon
-  const TrendIcon = weightStats.trendKg !== null 
-    ? weightStats.trendKg < 0 ? TrendingDown 
-    : weightStats.trendKg > 0 ? TrendingUp 
-    : null
-    : null;
+  const TrendIcon =
+    weightStats.trendKg !== null
+      ? weightStats.trendKg < 0
+        ? TrendingDown
+        : weightStats.trendKg > 0
+          ? TrendingUp
+          : null
+      : null;
 
   // Exercícios disponíveis
-  const exercisesWithHistory = useMemo(() => getExercisesWithHistory(), []);
-  
+  const exercisesWithHistory = useMemo(() => getExercisesWithHistory(), [refreshKey]);
+
   // Selecionar primeiro exercício se não selecionado
   const currentExercise = selectedExercise || exercisesWithHistory[0]?.id || "";
 
@@ -85,21 +119,27 @@ const Progresso = () => {
   const e1rmData = useMemo(() => {
     if (!currentExercise) return [];
     return getE1RMHistory(currentExercise);
-  }, [currentExercise]);
+  }, [currentExercise, refreshKey]);
 
-  const weeklyVolumeData = useMemo(() => getWeeklyVolume(parseInt(period)), [period]);
-  const prsCount = useMemo(() => getPRsCount(), []);
-  const workoutsLast30 = useMemo(() => getWorkoutsInPeriod(30), []);
-  const consistency = useMemo(() => getConsistency(30), []);
+  const weeklyVolumeData = useMemo(() => {
+    return getWeeklyVolume(parseInt(period));
+  }, [period, refreshKey]);
+
+  const prsCount = useMemo(() => getPRsCount(), [refreshKey]);
+  const workoutsLast30 = useMemo(() => getWorkoutsInPeriod(30), [refreshKey]);
+  const consistency = useMemo(() => getConsistency(30), [refreshKey]);
 
   // Dados de nutrição - consolidar dados do dia atual
   const nutritionData = useMemo(() => {
     // Consolidar nutrição do dia atual antes de buscar dados
     const today = getNutritionToday();
     const goals = getNutritionGoals();
-    
-    let totalKcal = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0;
-    
+
+    let totalKcal = 0,
+      totalProtein = 0,
+      totalCarbs = 0,
+      totalFat = 0;
+
     for (const meal of today.meals) {
       for (const entry of meal.entries) {
         if (entry.consumed) {
@@ -114,7 +154,7 @@ const Progresso = () => {
         }
       }
     }
-    
+
     // Salvar log de hoje se houver consumo
     if (totalKcal > 0) {
       const dateKey = new Date().toISOString().split("T")[0];
@@ -126,27 +166,14 @@ const Progresso = () => {
         fat: Math.round(totalFat),
       });
     }
-    
+
     return getNutritionChartData(parseInt(nutritionPeriod));
-  }, [nutritionPeriod]);
+  }, [nutritionPeriod, refreshKey]);
 
   // Dados de peso
-  const weightData = useMemo(() => getWeightChartData(), []);
-  const weightVariation = useMemo(() => getWeightVariation(), []);
-  const weightHistory = useMemo(() => getWeightHistory(), []);
-
-  const handleSaveWeight = () => {
-    const weight = parseFloat(newWeight);
-    if (isNaN(weight) || weight <= 0) {
-      toast.error("Digite um peso válido");
-      return;
-    }
-    saveWeight(weight);
-    setShowWeightModal(false);
-    setNewWeight("");
-    toast.success("Peso registrado!");
-    triggerSync(); // Sync after saving weight
-  };
+  const weightData = useMemo(() => getWeightChartData(), [refreshKey]);
+  const weightVariation = useMemo(() => getWeightVariation(), [refreshKey]);
+  const weightHistory = useMemo(() => getWeightHistory(), [refreshKey]);
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -213,8 +240,10 @@ const Progresso = () => {
                   <SelectValue placeholder="Exercício" />
                 </SelectTrigger>
                 <SelectContent>
-                  {exercisesWithHistory.map(ex => (
-                    <SelectItem key={ex.id} value={ex.id}>{ex.name}</SelectItem>
+                  {exercisesWithHistory.map((ex) => (
+                    <SelectItem key={ex.id} value={ex.id}>
+                      {ex.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -238,17 +267,12 @@ const Progresso = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={e1rmData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="dateLabel" 
-                        stroke="hsl(var(--muted-foreground))" 
+                      <XAxis dataKey="dateLabel" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} />
+                      <YAxis
+                        stroke="hsl(var(--muted-foreground))"
                         fontSize={10}
                         tickLine={false}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))" 
-                        fontSize={10}
-                        tickLine={false}
-                        domain={['dataMin - 5', 'dataMax + 5']}
+                        domain={["dataMin - 5", "dataMax + 5"]}
                       />
                       <Tooltip
                         contentStyle={{
@@ -259,12 +283,16 @@ const Progresso = () => {
                         labelStyle={{ color: "hsl(var(--foreground))" }}
                         formatter={(value: number) => [`${value} kg`, "e1RM"]}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="e1rm" 
-                        stroke="hsl(var(--primary))" 
+                      <Line
+                        type="monotone"
+                        dataKey="e1rm"
+                        stroke="hsl(var(--primary))"
                         strokeWidth={2}
-                        dot={{ fill: "hsl(var(--primary))", strokeWidth: 0, r: 4 }}
+                        dot={{
+                          fill: "hsl(var(--primary))",
+                          strokeWidth: 0,
+                          r: 4,
+                        }}
                         activeDot={{ r: 6 }}
                       />
                     </LineChart>
@@ -285,14 +313,9 @@ const Progresso = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={weeklyVolumeData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="weekLabel" 
-                        stroke="hsl(var(--muted-foreground))" 
-                        fontSize={10}
-                        tickLine={false}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))" 
+                      <XAxis dataKey="weekLabel" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} />
+                      <YAxis
+                        stroke="hsl(var(--muted-foreground))"
                         fontSize={10}
                         tickLine={false}
                         tickFormatter={(v) => `${(v / 1000).toFixed(0)}t`}
@@ -305,11 +328,7 @@ const Progresso = () => {
                         }}
                         formatter={(value: number) => [`${value.toLocaleString()} kg`, "Volume"]}
                       />
-                      <Bar 
-                        dataKey="volume" 
-                        fill="hsl(var(--primary))" 
-                        radius={[4, 4, 0, 0]}
-                      />
+                      <Bar dataKey="volume" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -344,17 +363,8 @@ const Progresso = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={nutritionData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="dateLabel" 
-                        stroke="hsl(var(--muted-foreground))" 
-                        fontSize={10}
-                        tickLine={false}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))" 
-                        fontSize={10}
-                        tickLine={false}
-                      />
+                      <XAxis dataKey="dateLabel" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: "hsl(var(--card))",
@@ -362,18 +372,17 @@ const Progresso = () => {
                           borderRadius: "8px",
                         }}
                       />
-                      <ReferenceLine 
-                        y={nutritionData[0]?.kcalMeta || 0} 
-                        stroke="hsl(var(--primary))" 
+                      <ReferenceLine
+                        y={nutritionData[0]?.kcalMeta || 0}
+                        stroke="hsl(var(--primary))"
                         strokeDasharray="3 3"
-                        label={{ value: "Meta", fill: "hsl(var(--primary))", fontSize: 10 }}
+                        label={{
+                          value: "Meta",
+                          fill: "hsl(var(--primary))",
+                          fontSize: 10,
+                        }}
                       />
-                      <Bar 
-                        dataKey="kcal" 
-                        fill="hsl(var(--primary))" 
-                        radius={[4, 4, 0, 0]}
-                        name="Calorias"
-                      />
+                      <Bar dataKey="kcal" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Calorias" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -392,17 +401,8 @@ const Progresso = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={nutritionData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="dateLabel" 
-                        stroke="hsl(var(--muted-foreground))" 
-                        fontSize={10}
-                        tickLine={false}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))" 
-                        fontSize={10}
-                        tickLine={false}
-                      />
+                      <XAxis dataKey="dateLabel" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: "hsl(var(--card))",
@@ -411,30 +411,23 @@ const Progresso = () => {
                         }}
                       />
                       <Legend />
-                      <Line 
-                        type="monotone" 
-                        dataKey="protein" 
-                        stroke="#22c55e" 
+                      <Line
+                        type="monotone"
+                        dataKey="protein"
+                        stroke="#22c55e"
                         strokeWidth={2}
                         dot={false}
                         name="Proteína"
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="carbs" 
-                        stroke="#3b82f6" 
+                      <Line
+                        type="monotone"
+                        dataKey="carbs"
+                        stroke="#3b82f6"
                         strokeWidth={2}
                         dot={false}
                         name="Carboidrato"
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="fat" 
-                        stroke="#eab308" 
-                        strokeWidth={2}
-                        dot={false}
-                        name="Gordura"
-                      />
+                      <Line type="monotone" dataKey="fat" stroke="#eab308" strokeWidth={2} dot={false} name="Gordura" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -455,7 +448,7 @@ const Progresso = () => {
                   <Scale className="w-5 h-5 text-primary" />
                   <h2 className="text-lg font-semibold text-foreground">Progresso</h2>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
-                    {weighingFrequency === 'weekly' ? 'Semanal' : 'Diário'}
+                    {weighingFrequency === "weekly" ? "Semanal" : "Diário"}
                   </span>
                   <HelpIcon helpKey="home.progress" size={14} />
                 </div>
@@ -469,17 +462,14 @@ const Progresso = () => {
 
               {/* Stats grid */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                {weighingFrequency === 'daily' ? (
+                {weighingFrequency === "daily" ? (
                   <div className="bg-muted/30 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground mb-1">Média 7 dias</p>
                     {weightStats.currentAvg7 !== null ? (
                       <p className="text-xl font-bold text-foreground">{weightStats.currentAvg7} kg</p>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        {weightStats.logsNeeded > 0 
-                          ? `Faltam ${weightStats.logsNeeded} registros` 
-                          : 'Sem dados'
-                        }
+                        {weightStats.logsNeeded > 0 ? `Faltam ${weightStats.logsNeeded} registros` : "Sem dados"}
                       </p>
                     )}
                   </div>
@@ -487,25 +477,32 @@ const Progresso = () => {
                   <div className="bg-muted/30 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground mb-1">Último check-in</p>
                     {weightStats.weeklyModeStats.currentWeight !== null ? (
-                      <p className="text-xl font-bold text-foreground">{weightStats.weeklyModeStats.currentWeight} kg</p>
+                      <p className="text-xl font-bold text-foreground">
+                        {weightStats.weeklyModeStats.currentWeight} kg
+                      </p>
                     ) : (
                       <p className="text-sm text-muted-foreground">Nenhum ainda</p>
                     )}
                   </div>
                 )}
-                
+
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground mb-1">Tendência</p>
                   {weightStats.trendKg !== null && TrendIcon ? (
-                    <div className={`flex items-center gap-1 text-xl font-bold ${
-                      weightStats.trendKg < 0 ? "text-green-500" : 
-                      weightStats.trendKg > 0 ? "text-orange-500" : 
-                      "text-muted-foreground"
-                    }`}>
+                    <div
+                      className={`flex items-center gap-1 text-xl font-bold ${
+                        weightStats.trendKg < 0
+                          ? "text-green-500"
+                          : weightStats.trendKg > 0
+                            ? "text-orange-500"
+                            : "text-muted-foreground"
+                      }`}
+                    >
                       <TrendIcon className="w-5 h-5" />
-                      {weightStats.trendKg > 0 ? "+" : ""}{weightStats.trendKg} kg
+                      {weightStats.trendKg > 0 ? "+" : ""}
+                      {weightStats.trendKg} kg
                     </div>
-                  ) : weighingFrequency === 'weekly' && weightStats.weeklyModeStats.checkinsNeeded > 0 ? (
+                  ) : weighingFrequency === "weekly" && weightStats.weeklyModeStats.checkinsNeeded > 0 ? (
                     <p className="text-sm text-muted-foreground">
                       +{weightStats.weeklyModeStats.checkinsNeeded} check-in(s)
                     </p>
@@ -520,23 +517,22 @@ const Progresso = () => {
                 <div className="flex items-center gap-2">
                   <CalendarCheck className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
-                    {checkinAvailable 
-                      ? 'Check-in disponível!' 
-                      : nextCheckinDate 
-                        ? `Próximo: ${nextCheckinDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
-                        : 'Registre seu primeiro peso'
-                    }
+                    {checkinAvailable
+                      ? "Check-in disponível!"
+                      : nextCheckinDate
+                        ? `Próximo: ${nextCheckinDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}`
+                        : "Registre seu primeiro peso"}
                   </span>
                 </div>
                 <button
                   onClick={() => setShowCheckinModal(true)}
                   className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                    checkinAvailable 
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                      : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                    checkinAvailable
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-secondary text-muted-foreground hover:bg-secondary/80"
                   }`}
                 >
-                  {checkinAvailable ? 'Fazer check-in' : 'Ver detalhes'}
+                  {checkinAvailable ? "Fazer check-in" : "Ver detalhes"}
                 </button>
               </div>
             </div>
@@ -551,8 +547,17 @@ const Progresso = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">Δ 7 dias</p>
-                    <p className={`text-xl font-bold ${weightVariation.delta > 0 ? "text-red-500" : weightVariation.delta < 0 ? "text-green-500" : "text-muted-foreground"}`}>
-                      {weightVariation.delta > 0 ? "+" : ""}{weightVariation.delta} kg
+                    <p
+                      className={`text-xl font-bold ${
+                        weightVariation.delta > 0
+                          ? "text-red-500"
+                          : weightVariation.delta < 0
+                            ? "text-green-500"
+                            : "text-muted-foreground"
+                      }`}
+                    >
+                      {weightVariation.delta > 0 ? "+" : ""}
+                      {weightVariation.delta} kg
                     </p>
                   </div>
                 </div>
@@ -567,17 +572,12 @@ const Progresso = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={weightData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="dateLabel" 
-                        stroke="hsl(var(--muted-foreground))" 
+                      <XAxis dataKey="dateLabel" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} />
+                      <YAxis
+                        stroke="hsl(var(--muted-foreground))"
                         fontSize={10}
                         tickLine={false}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))" 
-                        fontSize={10}
-                        tickLine={false}
-                        domain={['dataMin - 1', 'dataMax + 1']}
+                        domain={["dataMin - 1", "dataMax + 1"]}
                       />
                       <Tooltip
                         contentStyle={{
@@ -587,12 +587,16 @@ const Progresso = () => {
                         }}
                         formatter={(value: number) => [`${value} kg`, "Peso"]}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="weight" 
-                        stroke="hsl(var(--primary))" 
+                      <Line
+                        type="monotone"
+                        dataKey="weight"
+                        stroke="hsl(var(--primary))"
                         strokeWidth={2}
-                        dot={{ fill: "hsl(var(--primary))", strokeWidth: 0, r: 4 }}
+                        dot={{
+                          fill: "hsl(var(--primary))",
+                          strokeWidth: 0,
+                          r: 4,
+                        }}
                         activeDot={{ r: 6 }}
                       />
                     </LineChart>
@@ -614,26 +618,34 @@ const Progresso = () => {
                     const date = new Date(entry.atISO);
                     const prevEntry = planHistory[idx + 1];
                     const calorieDelta = prevEntry ? entry.calories - prevEntry.calories : 0;
-                    
+
                     return (
-                      <div key={idx} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
+                      >
                         <div>
-                          <span className="text-sm text-foreground">
-                            {entry.calories} kcal
-                          </span>
+                          <span className="text-sm text-foreground">{entry.calories} kcal</span>
                           {calorieDelta !== 0 && (
-                            <span className={`ml-2 text-xs ${calorieDelta > 0 ? 'text-orange-500' : 'text-green-500'}`}>
-                              ({calorieDelta > 0 ? '+' : ''}{calorieDelta})
+                            <span className={`ml-2 text-xs ${calorieDelta > 0 ? "text-orange-500" : "text-green-500"}`}>
+                              ({calorieDelta > 0 ? "+" : ""}
+                              {calorieDelta})
                             </span>
                           )}
                         </div>
                         <div className="text-right">
                           <span className="text-xs text-muted-foreground">
-                            {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                            {date.toLocaleDateString("pt-BR", {
+                              day: "2-digit",
+                              month: "short",
+                            })}
                           </span>
                           <span className="ml-2 text-xs text-muted-foreground/70">
-                            {entry.reason === 'onboarding' ? 'Inicial' : 
-                             entry.reason === 'auto_adjust' ? 'Check-in' : 'Manual'}
+                            {entry.reason === "onboarding"
+                              ? "Inicial"
+                              : entry.reason === "auto_adjust"
+                                ? "Check-in"
+                                : "Manual"}
                           </span>
                         </div>
                       </div>
@@ -651,9 +663,16 @@ const Progresso = () => {
                   {weightHistory.slice(0, 5).map((entry, idx) => {
                     const date = new Date(entry.timestamp);
                     return (
-                      <div key={idx} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
+                      >
                         <span className="text-sm text-muted-foreground">
-                          {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                          {date.toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
                         </span>
                         <span className="font-medium text-foreground">{entry.weight} kg</span>
                       </div>
@@ -664,11 +683,7 @@ const Progresso = () => {
             )}
 
             {/* Register Weight CTA */}
-            <Button 
-              onClick={() => setShowWeightModal(true)}
-              className="w-full"
-              size="lg"
-            >
+            <Button onClick={() => setShowWeightModal(true)} className="w-full" size="lg">
               <Scale className="w-5 h-5 mr-2" />
               Registrar peso
             </Button>
@@ -680,14 +695,20 @@ const Progresso = () => {
       <WeightLogModal
         open={showWeightModal}
         onClose={() => setShowWeightModal(false)}
-        onSaved={() => setRefreshKey(k => k + 1)}
+        onSaved={() => {
+          setRefreshKey((k) => k + 1);
+          triggerSync();
+        }}
       />
 
       {/* Weekly Checkin Modal */}
       <WeeklyCheckinModal
         open={showCheckinModal}
         onClose={() => setShowCheckinModal(false)}
-        onApplied={() => setRefreshKey(k => k + 1)}
+        onApplied={() => {
+          setRefreshKey((k) => k + 1);
+          triggerSync();
+        }}
       />
 
       {/* Bottom Navigation */}

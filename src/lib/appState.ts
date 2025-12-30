@@ -1,10 +1,7 @@
+// appState.ts
 // Centralized AppState type and migration logic
 
-import { 
-  STORAGE_KEYS,
-  load,
-  save,
-} from './storage';
+import { STORAGE_KEYS, load, save } from "./storage";
 
 // ============= SET DATA TYPE =============
 
@@ -217,8 +214,46 @@ export interface AppState {
   weeklyCompletions?: WeeklyCompletions;
 }
 
-const APP_STATE_KEY = 'levelup.appState';
+const APP_STATE_KEY = "levelup.appState";
 const APP_STATE_VERSION = 1;
+
+// ============= HELPERS (CRITICAL FIX) =============
+
+function hasPlanWorkouts(plan?: UserWorkoutPlan | null): boolean {
+  return !!(plan && Array.isArray(plan.workouts) && plan.workouts.length > 0);
+}
+
+function readLegacyPlan(): UserWorkoutPlan | null {
+  const p = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
+  return hasPlanWorkouts(p) ? p : null;
+}
+
+/**
+ * Se o AppState estiver com plan vazio, mas existir um plano salvo no legacy key,
+ * "hidrata" o AppState com ele para evitar sobrescrever o plano do usuário.
+ */
+function hydratePlanFromLegacy(state: AppState): { changed: boolean } {
+  const legacyPlan = readLegacyPlan();
+
+  // Se estado antigo não tiver plan (ou tiver vazio), mas o legacy tiver, puxa pra cá.
+  if (!state.plan || !hasPlanWorkouts(state.plan)) {
+    if (legacyPlan) {
+      state.plan = legacyPlan;
+      return { changed: true };
+    }
+  }
+
+  // Garantir que plan sempre exista no objeto (evita undefined em versões antigas)
+  if (!state.plan) {
+    state.plan = {
+      workouts: [],
+      updatedAt: new Date().toISOString(),
+    };
+    return { changed: true };
+  }
+
+  return { changed: false };
+}
 
 // Default values for NEW users (start at Level 1)
 const DEFAULT_PROFILE_NEW_USER: Profile = {
@@ -258,7 +293,11 @@ function migrateFromLegacy(): AppState {
   const weightHistory = load<WeightEntry[]>(STORAGE_KEYS.WEIGHT_HISTORY, []);
   const workoutsCompleted = load<WorkoutCompleted[]>(STORAGE_KEYS.WORKOUTS_COMPLETED, []);
   const treinoProgresso = load<TreinoProgresso>(STORAGE_KEYS.TREINO_PROGRESSO, {});
-  const quests = load<Quests>(STORAGE_KEYS.QUESTS, { treinoDoDiaDone: false, registrarAlimentacaoDone: false, registrarPesoDone: false });
+  const quests = load<Quests>(STORAGE_KEYS.QUESTS, {
+    treinoDoDiaDone: false,
+    registrarAlimentacaoDone: false,
+    registrarPesoDone: false,
+  });
   const progressionSuggestions = load<ProgressionSuggestions>(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, {});
   const userPlan = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
 
@@ -267,16 +306,19 @@ function migrateFromLegacy(): AppState {
     dailyLogs[nutritionToday.dateKey] = nutritionToday;
   }
 
-  const defaultPlan: UserWorkoutPlan = userPlan || {
+  // ⚠️ Importante: se o legacy tiver plan vazio, tratamos como "sem plan"
+  const planFromLegacy = hasPlanWorkouts(userPlan) ? userPlan : null;
+
+  const defaultPlan: UserWorkoutPlan = planFromLegacy || {
     workouts: [],
     updatedAt: new Date().toISOString(),
   };
 
-  return {
+  const state: AppState = {
     version: APP_STATE_VERSION,
     updatedAt: Date.now(),
     profile: {
-      displayName: 'Atleta',
+      displayName: "Atleta",
       photoURL: undefined,
       goal: undefined,
     },
@@ -302,8 +344,8 @@ function migrateFromLegacy(): AppState {
       dailyLogs,
     },
     bodyweight: {
-      entries: weightHistory.map(w => ({
-        date: w.timestamp.split('T')[0],
+      entries: weightHistory.map((w) => ({
+        date: w.timestamp.split("T")[0],
         weight: w.weight,
         updatedAt: new Date(w.timestamp).getTime(),
       })),
@@ -316,23 +358,36 @@ function migrateFromLegacy(): AppState {
     quests,
     progressionSuggestions,
   };
+
+  // ✅ Garantir que, se existir legacy plan, o AppState não fique vazio
+  hydratePlanFromLegacy(state);
+
+  return state;
 }
 
 // ============= LOCAL STATE FUNCTIONS =============
 
 export function getLocalState(): AppState {
   const stored = load<AppState | null>(APP_STATE_KEY, null);
-  
+
   if (stored && stored.version) {
+    // ✅ Correção: nunca deixe o AppState com plan vazio se houver plan salvo no legacy
+    const { changed } = hydratePlanFromLegacy(stored);
+    if (changed) {
+      setLocalState(stored);
+    }
     return stored;
   }
-  
+
   const migrated = migrateFromLegacy();
   setLocalState(migrated);
   return migrated;
 }
 
 export function setLocalState(state: AppState): void {
+  // ✅ Correção: hidrata antes de salvar + evita sobrescrever plan do usuário
+  hydratePlanFromLegacy(state);
+
   state.updatedAt = Date.now();
   save(APP_STATE_KEY, state);
   syncToLegacyKeys(state);
@@ -341,6 +396,9 @@ export function setLocalState(state: AppState): void {
 export function updateLocalState(patchFn: (state: AppState) => AppState): AppState {
   const current = getLocalState();
   const updated = patchFn(current);
+
+  hydratePlanFromLegacy(updated);
+
   updated.updatedAt = Date.now();
   setLocalState(updated);
   return updated;
@@ -356,7 +414,7 @@ function syncToLegacyKeys(state: AppState): void {
     shields: state.progression.shields,
   };
   save(STORAGE_KEYS.PROFILE, profile);
-  
+
   const nutritionGoals: NutritionGoals = {
     kcalTarget: state.nutrition.targets.kcal,
     pTarget: state.nutrition.targets.protein,
@@ -364,27 +422,45 @@ function syncToLegacyKeys(state: AppState): void {
     gTarget: state.nutrition.targets.fats,
   };
   save(STORAGE_KEYS.NUTRITION_GOALS, nutritionGoals);
-  
+
   if (state.nutrition.dietPlan) {
     save(STORAGE_KEYS.NUTRITION_DIET, state.nutrition.dietPlan);
   }
-  
-  const todayKey = new Date().toISOString().split('T')[0];
+
+  const todayKey = new Date().toISOString().split("T")[0];
   if (state.nutrition.dailyLogs[todayKey]) {
     save(STORAGE_KEYS.NUTRITION_TODAY, state.nutrition.dailyLogs[todayKey]);
   }
-  
+
   save(STORAGE_KEYS.EXERCISE_HISTORY, state.exerciseHistory);
-  
-  const weightHistory: WeightEntry[] = state.bodyweight.entries.map(e => ({
+
+  const weightHistory: WeightEntry[] = state.bodyweight.entries.map((e) => ({
     weight: e.weight,
     timestamp: new Date(e.updatedAt).toISOString(),
   }));
   save(STORAGE_KEYS.WEIGHT_HISTORY, weightHistory);
-  
+
   save(STORAGE_KEYS.WORKOUTS_COMPLETED, state.workoutHistory);
-  save(STORAGE_KEYS.USER_WORKOUT_PLAN, state.plan);
-  
+
+  // ✅ CRÍTICO: não sobrescrever o plano salvo do usuário com plan vazio do AppState
+  const existingPlan = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
+  const stateHasPlan = hasPlanWorkouts(state.plan);
+  const existingHasPlan = hasPlanWorkouts(existingPlan);
+
+  if (stateHasPlan) {
+    save(STORAGE_KEYS.USER_WORKOUT_PLAN, state.plan);
+  } else if (existingHasPlan) {
+    // mantém o que já existe (não clobbera)
+    save(STORAGE_KEYS.USER_WORKOUT_PLAN, existingPlan as UserWorkoutPlan);
+  } else {
+    // remove para permitir fallback para plano padrão (não deixa gravado vazio)
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
+    } catch {
+      // ignore
+    }
+  }
+
   if (state.treinoProgresso) {
     save(STORAGE_KEYS.TREINO_PROGRESSO, state.treinoProgresso);
   }
@@ -410,26 +486,26 @@ export function exportAppState(): string {
 export function importAppState(jsonString: string): { success: boolean; error?: string } {
   try {
     const parsed = JSON.parse(jsonString);
-    
-    if (!parsed.version || typeof parsed.version !== 'number') {
-      return { success: false, error: 'Formato inválido: versão não encontrada' };
+
+    if (!parsed.version || typeof parsed.version !== "number") {
+      return { success: false, error: "Formato inválido: versão não encontrada" };
     }
-    
+
     if (!parsed.progression || !parsed.nutrition) {
-      return { success: false, error: 'Formato inválido: dados incompletos' };
+      return { success: false, error: "Formato inválido: dados incompletos" };
     }
-    
+
     parsed.updatedAt = Date.now();
     setLocalState(parsed as AppState);
     return { success: true };
   } catch {
-    return { success: false, error: 'Erro ao processar JSON' };
+    return { success: false, error: "Erro ao processar JSON" };
   }
 }
 
 // ============= NEW USER INITIALIZATION =============
 
-import { getWeekStart } from './weekUtils';
+import { getWeekStart } from "./weekUtils";
 
 export function createNewUserState(): AppState {
   const defaultPlan: UserWorkoutPlan = {
@@ -437,11 +513,11 @@ export function createNewUserState(): AppState {
     updatedAt: new Date().toISOString(),
   };
 
-  return {
+  const state: AppState = {
     version: APP_STATE_VERSION,
     updatedAt: Date.now(),
     profile: {
-      displayName: 'Atleta',
+      displayName: "Atleta",
       photoURL: undefined,
       goal: undefined,
     },
@@ -481,6 +557,11 @@ export function createNewUserState(): AppState {
     progressionSuggestions: {},
     weeklyCompletions: {},
   };
+
+  // ✅ Se já existir um plano no legacy, não cria usuário novo “apagando” isso
+  hydratePlanFromLegacy(state);
+
+  return state;
 }
 
 // ============= WEEKLY COMPLETION FUNCTIONS =============
@@ -489,9 +570,9 @@ export function markWorkoutCompletedThisWeek(
   workoutId: string,
   xpGained: number,
   setsCompleted: number,
-  totalVolume: number
+  totalVolume: number,
 ): void {
-  const state = getLocalState();
+  const state = getLocalState(); // já vem hidratado com plan se existir
   const weekStart = getWeekStart(new Date());
 
   if (!state.weeklyCompletions) {
@@ -516,10 +597,12 @@ export function isWorkoutCompletedThisWeek(workoutId: string, weekStart?: string
   const state = getLocalState();
   const week = weekStart || getWeekStart(new Date());
 
-  return !!(state.weeklyCompletions?.[week]?.[workoutId]);
+  return !!state.weeklyCompletions?.[week]?.[workoutId];
 }
 
-export function getWeeklyCompletions(weekStart?: string): Record<string, { completedAt: string; xpGained: number; setsCompleted: number; totalVolume: number }> {
+export function getWeeklyCompletions(
+  weekStart?: string,
+): Record<string, { completedAt: string; xpGained: number; setsCompleted: number; totalVolume: number }> {
   const state = getLocalState();
   const week = weekStart || getWeekStart(new Date());
 

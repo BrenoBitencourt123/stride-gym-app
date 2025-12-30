@@ -4,13 +4,7 @@ import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Save, Ro
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -19,18 +13,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "@/hooks/use-toast";
-import { getUserWorkoutPlan, saveUserWorkoutPlan, resetUserWorkoutPlan, type UserWorkoutPlan, type UserExercise, type UserWorkout } from "@/lib/storage";
+import {
+  getUserWorkoutPlan,
+  saveUserWorkoutPlan,
+  resetUserWorkoutPlan,
+  type UserWorkoutPlan,
+  type UserExercise,
+  type UserWorkout,
+} from "@/lib/storage";
 import { useSyncTrigger } from "@/hooks/useSyncTrigger";
+import { updateLocalState } from "@/lib/appState"; // ✅ ADICIONADO
 
 const MUSCLE_GROUPS = [
-  "Peito", "Costas", "Ombros", "Bíceps", "Tríceps", "Pernas", "Posterior", "Panturrilha", "Core", "Braços"
+  "Peito",
+  "Costas",
+  "Ombros",
+  "Bíceps",
+  "Tríceps",
+  "Pernas",
+  "Posterior",
+  "Panturrilha",
+  "Core",
+  "Braços",
 ];
 
 const REST_OPTIONS = [
@@ -42,15 +48,42 @@ const REST_OPTIONS = [
 ];
 
 const EXERCISE_SUGGESTIONS = [
-  "Supino Reto", "Supino Inclinado", "Supino Declinado", "Crucifixo", "Crossover",
-  "Remada Curvada", "Remada Baixa", "Puxada Frontal", "Barra Fixa", "Pulldown",
-  "Desenvolvimento", "Elevação Lateral", "Elevação Frontal", "Face Pull",
-  "Rosca Direta", "Rosca Alternada", "Rosca Martelo", "Rosca Scott",
-  "Tríceps Corda", "Tríceps Testa", "Tríceps Francês", "Mergulho",
-  "Agachamento Livre", "Leg Press", "Hack Machine", "Extensora", "Passada",
-  "Mesa Flexora", "Stiff", "Levantamento Terra", "Good Morning",
-  "Panturrilha em Pé", "Panturrilha Sentado",
-  "Abdominal", "Prancha", "Crunch",
+  "Supino Reto",
+  "Supino Inclinado",
+  "Supino Declinado",
+  "Crucifixo",
+  "Crossover",
+  "Remada Curvada",
+  "Remada Baixa",
+  "Puxada Frontal",
+  "Barra Fixa",
+  "Pulldown",
+  "Desenvolvimento",
+  "Elevação Lateral",
+  "Elevação Frontal",
+  "Face Pull",
+  "Rosca Direta",
+  "Rosca Alternada",
+  "Rosca Martelo",
+  "Rosca Scott",
+  "Tríceps Corda",
+  "Tríceps Testa",
+  "Tríceps Francês",
+  "Mergulho",
+  "Agachamento Livre",
+  "Leg Press",
+  "Hack Machine",
+  "Extensora",
+  "Passada",
+  "Mesa Flexora",
+  "Stiff",
+  "Levantamento Terra",
+  "Good Morning",
+  "Panturrilha em Pé",
+  "Panturrilha Sentado",
+  "Abdominal",
+  "Prancha",
+  "Crunch",
 ];
 
 function generateExerciseId(name: string): string {
@@ -78,14 +111,14 @@ const AjustarPlano = () => {
   const triggerSync = useSyncTrigger();
   const [plan, setPlan] = useState<UserWorkoutPlan | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string[]>([]);
-  
+
   // Modal states
   const [showDeleteWorkout, setShowDeleteWorkout] = useState<string | null>(null);
   const [showDeleteExercise, setShowDeleteExercise] = useState<{ workoutId: string; exerciseId: string } | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [showEditExercise, setShowEditExercise] = useState<{ workoutId: string; exercise: UserExercise } | null>(null);
-  
+
   // New exercise form
   const [newExercise, setNewExercise] = useState<Partial<UserExercise>>({
     nome: "",
@@ -105,7 +138,13 @@ const AjustarPlano = () => {
 
   const handleSave = () => {
     if (!plan) return;
+
+    // ✅ Salva no storage (legacy)
     saveUserWorkoutPlan(plan);
+
+    // ✅ E também salva no AppState (evita sumir ao concluir treino + melhora sync)
+    updateLocalState((s) => ({ ...s, plan }));
+
     triggerSync(); // Sync after saving workout plan
     toast({
       title: "Plano salvo!",
@@ -119,6 +158,13 @@ const AjustarPlano = () => {
     const defaultPlan = getUserWorkoutPlan();
     setPlan(defaultPlan);
     setShowResetConfirm(false);
+
+    // ✅ Reflete no AppState também
+    updateLocalState((s) => ({ ...s, plan: defaultPlan }));
+
+    // opcional: já sincroniza
+    triggerSync();
+
     toast({
       title: "Plano restaurado",
       description: "O plano foi restaurado para o padrão.",
@@ -130,9 +176,7 @@ const AjustarPlano = () => {
     if (!plan) return;
     setPlan({
       ...plan,
-      workouts: plan.workouts.map(w =>
-        w.id === workoutId ? { ...w, titulo: newTitle } : w
-      ),
+      workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, titulo: newTitle } : w)),
     });
   };
 
@@ -155,19 +199,19 @@ const AjustarPlano = () => {
     if (!plan) return;
     setPlan({
       ...plan,
-      workouts: plan.workouts.filter(w => w.id !== workoutId),
+      workouts: plan.workouts.filter((w) => w.id !== workoutId),
     });
     setShowDeleteWorkout(null);
   };
 
   const moveWorkout = (workoutId: string, direction: "up" | "down") => {
     if (!plan) return;
-    const index = plan.workouts.findIndex(w => w.id === workoutId);
+    const index = plan.workouts.findIndex((w) => w.id === workoutId);
     if (index === -1) return;
-    
+
     const newIndex = direction === "up" ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= plan.workouts.length) return;
-    
+
     const newWorkouts = [...plan.workouts];
     [newWorkouts[index], newWorkouts[newIndex]] = [newWorkouts[newIndex], newWorkouts[index]];
     setPlan({ ...plan, workouts: newWorkouts });
@@ -176,7 +220,7 @@ const AjustarPlano = () => {
   // Exercise operations
   const addExercise = (workoutId: string) => {
     if (!plan || !newExercise.nome) return;
-    
+
     const exercise: UserExercise = {
       id: generateExerciseId(newExercise.nome),
       nome: newExercise.nome,
@@ -193,16 +237,12 @@ const AjustarPlano = () => {
       ],
       observacoes: newExercise.observacoes,
     };
-    
+
     setPlan({
       ...plan,
-      workouts: plan.workouts.map(w =>
-        w.id === workoutId
-          ? { ...w, exercicios: [...w.exercicios, exercise] }
-          : w
-      ),
+      workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, exercicios: [...w.exercicios, exercise] } : w)),
     });
-    
+
     setShowAddExercise(null);
     setNewExercise({
       nome: "",
@@ -216,15 +256,13 @@ const AjustarPlano = () => {
     if (!plan) return;
     setPlan({
       ...plan,
-      workouts: plan.workouts.map(w =>
+      workouts: plan.workouts.map((w) =>
         w.id === workoutId
           ? {
               ...w,
-              exercicios: w.exercicios.map(e =>
-                e.id === exerciseId ? { ...e, ...updates } : e
-              ),
+              exercicios: w.exercicios.map((e) => (e.id === exerciseId ? { ...e, ...updates } : e)),
             }
-          : w
+          : w,
       ),
     });
   };
@@ -233,10 +271,8 @@ const AjustarPlano = () => {
     if (!plan) return;
     setPlan({
       ...plan,
-      workouts: plan.workouts.map(w =>
-        w.id === workoutId
-          ? { ...w, exercicios: w.exercicios.filter(e => e.id !== exerciseId) }
-          : w
+      workouts: plan.workouts.map((w) =>
+        w.id === workoutId ? { ...w, exercicios: w.exercicios.filter((e) => e.id !== exerciseId) } : w,
       ),
     });
     setShowDeleteExercise(null);
@@ -244,23 +280,21 @@ const AjustarPlano = () => {
 
   const moveExercise = (workoutId: string, exerciseId: string, direction: "up" | "down") => {
     if (!plan) return;
-    const workout = plan.workouts.find(w => w.id === workoutId);
+    const workout = plan.workouts.find((w) => w.id === workoutId);
     if (!workout) return;
-    
-    const index = workout.exercicios.findIndex(e => e.id === exerciseId);
+
+    const index = workout.exercicios.findIndex((e) => e.id === exerciseId);
     if (index === -1) return;
-    
+
     const newIndex = direction === "up" ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= workout.exercicios.length) return;
-    
+
     const newExercicios = [...workout.exercicios];
     [newExercicios[index], newExercicios[newIndex]] = [newExercicios[newIndex], newExercicios[index]];
-    
+
     setPlan({
       ...plan,
-      workouts: plan.workouts.map(w =>
-        w.id === workoutId ? { ...w, exercicios: newExercicios } : w
-      ),
+      workouts: plan.workouts.map((w) => (w.id === workoutId ? { ...w, exercicios: newExercicios } : w)),
     });
   };
 
@@ -294,12 +328,7 @@ const AjustarPlano = () => {
 
       {/* Content */}
       <div className="max-w-md mx-auto px-4 pt-4">
-        <Accordion
-          type="multiple"
-          value={openAccordion}
-          onValueChange={setOpenAccordion}
-          className="space-y-3"
-        >
+        <Accordion type="multiple" value={openAccordion} onValueChange={setOpenAccordion} className="space-y-3">
           {plan.workouts.map((workout, workoutIndex) => (
             <AccordionItem
               key={workout.id}
@@ -308,7 +337,7 @@ const AjustarPlano = () => {
             >
               <div className="flex items-center px-4 py-3 gap-2">
                 <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                
+
                 <AccordionTrigger className="flex-1 py-0 hover:no-underline">
                   <Input
                     value={workout.titulo}
@@ -345,12 +374,9 @@ const AjustarPlano = () => {
               <AccordionContent className="px-4 pb-4">
                 <div className="space-y-2">
                   {workout.exercicios.map((exercise, exerciseIndex) => (
-                    <div
-                      key={exercise.id}
-                      className="flex items-center gap-2 p-3 bg-secondary/30 rounded-lg"
-                    >
+                    <div key={exercise.id} className="flex items-center gap-2 p-3 bg-secondary/30 rounded-lg">
                       <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      
+
                       <div
                         className="flex-1 cursor-pointer"
                         onClick={() => setShowEditExercise({ workoutId: workout.id, exercise })}
@@ -454,7 +480,9 @@ const AjustarPlano = () => {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => showDeleteExercise && deleteExercise(showDeleteExercise.workoutId, showDeleteExercise.exerciseId)}
+              onClick={() =>
+                showDeleteExercise && deleteExercise(showDeleteExercise.workoutId, showDeleteExercise.exerciseId)
+              }
             >
               Remover
             </Button>
@@ -488,7 +516,7 @@ const AjustarPlano = () => {
           <DialogHeader>
             <DialogTitle>Adicionar exercício</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Nome do exercício</Label>
@@ -567,10 +595,7 @@ const AjustarPlano = () => {
             <Button variant="outline" onClick={() => setShowAddExercise(null)}>
               Cancelar
             </Button>
-            <Button
-              onClick={() => showAddExercise && addExercise(showAddExercise)}
-              disabled={!newExercise.nome}
-            >
+            <Button onClick={() => showAddExercise && addExercise(showAddExercise)} disabled={!newExercise.nome}>
               Adicionar
             </Button>
           </DialogFooter>
@@ -583,7 +608,7 @@ const AjustarPlano = () => {
           <DialogHeader>
             <DialogTitle>Editar exercício</DialogTitle>
           </DialogHeader>
-          
+
           {showEditExercise && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -683,11 +708,7 @@ const AjustarPlano = () => {
             <Button
               onClick={() => {
                 if (showEditExercise) {
-                  updateExercise(
-                    showEditExercise.workoutId,
-                    showEditExercise.exercise.id,
-                    showEditExercise.exercise
-                  );
+                  updateExercise(showEditExercise.workoutId, showEditExercise.exercise.id, showEditExercise.exercise);
                   setShowEditExercise(null);
                 }
               }}

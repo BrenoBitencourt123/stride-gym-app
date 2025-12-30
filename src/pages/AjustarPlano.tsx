@@ -221,16 +221,15 @@ const AjustarPlano = () => {
     setPlan({ ...plan, workouts: newWorkouts });
   };
 
-  const toggleScheduledDay = (workoutId: string, dayIndex: number) => {
+  const setScheduledDay = (workoutId: string, dayIndex: number) => {
     if (!plan) return;
     setPlan({
       ...plan,
       workouts: plan.workouts.map((w) => {
         if (w.id !== workoutId) return w;
+        // Single day selection: toggle off if same day, otherwise set new day
         const currentDays = w.scheduledDays || [];
-        const newDays = currentDays.includes(dayIndex)
-          ? currentDays.filter((d) => d !== dayIndex)
-          : [...currentDays, dayIndex].sort((a, b) => a - b);
+        const newDays = currentDays.includes(dayIndex) ? [] : [dayIndex];
         return { ...w, scheduledDays: newDays };
       }),
     });
@@ -380,37 +379,6 @@ const AjustarPlano = () => {
                 </AccordionTrigger>
 
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-secondary/50 transition-colors ${
-                          workout.scheduledDays && workout.scheduledDays.length > 0 ? 'text-primary' : 'text-muted-foreground'
-                        }`}
-                      >
-                        <CalendarDays className="w-4 h-4" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3" align="end">
-                      <p className="text-sm font-medium mb-2">Dias do treino</p>
-                      <div className="flex flex-wrap gap-2">
-                        {SCHEDULE_DAYS.map((day, dayIndex) => (
-                          <button
-                            key={dayIndex}
-                            type="button"
-                            onClick={() => toggleScheduledDay(workout.id, dayIndex)}
-                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                              workout.scheduledDays?.includes(dayIndex)
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
-                            }`}
-                          >
-                            {day.slice(0, 3)}
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
                   <button
                     onClick={() => moveWorkout(workout.id, "up")}
                     disabled={workoutIndex === 0}
@@ -425,6 +393,37 @@ const AjustarPlano = () => {
                   >
                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
                   </button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-secondary/50 transition-colors ${
+                          workout.scheduledDays && workout.scheduledDays.length > 0 ? 'text-primary' : 'text-muted-foreground'
+                        }`}
+                      >
+                        <CalendarDays className="w-4 h-4" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="end">
+                      <p className="text-sm font-medium mb-2">Dia do treino</p>
+                      <div className="flex flex-wrap gap-2">
+                        {SCHEDULE_DAYS.map((day, dayIndex) => (
+                          <button
+                            key={dayIndex}
+                            type="button"
+                            onClick={() => setScheduledDay(workout.id, dayIndex)}
+                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                              workout.scheduledDays?.includes(dayIndex)
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+                            }`}
+                          >
+                            {day.slice(0, 3)}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <button
                     onClick={() => setShowDeleteWorkout(workout.id)}
                     className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-destructive/20 transition-colors"

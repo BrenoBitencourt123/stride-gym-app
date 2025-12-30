@@ -6,12 +6,13 @@ import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/fir
 // Firebase config is public and safe to include in client code
 // These are publishable keys - they identify the project but don't grant access
 const firebaseConfig = {
-  apiKey: "AIzaSyC8HMpEIBEEu5qEqwHQxPKfJpjNe2E2QZw",
-  authDomain: "levelup-gym-c6953.firebaseapp.com",
-  projectId: "levelup-gym-c6953",
-  storageBucket: "levelup-gym-c6953.firebasestorage.app",
-  messagingSenderId: "441318134863",
-  appId: "1:441318134863:web:a9d9e1e1f8d8e1f8d8e1f8"
+  apiKey: "AIzaSyDRRkKF7BVDyrFdGM0m-T-CALUqffNzq8M",
+  authDomain: "levelup-gym-f81ee.firebaseapp.com",
+  projectId: "levelup-gym-f81ee",
+  storageBucket: "levelup-gym-f81ee.firebasestorage.app",
+  messagingSenderId: "417934158334",
+  appId: "1:417934158334:web:c0a986c073d9ab39df78af",
+  measurementId: "G-6FXMX5S188"
 };
 
 // Always configured since we have hardcoded values

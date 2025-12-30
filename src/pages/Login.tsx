@@ -146,17 +146,6 @@ const Login = () => {
           </p>
         </div>
 
-        {/* Logo/Brand */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-            <User className="w-10 h-10 text-primary-foreground" />
-          </div>
-          <h2 className="text-xl font-semibold text-foreground">LevelUp Gym</h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            {isSignUp ? 'Crie sua conta para backup na nuvem' : 'Faça login para sincronizar'}
-          </p>
-        </div>
-
         {/* Error */}
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center gap-2">

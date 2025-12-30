@@ -63,6 +63,10 @@ export async function syncState(uid: string): Promise<{ status: SyncStatus; mess
     const localTime = local.updatedAt || 0;
     const remoteTime = remote.updatedAt || 0;
     
+    // Check if local has a workout plan that remote doesn't have
+    const localHasPlan = local.plan && local.plan.workouts && local.plan.workouts.length > 0;
+    const remoteHasPlan = remote.plan && remote.plan.workouts && remote.plan.workouts.length > 0;
+    
     if (localTime > remoteTime) {
       // Local is newer - push to remote
       const success = await setRemoteState(uid, local);
@@ -71,8 +75,22 @@ export async function syncState(uid: string): Promise<{ status: SyncStatus; mess
       }
       return { status: 'error', message: 'Erro ao atualizar nuvem' };
     } else if (remoteTime > localTime) {
-      // Remote is newer - pull to local
-      setLocalState(remote);
+      // Remote is newer - pull to local BUT preserve local workout plan if remote has none
+      const mergedState = { ...remote };
+      
+      // CRITICAL: If local has a plan but remote doesn't, preserve the local plan
+      if (localHasPlan && !remoteHasPlan) {
+        mergedState.plan = local.plan;
+        mergedState.updatedAt = Date.now();
+        // Also preserve workout progress tied to the plan
+        if (local.treinoProgresso && Object.keys(local.treinoProgresso).length > 0) {
+          mergedState.treinoProgresso = local.treinoProgresso;
+        }
+        // Push merged state back to remote
+        await setRemoteState(uid, mergedState);
+      }
+      
+      setLocalState(mergedState);
       return { status: 'synced', message: 'Dados atualizados do servidor' };
     }
     

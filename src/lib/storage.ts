@@ -212,14 +212,14 @@ export function saveTreinoHoje(treinoHoje: TreinoHoje): void {
 export function addXP(amount: number): Profile {
   const profile = getProfile();
   profile.xpAtual += amount;
-  
+
   // Level up se necessário
   while (profile.xpAtual >= profile.xpMeta) {
     profile.xpAtual -= profile.xpMeta;
     profile.level += 1;
     profile.xpMeta += 300; // Aumenta 300 XP por level
   }
-  
+
   saveProfile(profile);
   return profile;
 }
@@ -229,10 +229,10 @@ export function completeTreinoDoDia(xpGained: number): void {
   const quests = getQuests();
   quests.treinoDoDiaDone = true;
   saveQuests(quests);
-  
+
   // Adicionar XP
   addXP(xpGained);
-  
+
   // Marcar treino de hoje como completo
   const treinoHoje = getTreinoHoje();
   if (treinoHoje) {
@@ -245,12 +245,12 @@ export function countCompletedSets(treinoId: string): number {
   const progresso = getTreinoProgresso();
   const treinoProgress = progresso[treinoId];
   if (!treinoProgress) return 0;
-  
+
   let count = 0;
   for (const exercicioId in treinoProgress) {
     const exerciseProgress = treinoProgress[exercicioId];
-    count += exerciseProgress.feederSets.filter(s => s.done).length;
-    count += exerciseProgress.workSets.filter(s => s.done).length;
+    count += exerciseProgress.feederSets.filter((s) => s.done).length;
+    count += exerciseProgress.workSets.filter((s) => s.done).length;
   }
   return count;
 }
@@ -258,14 +258,14 @@ export function countCompletedSets(treinoId: string): number {
 export function isExerciseComplete(treinoId: string, exercicioId: string): boolean {
   const progress = getExerciseProgress(treinoId, exercicioId);
   if (!progress || progress.workSets.length === 0) return false;
-  return progress.workSets.every(s => s.done);
+  return progress.workSets.every((s) => s.done);
 }
 
 export function getExerciseSetProgress(treinoId: string, exercicioId: string): { done: number; total: number } {
   const progress = getExerciseProgress(treinoId, exercicioId);
   if (!progress) return { done: 0, total: 0 };
   const total = progress.workSets.length;
-  const done = progress.workSets.filter(s => s.done).length;
+  const done = progress.workSets.filter((s) => s.done).length;
   return { done, total };
 }
 
@@ -277,20 +277,24 @@ export function clearTreinoProgress(treinoId: string): void {
   }
 }
 
-export function getWorkoutSummaryStats(treinoId: string): { completedSets: number; totalSets: number; totalVolume: number } {
+export function getWorkoutSummaryStats(treinoId: string): {
+  completedSets: number;
+  totalSets: number;
+  totalVolume: number;
+} {
   const progresso = getTreinoProgresso();
   const treinoProgress = progresso[treinoId];
-  
+
   if (!treinoProgress) return { completedSets: 0, totalSets: 0, totalVolume: 0 };
-  
+
   let completedSets = 0;
   let totalSets = 0;
   let totalVolume = 0;
-  
+
   for (const exercicioId in treinoProgress) {
     const exerciseProgress = treinoProgress[exercicioId];
     totalSets += exerciseProgress.workSets.length;
-    
+
     for (const set of exerciseProgress.workSets) {
       if (set.done) {
         completedSets++;
@@ -298,7 +302,7 @@ export function getWorkoutSummaryStats(treinoId: string): { completedSets: numbe
       }
     }
   }
-  
+
   return { completedSets, totalSets, totalVolume: Math.round(totalVolume) };
 }
 
@@ -328,31 +332,32 @@ function getDateKey(): string {
 export function getNutritionToday(): NutritionToday {
   const stored = load<NutritionToday | null>(STORAGE_KEYS.NUTRITION_TODAY, null);
   const todayKey = getDateKey();
-  
+
   // Se não existe ou é outro dia, aplicar dieta automaticamente
   if (!stored || stored.dateKey !== todayKey) {
     const diet = getNutritionDiet();
     const fresh: NutritionToday = {
       dateKey: todayKey,
-      meals: DEFAULT_MEALS.map(m => {
-        const dietMeal = diet?.meals.find(dm => dm.id === m.id);
-        const entries: TodayEntry[] = dietMeal?.items.map(item => ({
-          id: crypto.randomUUID(),
-          foodId: item.foodId,
-          quantidade: item.quantidade,
-          unidade: item.unidade,
-          source: "diet" as const,
-          createdAt: Date.now(),
-          planned: true,
-          consumed: false,
-        })) || [];
+      meals: DEFAULT_MEALS.map((m) => {
+        const dietMeal = diet?.meals.find((dm) => dm.id === m.id);
+        const entries: TodayEntry[] =
+          dietMeal?.items.map((item) => ({
+            id: crypto.randomUUID(),
+            foodId: item.foodId,
+            quantidade: item.quantidade,
+            unidade: item.unidade,
+            source: "diet" as const,
+            createdAt: Date.now(),
+            planned: true,
+            consumed: false,
+          })) || [];
         return { ...m, entries };
       }),
     };
     save(STORAGE_KEYS.NUTRITION_TODAY, fresh);
     return fresh;
   }
-  
+
   // Migração de dados antigos: corrigir entries sem planned/consumed
   let needsSave = false;
   for (const meal of stored.meals) {
@@ -367,11 +372,11 @@ export function getNutritionToday(): NutritionToday {
       }
     }
   }
-  
+
   if (needsSave) {
     save(STORAGE_KEYS.NUTRITION_TODAY, stored);
   }
-  
+
   return stored;
 }
 
@@ -379,25 +384,26 @@ export function getNutritionToday(): NutritionToday {
 export function resetNutritionToday(): void {
   const diet = getNutritionDiet();
   const todayKey = getDateKey();
-  
+
   const fresh: NutritionToday = {
     dateKey: todayKey,
-    meals: DEFAULT_MEALS.map(m => {
-      const dietMeal = diet?.meals.find(dm => dm.id === m.id);
-      const entries: TodayEntry[] = dietMeal?.items.map(item => ({
-        id: crypto.randomUUID(),
-        foodId: item.foodId,
-        quantidade: item.quantidade,
-        unidade: item.unidade,
-        source: "diet" as const,
-        createdAt: Date.now(),
-        planned: true,
-        consumed: false,
-      })) || [];
+    meals: DEFAULT_MEALS.map((m) => {
+      const dietMeal = diet?.meals.find((dm) => dm.id === m.id);
+      const entries: TodayEntry[] =
+        dietMeal?.items.map((item) => ({
+          id: crypto.randomUUID(),
+          foodId: item.foodId,
+          quantidade: item.quantidade,
+          unidade: item.unidade,
+          source: "diet" as const,
+          createdAt: Date.now(),
+          planned: true,
+          consumed: false,
+        })) || [];
       return { ...m, entries };
     }),
   };
-  
+
   save(STORAGE_KEYS.NUTRITION_TODAY, fresh);
 }
 
@@ -405,14 +411,20 @@ export function saveNutritionToday(today: NutritionToday): void {
   save(STORAGE_KEYS.NUTRITION_TODAY, today);
 }
 
-export function addFoodToToday(mealId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop", source: "diet" | "extra" | "auto" = "extra"): void {
+export function addFoodToToday(
+  mealId: string,
+  foodId: string,
+  quantidade: number,
+  unidade: "g" | "un" | "ml" | "scoop",
+  source: "diet" | "extra" | "auto" = "extra",
+): void {
   const today = getNutritionToday();
-  const meal = today.meals.find(m => m.id === mealId);
-  
+  const meal = today.meals.find((m) => m.id === mealId);
+
   // Extras e auto entram como consumidos automaticamente
   const isPlanned = source === "diet";
   const isConsumed = source !== "diet"; // extras e auto já são consumidos
-  
+
   const newEntry: TodayEntry = {
     id: crypto.randomUUID(),
     foodId,
@@ -423,7 +435,7 @@ export function addFoodToToday(mealId: string, foodId: string, quantidade: numbe
     planned: isPlanned,
     consumed: isConsumed,
   };
-  
+
   if (!meal) {
     // Se a refeição não existe, criar
     today.meals.push({
@@ -434,9 +446,9 @@ export function addFoodToToday(mealId: string, foodId: string, quantidade: numbe
   } else {
     meal.entries.push(newEntry);
   }
-  
+
   saveNutritionToday(today);
-  
+
   // Marcar quest como feita se consumiu algo
   if (isConsumed) {
     const quests = getQuests();
@@ -447,28 +459,33 @@ export function addFoodToToday(mealId: string, foodId: string, quantidade: numbe
   }
 }
 
-export function addFoodToDiet(mealId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop"): void {
+export function addFoodToDiet(
+  mealId: string,
+  foodId: string,
+  quantidade: number,
+  unidade: "g" | "un" | "ml" | "scoop",
+): void {
   let diet = getNutritionDiet();
-  
+
   if (!diet) {
     diet = {
-      meals: DEFAULT_MEALS.map(m => ({ id: m.id, nome: m.nome, items: [] })),
+      meals: DEFAULT_MEALS.map((m) => ({ id: m.id, nome: m.nome, items: [] })),
     };
   }
-  
-  const meal = diet.meals.find(m => m.id === mealId);
+
+  const meal = diet.meals.find((m) => m.id === mealId);
   if (meal) {
     meal.items.push({ foodId, quantidade, unidade });
   }
-  
+
   saveNutritionDiet(diet);
 }
 
 export function removeFoodFromDiet(mealId: string, index: number): void {
   const diet = getNutritionDiet();
   if (!diet) return;
-  
-  const meal = diet.meals.find(m => m.id === mealId);
+
+  const meal = diet.meals.find((m) => m.id === mealId);
   if (meal && meal.items[index]) {
     meal.items.splice(index, 1);
     saveNutritionDiet(diet);
@@ -478,8 +495,8 @@ export function removeFoodFromDiet(mealId: string, index: number): void {
 export function updateFoodInDiet(mealId: string, index: number, newQuantity: number): void {
   const diet = getNutritionDiet();
   if (!diet) return;
-  
-  const meal = diet.meals.find(m => m.id === mealId);
+
+  const meal = diet.meals.find((m) => m.id === mealId);
   if (meal && meal.items[index]) {
     meal.items[index].quantidade = newQuantity;
     saveNutritionDiet(diet);
@@ -488,10 +505,10 @@ export function updateFoodInDiet(mealId: string, index: number, newQuantity: num
 
 export function updateFoodInToday(mealId: string, entryId: string, newQuantity: number): void {
   const today = getNutritionToday();
-  const meal = today.meals.find(m => m.id === mealId);
-  
+  const meal = today.meals.find((m) => m.id === mealId);
+
   if (meal) {
-    const entry = meal.entries.find(e => e.id === entryId);
+    const entry = meal.entries.find((e) => e.id === entryId);
     if (entry) {
       entry.quantidade = newQuantity;
       saveNutritionToday(today);
@@ -501,10 +518,10 @@ export function updateFoodInToday(mealId: string, entryId: string, newQuantity: 
 
 export function removeFoodFromToday(mealId: string, entryId: string): void {
   const today = getNutritionToday();
-  const meal = today.meals.find(m => m.id === mealId);
-  
+  const meal = today.meals.find((m) => m.id === mealId);
+
   if (meal) {
-    meal.entries = meal.entries.filter(e => e.id !== entryId);
+    meal.entries = meal.entries.filter((e) => e.id !== entryId);
     saveNutritionToday(today);
   }
 }
@@ -512,11 +529,11 @@ export function removeFoodFromToday(mealId: string, entryId: string): void {
 export function applyDietToToday(): void {
   const diet = getNutritionDiet();
   if (!diet) return;
-  
+
   const today = getNutritionToday();
-  
+
   for (const dietMeal of diet.meals) {
-    const todayMeal = today.meals.find(m => m.id === dietMeal.id);
+    const todayMeal = today.meals.find((m) => m.id === dietMeal.id);
     if (todayMeal) {
       for (const item of dietMeal.items) {
         todayMeal.entries.push({
@@ -532,30 +549,30 @@ export function applyDietToToday(): void {
       }
     }
   }
-  
+
   saveNutritionToday(today);
 }
 
 export function hasDietSaved(): boolean {
   const diet = getNutritionDiet();
-  return diet !== null && diet.meals.some(m => m.items.length > 0);
+  return diet !== null && diet.meals.some((m) => m.items.length > 0);
 }
 
 export function isTodayEmpty(): boolean {
   const today = getNutritionToday();
-  return today.meals.every(m => m.entries.length === 0);
+  return today.meals.every((m) => m.entries.length === 0);
 }
 
 export function toggleFoodConsumed(mealId: string, entryId: string): void {
   const today = getNutritionToday();
-  const meal = today.meals.find(m => m.id === mealId);
-  
+  const meal = today.meals.find((m) => m.id === mealId);
+
   if (meal) {
-    const entry = meal.entries.find(e => e.id === entryId);
+    const entry = meal.entries.find((e) => e.id === entryId);
     if (entry) {
       entry.consumed = !entry.consumed;
       saveNutritionToday(today);
-      
+
       // Marcar quest se consumiu algo
       if (entry.consumed) {
         const quests = getQuests();
@@ -571,13 +588,13 @@ export function toggleFoodConsumed(mealId: string, entryId: string): void {
 // Refeição completa quando todos os itens PLANEJADOS foram consumidos
 export function isMealComplete(mealId: string): boolean {
   const today = getNutritionToday();
-  const meal = today.meals.find(m => m.id === mealId);
+  const meal = today.meals.find((m) => m.id === mealId);
   if (!meal) return false;
-  
-  const plannedItems = meal.entries.filter(e => e.planned);
+
+  const plannedItems = meal.entries.filter((e) => e.planned);
   if (plannedItems.length === 0) return false;
-  
-  return plannedItems.every(e => e.consumed === true);
+
+  return plannedItems.every((e) => e.consumed === true);
 }
 
 // Calcula totais planejados (dieta) para uma refeição
@@ -607,14 +624,14 @@ export function isNutritionCompletedToday(): boolean {
 export function getCompletedMealsCount(): number {
   const today = getNutritionToday();
   let count = 0;
-  
+
   for (const meal of today.meals) {
-    const plannedItems = meal.entries.filter(e => e.planned);
-    if (plannedItems.length > 0 && plannedItems.every(e => e.consumed)) {
+    const plannedItems = meal.entries.filter((e) => e.planned);
+    if (plannedItems.length > 0 && plannedItems.every((e) => e.consumed)) {
       count++;
     }
   }
-  
+
   return count;
 }
 
@@ -622,15 +639,15 @@ export function getCompletedMealsCount(): number {
 export function completeNutritionToday(xpGained: number): void {
   // Evitar XP duplicado
   if (isNutritionCompletedToday()) return;
-  
+
   // Marcar quest como feita
   const quests = getQuests();
   quests.registrarAlimentacaoDone = true;
   saveQuests(quests);
-  
+
   // Adicionar XP
   addXP(xpGained);
-  
+
   // Marcar nutrição de hoje como completa
   const completed: NutritionCompleted = {
     dateKey: getDateKey(),
@@ -684,10 +701,10 @@ export function saveExerciseSnapshot(
   exerciseId: string,
   workoutId: string,
   repsRange: string,
-  workSets: ExerciseSetSnapshot[]
+  workSets: ExerciseSetSnapshot[],
 ): void {
   const history = getExerciseHistory();
-  
+
   const snapshot: ExerciseSnapshot = {
     exerciseId,
     workoutId,
@@ -695,19 +712,19 @@ export function saveExerciseSnapshot(
     workSets,
     timestamp: new Date().toISOString(),
   };
-  
+
   if (!history[exerciseId]) {
     history[exerciseId] = [];
   }
-  
+
   // Adiciona no início (mais recente primeiro)
   history[exerciseId].unshift(snapshot);
-  
+
   // Mantém apenas os últimos 10 snapshots por exercício
   if (history[exerciseId].length > 10) {
     history[exerciseId] = history[exerciseId].slice(0, 10);
   }
-  
+
   save(STORAGE_KEYS.EXERCISE_HISTORY, history);
 }
 
@@ -715,11 +732,11 @@ export function saveExerciseSnapshot(
 export function getLastExercisePerformance(exerciseId: string): { kg: number; reps: number; timestamp: string } | null {
   const history = getExerciseHistory();
   const snapshots = history[exerciseId];
-  
+
   if (!snapshots || snapshots.length === 0) return null;
-  
+
   const lastSnapshot = snapshots[0];
-  
+
   // Encontra o melhor set (maior kg × reps)
   let bestSet = { kg: 0, reps: 0 };
   for (const set of lastSnapshot.workSets) {
@@ -727,7 +744,7 @@ export function getLastExercisePerformance(exerciseId: string): { kg: number; re
       bestSet = set;
     }
   }
-  
+
   return {
     kg: bestSet.kg,
     reps: bestSet.reps,
@@ -739,12 +756,12 @@ export function getLastExercisePerformance(exerciseId: string): { kg: number; re
 export function getProgressionSuggestion(exerciseId: string, repsRange: string): ProgressionSuggestion {
   const history = getExerciseHistory();
   const snapshots = history[exerciseId];
-  
+
   // Parse repsRange (ex: "6–10" ou "8-12")
   const rangeMatch = repsRange.match(/(\d+)[–-](\d+)/);
   const lowerLimit = rangeMatch ? parseInt(rangeMatch[1]) : 6;
   const upperLimit = rangeMatch ? parseInt(rangeMatch[2]) : 10;
-  
+
   // Sem histórico
   if (!snapshots || snapshots.length === 0) {
     return {
@@ -755,17 +772,17 @@ export function getProgressionSuggestion(exerciseId: string, repsRange: string):
       metaHoje: `Faça ${lowerLimit}–${upperLimit} reps nas séries válidas`,
     };
   }
-  
+
   const lastSnapshot = snapshots[0];
   const workSets = lastSnapshot.workSets;
-  
+
   // Verifica se todas as séries atingiram o topo da faixa
-  const allAtTop = workSets.length > 0 && workSets.every(set => set.reps >= upperLimit);
-  
+  const allAtTop = workSets.length > 0 && workSets.every((set) => set.reps >= upperLimit);
+
   // Encontra a carga usada (maior kg) e a maior reps
-  const maxKg = Math.max(...workSets.map(s => s.kg), 0);
-  const maxReps = Math.max(...workSets.map(s => s.reps), lowerLimit);
-  
+  const maxKg = Math.max(...workSets.map((s) => s.kg), 0);
+  const maxReps = Math.max(...workSets.map((s) => s.reps), lowerLimit);
+
   if (allAtTop) {
     const suggestedLoad = Math.round(maxKg * 1.025 * 2) / 2; // Arredonda para 0.5kg
     return {
@@ -777,11 +794,11 @@ export function getProgressionSuggestion(exerciseId: string, repsRange: string):
       suggestedNextLoad: suggestedLoad,
     };
   }
-  
+
   // Meta dinâmica: tentar subir reps baseado no último treino
   const targetReps = Math.min(maxReps + 1, upperLimit);
   const repsNeeded = targetReps === upperLimit ? upperLimit : `${targetReps}–${upperLimit}`;
-  
+
   return {
     status: "maintain",
     statusLabel: "Manter",
@@ -812,7 +829,7 @@ export function formatRelativeDate(timestamp: string): string {
   const date = new Date(timestamp);
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays === 0) return "hoje";
   if (diffDays === 1) return "ontem";
   if (diffDays < 7) return `há ${diffDays} dias`;
@@ -823,7 +840,7 @@ export function formatRelativeDate(timestamp: string): string {
 // Obtém o último treino de um workout específico
 export function getLastWorkoutDate(workoutId: string): string | null {
   const history = getExerciseHistory();
-  
+
   // Procura qualquer exercício deste workout
   for (const exerciseId in history) {
     const snapshots = history[exerciseId];
@@ -833,7 +850,7 @@ export function getLastWorkoutDate(workoutId: string): string | null {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -875,7 +892,7 @@ function convertDefaultWorkout(workout: Workout): UserWorkout {
     exercicios: workout.exercicios.map((ex) => ({
       id: ex.id,
       nome: ex.nome,
-      muscleGroup: ex.tags.find(t => t !== "Principal" && t !== "Acessório") || "Outro",
+      muscleGroup: ex.tags.find((t) => t !== "Principal" && t !== "Acessório") || "Outro",
       tags: ex.tags,
       repsRange: ex.repsRange,
       descansoSeg: ex.descansoSeg,
@@ -889,17 +906,27 @@ function convertDefaultWorkout(workout: Workout): UserWorkout {
 // Obtém plano de treino do usuário (ou padrão se não existir)
 export function getUserWorkoutPlan(): UserWorkoutPlan {
   const stored = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
-  
-  if (stored) {
+
+  // ✅ Se tiver workouts, ok
+  if (stored && Array.isArray(stored.workouts) && stored.workouts.length > 0) {
     return stored;
   }
-  
+
+  // ✅ Se existir mas vier vazio, tratamos como inválido e removemos
+  if (stored && Array.isArray(stored.workouts) && stored.workouts.length === 0) {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
+    } catch {
+      // ignore
+    }
+  }
+
   // Retorna plano padrão convertido
   const defaultPlan: UserWorkoutPlan = {
     workouts: Object.values(defaultWorkouts).map(convertDefaultWorkout),
     updatedAt: new Date().toISOString(),
   };
-  
+
   return defaultPlan;
 }
 
@@ -907,10 +934,10 @@ export function getUserWorkoutPlan(): UserWorkoutPlan {
 export function saveUserWorkoutPlan(plan: UserWorkoutPlan): void {
   plan.updatedAt = new Date().toISOString();
   save(STORAGE_KEYS.USER_WORKOUT_PLAN, plan);
-  
+
   // CRITICAL: Also update AppState to ensure cloud sync works
   try {
-    const APP_STATE_KEY = 'levelup.appState';
+    const APP_STATE_KEY = "levelup.appState";
     const storedAppState = localStorage.getItem(APP_STATE_KEY);
     if (storedAppState) {
       const appState = JSON.parse(storedAppState);
@@ -919,7 +946,7 @@ export function saveUserWorkoutPlan(plan: UserWorkoutPlan): void {
       localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
     }
   } catch (error) {
-    console.error('Failed to update AppState with workout plan:', error);
+    console.error("Failed to update AppState with workout plan:", error);
   }
 }
 
@@ -936,26 +963,26 @@ export function hasCustomWorkoutPlan(): boolean {
 // Obtém um workout específico do plano do usuário
 export function getUserWorkout(id: string): UserWorkout | undefined {
   const plan = getUserWorkoutPlan();
-  return plan.workouts.find(w => w.id === id);
+  return plan.workouts.find((w) => w.id === id);
 }
 
 // Obtém um exercício específico do plano do usuário
 export function getUserExercise(workoutId: string, exerciseId: string): UserExercise | undefined {
   const workout = getUserWorkout(workoutId);
   if (!workout) return undefined;
-  return workout.exercicios.find(e => e.id === exerciseId);
+  return workout.exercicios.find((e) => e.id === exerciseId);
 }
 
 // Obtém próximo exercício do plano do usuário
 export function getUserNextExercise(workoutId: string, currentExerciseId: string): UserExercise | null {
   const workout = getUserWorkout(workoutId);
   if (!workout) return null;
-  
-  const currentIndex = workout.exercicios.findIndex(e => e.id === currentExerciseId);
+
+  const currentIndex = workout.exercicios.findIndex((e) => e.id === currentExerciseId);
   if (currentIndex === -1 || currentIndex >= workout.exercicios.length - 1) {
     return null;
   }
-  
+
   return workout.exercicios[currentIndex + 1];
 }
 
@@ -963,7 +990,7 @@ export function getUserNextExercise(workoutId: string, currentExerciseId: string
 export function isUserLastExercise(workoutId: string, exerciseId: string): boolean {
   const workout = getUserWorkout(workoutId);
   if (!workout) return true;
-  
+
   const lastExercise = workout.exercicios[workout.exercicios.length - 1];
   return lastExercise?.id === exerciseId;
 }
@@ -986,7 +1013,7 @@ export function saveWeight(weight: number): void {
     timestamp: new Date().toISOString(),
   });
   save(STORAGE_KEYS.WEIGHT_HISTORY, history.slice(0, 100)); // Keep last 100 entries
-  
+
   // Mark quest as done
   const quests = getQuests();
   quests.registrarPesoDone = true;
@@ -996,12 +1023,12 @@ export function saveWeight(weight: number): void {
 export function hasWeightThisWeek(): boolean {
   const history = getWeightHistory();
   if (history.length === 0) return false;
-  
+
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
   startOfWeek.setHours(0, 0, 0, 0);
-  
+
   const lastEntry = new Date(history[0].timestamp);
   return lastEntry >= startOfWeek;
 }
@@ -1060,7 +1087,7 @@ export function getAchievements(): Achievement[] {
   const profile = getProfile();
   const totalWorkouts = getTotalWorkoutsCompleted();
   const prsCount = getPRsCount();
-  
+
   return [
     {
       id: "streak-3",
@@ -1213,15 +1240,15 @@ export function checkNutritionQuestStatus(): boolean {
 // Sync quests status based on real data
 export function syncQuestsStatus(): void {
   const quests = getQuests();
-  
+
   // Check nutrition
   quests.registrarAlimentacaoDone = checkNutritionQuestStatus();
-  
+
   // Check weight (weekly)
   quests.registrarPesoDone = hasWeightThisWeek();
-  
+
   // Treino do dia is already updated when workout is completed
-  
+
   saveQuests(quests);
 }
 
@@ -1245,11 +1272,11 @@ export interface E1RMDataPoint {
 export function getE1RMHistory(exerciseId: string): E1RMDataPoint[] {
   const history = getExerciseHistory();
   const snapshots = history[exerciseId];
-  
+
   if (!snapshots || snapshots.length === 0) return [];
-  
+
   return snapshots
-    .map(snapshot => {
+    .map((snapshot) => {
       // Melhor série (maior e1RM)
       let best = { kg: 0, reps: 0, e1rm: 0 };
       for (const set of snapshot.workSets) {
@@ -1258,7 +1285,7 @@ export function getE1RMHistory(exerciseId: string): E1RMDataPoint[] {
           best = { kg: set.kg, reps: set.reps, e1rm };
         }
       }
-      
+
       const date = new Date(snapshot.timestamp);
       return {
         date: snapshot.timestamp,
@@ -1282,23 +1309,23 @@ export function getWeeklyVolume(days: number = 90): WeeklyVolumeDataPoint[] {
   const completed = getWorkoutsCompleted();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  
+
   // Agrupar por semana
   const weekMap = new Map<string, number>();
-  
+
   for (const workout of completed) {
     const date = new Date(workout.timestamp);
     if (date < cutoff) continue;
-    
+
     // Início da semana (domingo)
     const startOfWeek = new Date(date);
     startOfWeek.setDate(date.getDate() - date.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     const weekKey = startOfWeek.toISOString().split("T")[0];
-    
+
     weekMap.set(weekKey, (weekMap.get(weekKey) || 0) + workout.totalVolume);
   }
-  
+
   // Converter para array ordenado
   return Array.from(weekMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -1317,8 +1344,8 @@ export function getWorkoutsInPeriod(days: number): number {
   const completed = getWorkoutsCompleted();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  
-  return completed.filter(w => new Date(w.timestamp) >= cutoff).length;
+
+  return completed.filter((w) => new Date(w.timestamp) >= cutoff).length;
 }
 
 // Consistência (% dias com treino nos últimos N dias)
@@ -1333,9 +1360,9 @@ export function getConsistency(days: number): number {
 export function getExercisesWithHistory(): { id: string; name: string }[] {
   const history = getExerciseHistory();
   const plan = getUserWorkoutPlan();
-  
+
   const exerciseMap = new Map<string, string>();
-  
+
   // Mapear IDs para nomes do plano do usuário
   for (const workout of plan.workouts) {
     for (const exercise of workout.exercicios) {
@@ -1344,7 +1371,7 @@ export function getExercisesWithHistory(): { id: string; name: string }[] {
       }
     }
   }
-  
+
   return Array.from(exerciseMap.entries()).map(([id, name]) => ({ id, name }));
 }
 
@@ -1365,7 +1392,7 @@ export function getNutritionLogs(): NutritionDailyLog[] {
 export function saveNutritionLog(log: NutritionDailyLog): void {
   const logs = getNutritionLogs();
   // Atualizar ou adicionar
-  const existingIndex = logs.findIndex(l => l.dateKey === log.dateKey);
+  const existingIndex = logs.findIndex((l) => l.dateKey === log.dateKey);
   if (existingIndex >= 0) {
     logs[existingIndex] = log;
   } else {
@@ -1379,7 +1406,7 @@ export function saveNutritionLog(log: NutritionDailyLog): void {
 export function consolidateNutritionToday(): NutritionDailyLog | null {
   // Importar foods dinamicamente para evitar circular dependency
   const today = getNutritionToday();
-  
+
   // Calcular totais consumidos (precisamos do foods)
   // Esta função será chamada do componente que tem acesso ao foods
   return null;
@@ -1402,15 +1429,15 @@ export interface NutritionChartData {
 export function getNutritionChartData(days: number): NutritionChartData[] {
   const logs = getNutritionLogs();
   const goals = getNutritionGoals();
-  
+
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffKey = cutoff.toISOString().split("T")[0];
-  
+
   return logs
-    .filter(l => l.dateKey >= cutoffKey)
+    .filter((l) => l.dateKey >= cutoffKey)
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
-    .map(log => {
+    .map((log) => {
       const date = new Date(log.dateKey);
       return {
         date: log.dateKey,
@@ -1431,13 +1458,13 @@ export function getNutritionChartData(days: number): NutritionChartData[] {
 export function getWeightVariation(): { current: number; previous: number; delta: number } | null {
   const history = getWeightHistory();
   if (history.length === 0) return null;
-  
+
   const current = history[0].weight;
-  
+
   // Encontrar peso de ~7 dias atrás
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
-  
+
   let previous = current;
   for (const entry of history) {
     const entryDate = new Date(entry.timestamp);
@@ -1446,7 +1473,7 @@ export function getWeightVariation(): { current: number; previous: number; delta
       break;
     }
   }
-  
+
   return {
     current,
     previous,
@@ -1463,10 +1490,10 @@ export interface WeightChartData {
 
 export function getWeightChartData(): WeightChartData[] {
   const history = getWeightHistory();
-  
+
   return history
     .slice(0, 30) // Últimos 30 registros
-    .map(entry => {
+    .map((entry) => {
       const date = new Date(entry.timestamp);
       return {
         date: entry.timestamp,

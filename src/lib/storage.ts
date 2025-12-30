@@ -907,6 +907,20 @@ export function getUserWorkoutPlan(): UserWorkoutPlan {
 export function saveUserWorkoutPlan(plan: UserWorkoutPlan): void {
   plan.updatedAt = new Date().toISOString();
   save(STORAGE_KEYS.USER_WORKOUT_PLAN, plan);
+  
+  // CRITICAL: Also update AppState to ensure cloud sync works
+  try {
+    const APP_STATE_KEY = 'levelup.appState';
+    const storedAppState = localStorage.getItem(APP_STATE_KEY);
+    if (storedAppState) {
+      const appState = JSON.parse(storedAppState);
+      appState.plan = plan;
+      appState.updatedAt = Date.now();
+      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
+    }
+  } catch (error) {
+    console.error('Failed to update AppState with workout plan:', error);
+  }
 }
 
 // Reseta plano para o padrão

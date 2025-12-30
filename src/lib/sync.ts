@@ -28,29 +28,35 @@ export async function syncState(uid: string): Promise<{ status: SyncStatus; mess
     const remote = await getRemoteState(uid) as AppState | null;
     
     if (!remote) {
-      // No remote state - this is a NEW user
-      // Check if local state is "fresh" (migrated from legacy or default)
-      // If local has significant data, push it; otherwise initialize fresh
+      // No remote state - this is a NEW user or first sync
+      // Check if local state has ANY user data worth preserving
       const hasSignificantData = local.workoutHistory.length > 0 || 
         Object.keys(local.exerciseHistory).length > 0 ||
-        local.bodyweight.entries.length > 0;
+        local.bodyweight.entries.length > 0 ||
+        (local.plan && local.plan.workouts && local.plan.workouts.length > 0) || // IMPORTANT: preserve workout plan!
+        (local.treinoProgresso && Object.keys(local.treinoProgresso).length > 0);
       
       if (hasSignificantData) {
-        // Push existing local data
+        // Push existing local data to cloud
         const success = await setRemoteState(uid, local);
         if (success) {
           return { status: 'synced', message: 'Dados enviados para a nuvem' };
         }
+        return { status: 'error', message: 'Erro ao enviar dados' };
       } else {
-        // Initialize new user with Level 1
+        // Truly new user with no data - initialize fresh state but KEEP any existing plan
         const newState = createNewUserState();
+        // Preserve any existing workout plan from local
+        if (local.plan && local.plan.workouts && local.plan.workouts.length > 0) {
+          newState.plan = local.plan;
+        }
         setLocalState(newState);
         const success = await setRemoteState(uid, newState);
         if (success) {
           return { status: 'synced', message: 'Conta inicializada' };
         }
+        return { status: 'error', message: 'Erro ao enviar dados' };
       }
-      return { status: 'error', message: 'Erro ao enviar dados' };
     }
     
     // Compare updatedAt

@@ -126,6 +126,7 @@ export interface UserWorkout {
   titulo: string;
   duracaoEstimada: number;
   exercicios: UserExercise[];
+  scheduledDays?: number[]; // Dias da semana: 0=Segunda, 1=Terça, ..., 6=Domingo
 }
 
 export interface UserWorkoutPlan {

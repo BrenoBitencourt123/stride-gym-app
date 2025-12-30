@@ -1,12 +1,16 @@
 // Utilitários de semana e treino do dia
 
+import { getUserWorkoutPlan } from './storage';
+
 export interface WorkoutScheduleEntry {
   workoutId: string | null; // null = dia de descanso
 }
 
-// Cronograma semanal: segunda = 0, domingo = 6
-// Segunda: Upper A, Terça: Lower A, Quarta: Descanso, Quinta: Upper B, Sexta: Lower B, Sábado/Domingo: Descanso
-const WEEKLY_SCHEDULE: WorkoutScheduleEntry[] = [
+// Dias da semana em português (índice 0 = Segunda)
+const DAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+// Cronograma padrão (fallback): segunda = 0, domingo = 6
+const DEFAULT_SCHEDULE: WorkoutScheduleEntry[] = [
   { workoutId: 'upper-a' },   // Segunda (0)
   { workoutId: 'lower-a' },   // Terça (1)
   { workoutId: null },        // Quarta (2) - Descanso
@@ -15,6 +19,35 @@ const WEEKLY_SCHEDULE: WorkoutScheduleEntry[] = [
   { workoutId: null },        // Sábado (5) - Descanso
   { workoutId: null },        // Domingo (6) - Descanso
 ];
+
+/**
+ * Obtém o cronograma do usuário com base nos scheduledDays de cada workout
+ */
+function getUserSchedule(): WorkoutScheduleEntry[] {
+  const plan = getUserWorkoutPlan();
+  
+  // Inicializa todos os dias como descanso
+  const schedule: WorkoutScheduleEntry[] = Array(7).fill(null).map(() => ({ workoutId: null }));
+  
+  // Mapeia os workouts para seus dias agendados
+  for (const workout of plan.workouts) {
+    if (workout.scheduledDays && workout.scheduledDays.length > 0) {
+      for (const day of workout.scheduledDays) {
+        if (day >= 0 && day <= 6) {
+          schedule[day] = { workoutId: workout.id };
+        }
+      }
+    }
+  }
+  
+  // Se nenhum workout tem dias agendados, usa o fallback padrão
+  const hasAnySchedule = schedule.some(s => s.workoutId !== null);
+  if (!hasAnySchedule) {
+    return DEFAULT_SCHEDULE;
+  }
+  
+  return schedule;
+}
 
 /**
  * Retorna a segunda-feira da semana da data fornecida
@@ -53,7 +86,8 @@ export function getDayIndex(date: Date = new Date()): number {
  */
 export function getWorkoutOfDay(date: Date = new Date()): string | null {
   const dayIndex = getDayIndex(date);
-  return WEEKLY_SCHEDULE[dayIndex].workoutId;
+  const schedule = getUserSchedule();
+  return schedule[dayIndex].workoutId;
 }
 
 /**
@@ -75,9 +109,16 @@ export function isRestDay(date: Date = new Date()): boolean {
  * Retorna o cronograma completo da semana com IDs
  */
 export function getWeeklySchedule(): { dayName: string; workoutId: string | null }[] {
-  const days = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-  return WEEKLY_SCHEDULE.map((entry, index) => ({
-    dayName: days[index],
+  const schedule = getUserSchedule();
+  return schedule.map((entry, index) => ({
+    dayName: DAY_NAMES[index],
     workoutId: entry.workoutId,
   }));
+}
+
+/**
+ * Retorna os nomes dos dias da semana
+ */
+export function getScheduleDayNames(): string[] {
+  return DAY_NAMES;
 }

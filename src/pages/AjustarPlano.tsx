@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Save, RotateCcw } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Save, RotateCcw, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -24,7 +25,10 @@ import {
   type UserWorkout,
 } from "@/lib/storage";
 import { useSyncTrigger } from "@/hooks/useSyncTrigger";
-import { updateLocalState } from "@/lib/appState"; // ✅ ADICIONADO
+import { updateLocalState } from "@/lib/appState";
+import { getScheduleDayNames } from "@/lib/weekUtils";
+
+const SCHEDULE_DAYS = getScheduleDayNames();
 
 const MUSCLE_GROUPS = [
   "Peito",
@@ -217,6 +221,29 @@ const AjustarPlano = () => {
     setPlan({ ...plan, workouts: newWorkouts });
   };
 
+  const toggleScheduledDay = (workoutId: string, dayIndex: number) => {
+    if (!plan) return;
+    setPlan({
+      ...plan,
+      workouts: plan.workouts.map((w) => {
+        if (w.id !== workoutId) return w;
+        const currentDays = w.scheduledDays || [];
+        const newDays = currentDays.includes(dayIndex)
+          ? currentDays.filter((d) => d !== dayIndex)
+          : [...currentDays, dayIndex].sort((a, b) => a - b);
+        return { ...w, scheduledDays: newDays };
+      }),
+    });
+  };
+
+  const getScheduledDaysLabel = (workout: UserWorkout): string => {
+    if (!workout.scheduledDays || workout.scheduledDays.length === 0) {
+      return "";
+    }
+    const shortDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    return workout.scheduledDays.map(d => shortDays[d]).join(', ');
+  };
+
   // Exercise operations
   const addExercise = (workoutId: string) => {
     if (!plan || !newExercise.nome) return;
@@ -339,15 +366,51 @@ const AjustarPlano = () => {
                 <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 
                 <AccordionTrigger className="flex-1 py-0 hover:no-underline">
-                  <Input
-                    value={workout.titulo}
-                    onChange={(e) => renameWorkout(workout.id, e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-transparent border-none p-0 h-auto text-lg font-semibold text-foreground focus-visible:ring-0"
-                  />
+                  <div className="flex flex-col items-start gap-0.5">
+                    <Input
+                      value={workout.titulo}
+                      onChange={(e) => renameWorkout(workout.id, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-transparent border-none p-0 h-auto text-lg font-semibold text-foreground focus-visible:ring-0"
+                    />
+                    {workout.scheduledDays && workout.scheduledDays.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{getScheduledDaysLabel(workout)}</span>
+                    )}
+                  </div>
                 </AccordionTrigger>
 
                 <div className="flex items-center gap-1 flex-shrink-0">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-secondary/50 transition-colors ${
+                          workout.scheduledDays && workout.scheduledDays.length > 0 ? 'text-primary' : 'text-muted-foreground'
+                        }`}
+                      >
+                        <CalendarDays className="w-4 h-4" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="end">
+                      <p className="text-sm font-medium mb-2">Dias do treino</p>
+                      <div className="flex flex-wrap gap-2">
+                        {SCHEDULE_DAYS.map((day, dayIndex) => (
+                          <button
+                            key={dayIndex}
+                            type="button"
+                            onClick={() => toggleScheduledDay(workout.id, dayIndex)}
+                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                              workout.scheduledDays?.includes(dayIndex)
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+                            }`}
+                          >
+                            {day.slice(0, 3)}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <button
                     onClick={() => moveWorkout(workout.id, "up")}
                     disabled={workoutIndex === 0}

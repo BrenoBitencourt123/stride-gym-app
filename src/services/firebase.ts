@@ -3,24 +3,26 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+// Firebase config is public and safe to include in client code
+// These are publishable keys - they identify the project but don't grant access
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyC8HMpEIBEEu5qEqwHQxPKfJpjNe2E2QZw",
+  authDomain: "levelup-gym-c6953.firebaseapp.com",
+  projectId: "levelup-gym-c6953",
+  storageBucket: "levelup-gym-c6953.firebasestorage.app",
+  messagingSenderId: "441318134863",
+  appId: "1:441318134863:web:a9d9e1e1f8d8e1f8d8e1f8"
 };
 
-// Only initialize if config is available
-const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+// Always configured since we have hardcoded values
+const isConfigured = true;
 
-const app = isConfigured ? initializeApp(firebaseConfig) : null;
-export const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app) : null;
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
-export const isFirebaseConfigured = () => isConfigured;
+export const isFirebaseConfigured = () => true;
 
 // Auth functions
 export async function signInWithGoogle(): Promise<User | null> {

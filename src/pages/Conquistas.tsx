@@ -89,7 +89,7 @@ const Conquistas = () => {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-foreground truncate">{achievement.name}</h3>
+                    <h3 className="font-semibold text-foreground truncate">{achievement.title}</h3>
                     {achievement.unlocked && (
                       <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">✓</span>
                     )}

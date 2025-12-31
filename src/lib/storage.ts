@@ -179,3 +179,129 @@ function afterLocalSave(key: string, value: unknown) {
   // Quando muda key legada, hidrata AppState (nutrição/treino/etc)
   scheduleHydrateAppState(key, value);
 }
+
+/* =========================================================
+   USER WORKOUT PLAN  ✅ (exporta getUserWorkoutPlan)
+   ========================================================= */
+
+// Se você já tiver esses imports no topo do arquivo, NÃO repita.
+// Caso não tenha, adicione no topo do storage.ts:
+// import { workouts as defaultWorkouts, type Workout, type SetData } from "@/data/workouts";
+
+export interface UserExercise {
+  id: string;
+  nome: string;
+  muscleGroup: string;
+  tags: string[];
+  repsRange: string;
+  descansoSeg: number;
+  warmupEnabled: boolean;
+  feederSetsDefault: SetData[];
+  workSetsDefault: SetData[];
+  observacoes?: string;
+}
+
+export interface UserWorkout {
+  id: string;
+  titulo: string;
+  duracaoEstimada: number;
+  exercicios: UserExercise[];
+  scheduledDays?: number[];
+}
+
+export interface UserWorkoutPlan {
+  workouts: UserWorkout[];
+  updatedAt: string;
+}
+
+function convertDefaultWorkout(workout: Workout): UserWorkout {
+  return {
+    id: workout.id,
+    titulo: workout.titulo,
+    duracaoEstimada: workout.duracaoEstimada,
+    exercicios: workout.exercicios.map((ex) => ({
+      id: ex.id,
+      nome: ex.nome,
+      muscleGroup: ex.tags.find((t) => t !== "Principal" && t !== "Acessório") || "Outro",
+      tags: ex.tags,
+      repsRange: ex.repsRange,
+      descansoSeg: ex.descansoSeg,
+      warmupEnabled: ex.warmupEnabled,
+      feederSetsDefault: ex.feederSetsDefault,
+      workSetsDefault: ex.workSetsDefault,
+      observacoes: ex.observacoes,
+    })),
+  };
+}
+
+export function getUserWorkoutPlan(): UserWorkoutPlan {
+  const stored = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
+
+  // Se já existe plano salvo, usa ele
+  if (stored && Array.isArray(stored.workouts) && stored.workouts.length > 0) {
+    return stored;
+  }
+
+  // Se existe mas está vazio, remove para forçar o default
+  if (stored && Array.isArray(stored.workouts) && stored.workouts.length === 0) {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Plano padrão = baseado nos treinos default do app
+  const defaultPlan: UserWorkoutPlan = {
+    workouts: Object.values(defaultWorkouts).map(convertDefaultWorkout),
+    updatedAt: new Date().toISOString(),
+  };
+
+  return defaultPlan;
+}
+
+export function saveUserWorkoutPlan(plan: UserWorkoutPlan): void {
+  plan.updatedAt = new Date().toISOString();
+  save(STORAGE_KEYS.USER_WORKOUT_PLAN, plan);
+}
+
+export function resetUserWorkoutPlan(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
+  } catch {
+    // ignore
+  }
+}
+
+export function hasCustomWorkoutPlan(): boolean {
+  return load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null) !== null;
+}
+
+export function getUserWorkout(id: string): UserWorkout | undefined {
+  const plan = getUserWorkoutPlan();
+  return plan.workouts.find((w) => w.id === id);
+}
+
+export function getUserExercise(workoutId: string, exerciseId: string): UserExercise | undefined {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return undefined;
+  return workout.exercicios.find((e) => e.id === exerciseId);
+}
+
+export function getUserNextExercise(workoutId: string, currentExerciseId: string): UserExercise | null {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return null;
+
+  const idx = workout.exercicios.findIndex((e) => e.id === currentExerciseId);
+  if (idx === -1 || idx >= workout.exercicios.length - 1) return null;
+
+  return workout.exercicios[idx + 1];
+}
+
+export function isUserLastExercise(workoutId: string, exerciseId: string): boolean {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return true;
+
+  const last = workout.exercicios[workout.exercicios.length - 1];
+  return last?.id === exerciseId;
+}

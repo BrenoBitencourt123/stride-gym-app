@@ -1,34 +1,251 @@
-// Utilitários de persistência localStorage
+// src/lib/storage.ts
+// Utilitários de persistência localStorage + hidratação automática do AppState (multi-dispositivo)
 
-export function load<T>(key: string, fallback: T): T {
+const APP_STATE_KEY = "levelup.appState";
+const APPSTATE_CHANGED_EVENT = "levelup:appstate-changed";
+const SUPPRESS_AUTOSYNC_FLAG = "__LEVELUP_SUPPRESS_AUTOSYNC__";
+
+const isBrowser = typeof window !== "undefined";
+
+// ===== Hydration control (evita loops quando AppState sincroniza keys legadas)
+let hydrationSuppressed = false;
+
+/**
+ * Use isso quando você for escrever várias keys legadas a partir do AppState
+ * (ex.: syncToLegacyKeys), para não entrar em loop de re-hidratação.
+ */
+export function suppressAppStateHydration<T>(fn: () => T): T {
+  hydrationSuppressed = true;
   try {
-    const stored = localStorage.getItem(key);
-    if (stored === null) return fallback;
-    return JSON.parse(stored) as T;
-  } catch {
-    return fallback;
+    return fn();
+  } finally {
+    hydrationSuppressed = false;
   }
 }
 
-export function save<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error("Failed to save to localStorage:", error);
+// ===== Auto-hidratação: quando salvar uma key legada, aplicar no AppState
+type HydrationQueueEntry = { key: string; value: unknown };
+const hydrationQueue = new Map<string, unknown>();
+let hydrationScheduled = false;
+let hydrationRunning = false;
+
+function emitAppStateChanged() {
+  if (!isBrowser) return;
+  if ((globalThis as any)[SUPPRESS_AUTOSYNC_FLAG]) return;
+  window.dispatchEvent(new CustomEvent(APPSTATE_CHANGED_EVENT));
+}
+
+function afterLocalSave(key: string, value: unknown) {
+  // Quando AppState muda: avisa o sync
+  if (key === APP_STATE_KEY) {
+    emitAppStateChanged();
+    return;
+  }
+
+  // Se estamos suprimindo (ex.: syncToLegacyKeys), não hidrata
+  if (hydrationSuppressed) return;
+
+  // Só hidratar keys relevantes
+  if (!HYDRATE_KEYS.has(key)) return;
+
+  hydrationQueue.set(key, value);
+
+  if (hydrationScheduled) return;
+  hydrationScheduled = true;
+
+  queueMicrotask(async () => {
+    hydrationScheduled = false;
+    if (hydrationRunning) return;
+    hydrationRunning = true;
+
+    try {
+      const entries: HydrationQueueEntry[] = Array.from(hydrationQueue.entries()).map(([k, v]) => ({
+        key: k,
+        value: v,
+      }));
+      hydrationQueue.clear();
+      if (entries.length === 0) return;
+
+      const { getLocalState, setLocalState } = await import("./appState");
+      const state = getLocalState();
+
+      let changed = false;
+      for (const e of entries) {
+        changed = applyLegacyKeyPatch(state as any, e.key, e.value) || changed;
+      }
+
+      if (changed) {
+        // Isso salva APP_STATE_KEY e dispara o evento de sync
+        setLocalState(state as any);
+      }
+    } catch (err) {
+      console.warn("[storage] Falha ao hidratar AppState:", err);
+    } finally {
+      hydrationRunning = false;
+    }
+  });
+}
+
+function safeObj(v: any): v is Record<string, any> {
+  return v && typeof v === "object";
+}
+
+function ensureNutrition(state: any) {
+  if (!state.nutrition) {
+    state.nutrition = {
+      targets: { kcal: 2050, protein: 160, carbs: 200, fats: 65 },
+      dailyLogs: {},
+    };
+  }
+  if (!state.nutrition.targets) {
+    state.nutrition.targets = { kcal: 2050, protein: 160, carbs: 200, fats: 65 };
+  }
+  if (!state.nutrition.dailyLogs) {
+    state.nutrition.dailyLogs = {};
   }
 }
 
-export function mergeSave<T extends Record<string, unknown>>(key: string, partial: Partial<T>): void {
-  try {
-    const existing = load<T>(key, {} as T);
-    const merged = { ...existing, ...partial };
-    save(key, merged);
-  } catch (error) {
-    console.error("Failed to merge save to localStorage:", error);
+/**
+ * Aplica patch no AppState baseado na key legada que foi salva.
+ * Retorna true se mudou algo.
+ */
+function applyLegacyKeyPatch(state: any, key: string, value: unknown): boolean {
+  if (!state || typeof state !== "object") return false;
+
+  // Garantir objetos base
+  if (!state.bodyweight) state.bodyweight = { entries: [] };
+  if (!state.progression) {
+    state.progression = {
+      accountLevel: 1,
+      xp: 0,
+      xpToNext: 500,
+      streakDays: 0,
+      shields: 0,
+      multiplier: 1,
+    };
+  }
+  ensureNutrition(state);
+
+  // ===== Mapeamentos principais =====
+  switch (key) {
+    case STORAGE_KEYS.PROFILE: {
+      if (!safeObj(value)) return false;
+      const prev = JSON.stringify(state.progression);
+      state.progression.accountLevel = Number(value.level ?? state.progression.accountLevel);
+      state.progression.xp = Number(value.xpAtual ?? state.progression.xp);
+      state.progression.xpToNext = Number(value.xpMeta ?? state.progression.xpToNext);
+      state.progression.streakDays = Number(value.streakDias ?? state.progression.streakDays);
+      state.progression.multiplier = Number(value.multiplier ?? state.progression.multiplier);
+      state.progression.shields = Number(value.shields ?? state.progression.shields);
+      return JSON.stringify(state.progression) !== prev;
+    }
+
+    case STORAGE_KEYS.QUESTS: {
+      if (!safeObj(value)) return false;
+      const prev = JSON.stringify(state.quests ?? null);
+      state.quests = value;
+      return JSON.stringify(state.quests ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.USER_WORKOUT_PLAN: {
+      if (!safeObj(value)) return false;
+      const prev = JSON.stringify(state.plan ?? null);
+      state.plan = value;
+      return JSON.stringify(state.plan ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.EXERCISE_HISTORY: {
+      if (!safeObj(value)) return false;
+      const prev = JSON.stringify(state.exerciseHistory ?? null);
+      state.exerciseHistory = value;
+      return JSON.stringify(state.exerciseHistory ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.WORKOUTS_COMPLETED: {
+      if (!Array.isArray(value)) return false;
+      const prev = JSON.stringify(state.workoutHistory ?? null);
+      state.workoutHistory = value;
+      return JSON.stringify(state.workoutHistory ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.TREINO_PROGRESSO: {
+      if (!safeObj(value)) return false;
+      const prev = JSON.stringify(state.treinoProgresso ?? null);
+      state.treinoProgresso = value;
+      return JSON.stringify(state.treinoProgresso ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.PROGRESSION_SUGGESTIONS: {
+      if (!safeObj(value)) return false;
+      const prev = JSON.stringify(state.progressionSuggestions ?? null);
+      state.progressionSuggestions = value;
+      return JSON.stringify(state.progressionSuggestions ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.TREINO_HOJE: {
+      const prev = JSON.stringify(state.treinoHoje ?? null);
+      state.treinoHoje = value as any;
+      return JSON.stringify(state.treinoHoje ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.WEIGHT_HISTORY: {
+      if (!Array.isArray(value)) return false;
+      const prev = JSON.stringify(state.bodyweight?.entries ?? []);
+      state.bodyweight.entries = (value as any[]).map((w) => ({
+        date: String(w.timestamp || "").split("T")[0] || String(w.date || ""),
+        weight: Number(w.weight ?? 0),
+        updatedAt: w.timestamp ? new Date(w.timestamp).getTime() : Date.now(),
+      }));
+      return JSON.stringify(state.bodyweight?.entries ?? []) !== prev;
+    }
+
+    case STORAGE_KEYS.NUTRITION_GOALS: {
+      if (!safeObj(value)) return false;
+      const prev = JSON.stringify(state.nutrition.targets);
+      state.nutrition.targets = {
+        kcal: Number(value.kcalTarget ?? state.nutrition.targets.kcal),
+        protein: Number(value.pTarget ?? state.nutrition.targets.protein),
+        carbs: Number(value.cTarget ?? state.nutrition.targets.carbs),
+        fats: Number(value.gTarget ?? state.nutrition.targets.fats),
+      };
+      return JSON.stringify(state.nutrition.targets) !== prev;
+    }
+
+    case STORAGE_KEYS.NUTRITION_DIET: {
+      const prev = JSON.stringify(state.nutrition.dietPlan ?? null);
+      state.nutrition.dietPlan = (value as any) || undefined;
+      return JSON.stringify(state.nutrition.dietPlan ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.NUTRITION_TODAY: {
+      if (!safeObj(value)) return false;
+      const dateKey = String((value as any).dateKey || "");
+      if (!dateKey) return false;
+      const prev = JSON.stringify(state.nutrition.dailyLogs?.[dateKey] ?? null);
+      state.nutrition.dailyLogs[dateKey] = value;
+      return JSON.stringify(state.nutrition.dailyLogs?.[dateKey] ?? null) !== prev;
+    }
+
+    case STORAGE_KEYS.NUTRITION_COMPLETED: {
+      const prev = JSON.stringify(state.nutritionCompleted ?? null);
+      state.nutritionCompleted = value as any;
+      return JSON.stringify(state.nutritionCompleted ?? null) !== prev;
+    }
+
+    case "levelup.nutritionLogs": {
+      // Logs agregados usados nos gráficos
+      if (!Array.isArray(value)) return false;
+      const prev = JSON.stringify(state.nutrition.totalsLogs ?? []);
+      state.nutrition.totalsLogs = value;
+      return JSON.stringify(state.nutrition.totalsLogs ?? []) !== prev;
+    }
+
+    default:
+      return false;
   }
 }
 
-// Storage keys
+// ===== Keys relevantes para hidratar AppState automaticamente =====
 export const STORAGE_KEYS = {
   PROFILE: "levelup.profile",
   TREINO_PROGRESSO: "levelup.treinoProgresso",
@@ -45,7 +262,60 @@ export const STORAGE_KEYS = {
   WORKOUTS_COMPLETED: "levelup.workoutsCompleted",
 } as const;
 
+const HYDRATE_KEYS = new Set<string>([
+  STORAGE_KEYS.PROFILE,
+  STORAGE_KEYS.TREINO_PROGRESSO,
+  STORAGE_KEYS.QUESTS,
+  STORAGE_KEYS.TREINO_HOJE,
+  STORAGE_KEYS.NUTRITION_GOALS,
+  STORAGE_KEYS.NUTRITION_DIET,
+  STORAGE_KEYS.NUTRITION_TODAY,
+  STORAGE_KEYS.NUTRITION_COMPLETED,
+  STORAGE_KEYS.EXERCISE_HISTORY,
+  STORAGE_KEYS.PROGRESSION_SUGGESTIONS,
+  STORAGE_KEYS.USER_WORKOUT_PLAN,
+  STORAGE_KEYS.WEIGHT_HISTORY,
+  STORAGE_KEYS.WORKOUTS_COMPLETED,
+  "levelup.nutritionLogs",
+]);
+
+// ===========================
+// Persistência local (base)
+// ===========================
+
+export function load<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored === null) return fallback;
+    return JSON.parse(stored) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function save<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    afterLocalSave(key, value);
+  } catch (error) {
+    console.error("Failed to save to localStorage:", error);
+  }
+}
+
+export function mergeSave<T extends Record<string, unknown>>(key: string, partial: Partial<T>): void {
+  try {
+    const existing = load<T>(key, {} as T);
+    const merged = { ...existing, ...partial };
+    save(key, merged as any);
+  } catch (error) {
+    console.error("Failed to merge save to localStorage:", error);
+  }
+}
+
+// ===========================
 // Tipos de dados persistidos
+// ===========================
+
 export interface SetProgress {
   kg: number;
   reps: number;
@@ -314,32 +584,6 @@ export function getNutritionGoals(): NutritionGoals {
 
 export function saveNutritionGoals(goals: NutritionGoals): void {
   save(STORAGE_KEYS.NUTRITION_GOALS, goals);
-
-  // CRITICAL: Also update AppState to ensure cloud sync works
-  try {
-    const APP_STATE_KEY = "levelup.appState";
-    const storedAppState = localStorage.getItem(APP_STATE_KEY);
-    if (storedAppState) {
-      const appState = JSON.parse(storedAppState);
-      if (!appState.nutrition) {
-        appState.nutrition = {
-          targets: { kcal: 2000, protein: 150, carbs: 200, fats: 70 },
-          dietPlan: null,
-          dailyLogs: {},
-        };
-      }
-      appState.nutrition.targets = {
-        kcal: goals.kcalTarget,
-        protein: goals.pTarget,
-        carbs: goals.cTarget,
-        fats: goals.gTarget,
-      };
-      appState.updatedAt = Date.now();
-      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
-    }
-  } catch (error) {
-    console.error("Failed to update AppState with nutrition goals:", error);
-  }
 }
 
 export function getNutritionDiet(): NutritionDiet | null {
@@ -348,27 +592,6 @@ export function getNutritionDiet(): NutritionDiet | null {
 
 export function saveNutritionDiet(diet: NutritionDiet): void {
   save(STORAGE_KEYS.NUTRITION_DIET, diet);
-
-  // CRITICAL: Also update AppState to ensure cloud sync works
-  try {
-    const APP_STATE_KEY = "levelup.appState";
-    const storedAppState = localStorage.getItem(APP_STATE_KEY);
-    if (storedAppState) {
-      const appState = JSON.parse(storedAppState);
-      if (!appState.nutrition) {
-        appState.nutrition = {
-          targets: { kcal: 2000, protein: 150, carbs: 200, fats: 70 },
-          dietPlan: null,
-          dailyLogs: {},
-        };
-      }
-      appState.nutrition.dietPlan = diet;
-      appState.updatedAt = Date.now();
-      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
-    }
-  } catch (error) {
-    console.error("Failed to update AppState with nutrition diet:", error);
-  }
 }
 
 function getDateKey(): string {
@@ -409,12 +632,12 @@ export function getNutritionToday(): NutritionToday {
   let needsSave = false;
   for (const meal of stored.meals) {
     for (const entry of meal.entries) {
-      if (entry.planned === undefined) {
-        entry.planned = entry.source === "diet";
+      if ((entry as any).planned === undefined) {
+        (entry as any).planned = entry.source === "diet";
         needsSave = true;
       }
-      if (entry.consumed === undefined) {
-        entry.consumed = entry.source !== "diet";
+      if ((entry as any).consumed === undefined) {
+        (entry as any).consumed = entry.source !== "diet";
         needsSave = true;
       }
     }
@@ -456,30 +679,6 @@ export function resetNutritionToday(): void {
 
 export function saveNutritionToday(today: NutritionToday): void {
   save(STORAGE_KEYS.NUTRITION_TODAY, today);
-
-  // CRITICAL: Also update AppState to ensure cloud sync works
-  try {
-    const APP_STATE_KEY = "levelup.appState";
-    const storedAppState = localStorage.getItem(APP_STATE_KEY);
-    if (storedAppState) {
-      const appState = JSON.parse(storedAppState);
-      if (!appState.nutrition) {
-        appState.nutrition = {
-          targets: { kcal: 2000, protein: 150, carbs: 200, fats: 70 },
-          dietPlan: null,
-          dailyLogs: {},
-        };
-      }
-      if (!appState.nutrition.dailyLogs) {
-        appState.nutrition.dailyLogs = {};
-      }
-      appState.nutrition.dailyLogs[today.dateKey] = today;
-      appState.updatedAt = Date.now();
-      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
-    }
-  } catch (error) {
-    console.error("Failed to update AppState with nutrition today:", error);
-  }
 }
 
 export function addFoodToToday(
@@ -668,16 +867,7 @@ export function isMealComplete(mealId: string): boolean {
   return plannedItems.every((e) => e.consumed === true);
 }
 
-// Calcula totais planejados (dieta) para uma refeição
-export function getPlannedTotals(): { kcal: number; p: number; c: number; g: number } {
-  // Import circular - precisamos acessar foods de outra forma
-  // Esta função será implementada no componente
-  return { kcal: 0, p: 0, c: 0, g: 0 };
-}
-
 // ======= NUTRITION COMPLETION =======
-
-// getDateKey já está definida acima - reutilizamos
 
 export interface NutritionCompleted {
   dateKey: string;
@@ -799,86 +989,6 @@ export function saveExerciseSnapshot(
   save(STORAGE_KEYS.EXERCISE_HISTORY, history);
 }
 
-// Retorna o último desempenho de um exercício (melhor set válido)
-export function getLastExercisePerformance(exerciseId: string): { kg: number; reps: number; timestamp: string } | null {
-  const history = getExerciseHistory();
-  const snapshots = history[exerciseId];
-
-  if (!snapshots || snapshots.length === 0) return null;
-
-  const lastSnapshot = snapshots[0];
-
-  // Encontra o melhor set (maior kg × reps)
-  let bestSet = { kg: 0, reps: 0 };
-  for (const set of lastSnapshot.workSets) {
-    if (set.kg * set.reps > bestSet.kg * bestSet.reps) {
-      bestSet = set;
-    }
-  }
-
-  return {
-    kg: bestSet.kg,
-    reps: bestSet.reps,
-    timestamp: lastSnapshot.timestamp,
-  };
-}
-
-// Calcula sugestão de progressão para um exercício (meta dinâmica baseada no último treino)
-export function getProgressionSuggestion(exerciseId: string, repsRange: string): ProgressionSuggestion {
-  const history = getExerciseHistory();
-  const snapshots = history[exerciseId];
-
-  // Parse repsRange (ex: "6–10" ou "8-12")
-  const rangeMatch = repsRange.match(/(\d+)[–-](\d+)/);
-  const lowerLimit = rangeMatch ? parseInt(rangeMatch[1]) : 6;
-  const upperLimit = rangeMatch ? parseInt(rangeMatch[2]) : 10;
-
-  // Sem histórico
-  if (!snapshots || snapshots.length === 0) {
-    return {
-      status: "return",
-      statusLabel: "Retorno",
-      statusIcon: "🕒",
-      message: "Primeiro treino deste exercício",
-      metaHoje: `Faça ${lowerLimit}–${upperLimit} reps nas séries válidas`,
-    };
-  }
-
-  const lastSnapshot = snapshots[0];
-  const workSets = lastSnapshot.workSets;
-
-  // Verifica se todas as séries atingiram o topo da faixa
-  const allAtTop = workSets.length > 0 && workSets.every((set) => set.reps >= upperLimit);
-
-  // Encontra a carga usada (maior kg) e a maior reps
-  const maxKg = Math.max(...workSets.map((s) => s.kg), 0);
-  const maxReps = Math.max(...workSets.map((s) => s.reps), lowerLimit);
-
-  if (allAtTop) {
-    const suggestedLoad = Math.round(maxKg * 1.025 * 2) / 2; // Arredonda para 0.5kg
-    return {
-      status: "ready",
-      statusLabel: "Pronto p/ subir",
-      statusIcon: "✅",
-      message: `Sugestão: +2,5% → ${suggestedLoad} kg na próxima`,
-      metaHoje: `Manter ${upperLimit} reps com ${maxKg} kg (confirmar)`,
-      suggestedNextLoad: suggestedLoad,
-    };
-  }
-
-  // Meta dinâmica: tentar subir reps baseado no último treino
-  const targetReps = Math.min(maxReps + 1, upperLimit);
-  const repsNeeded = targetReps === upperLimit ? upperLimit : `${targetReps}–${upperLimit}`;
-
-  return {
-    status: "maintain",
-    statusLabel: "Manter",
-    statusIcon: "⏳",
-    message: "Mantenha a carga e tente aumentar reps",
-    metaHoje: `Tentar ${repsNeeded} reps com ${maxKg} kg`,
-  };
-}
-
 // Obtém sugestões salvas (quando usuário clica "Aplicar sugestão")
 export function getProgressionSuggestions(): ProgressionSuggestions {
   return load(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, {});
@@ -894,40 +1004,8 @@ export function saveProgressionSuggestion(exerciseId: string, suggestedNextLoad:
   save(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, suggestions);
 }
 
-// Formata timestamp para data relativa (ex: "há 3 dias")
-export function formatRelativeDate(timestamp: string): string {
-  const now = new Date();
-  const date = new Date(timestamp);
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return "hoje";
-  if (diffDays === 1) return "ontem";
-  if (diffDays < 7) return `há ${diffDays} dias`;
-  if (diffDays < 30) return `há ${Math.floor(diffDays / 7)} sem.`;
-  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
-// Obtém o último treino de um workout específico
-export function getLastWorkoutDate(workoutId: string): string | null {
-  const history = getExerciseHistory();
-
-  // Procura qualquer exercício deste workout
-  for (const exerciseId in history) {
-    const snapshots = history[exerciseId];
-    for (const snapshot of snapshots) {
-      if (snapshot.workoutId === workoutId) {
-        return snapshot.timestamp;
-      }
-    }
-  }
-
-  return null;
-}
-
 // ======= USER WORKOUT PLAN =======
-
-import { workouts as defaultWorkouts, type Workout, type Exercise, type SetData } from "@/data/workouts";
+import { workouts as defaultWorkouts, type Workout, type SetData } from "@/data/workouts";
 
 export interface UserExercise {
   id: string;
@@ -947,7 +1025,7 @@ export interface UserWorkout {
   titulo: string;
   duracaoEstimada: number;
   exercicios: UserExercise[];
-  scheduledDays?: number[]; // Dias da semana: 0=Segunda, 1=Terça, ..., 6=Domingo
+  scheduledDays?: number[];
 }
 
 export interface UserWorkoutPlan {
@@ -955,7 +1033,6 @@ export interface UserWorkoutPlan {
   updatedAt: string;
 }
 
-// Converte workout padrão para formato de usuário
 function convertDefaultWorkout(workout: Workout): UserWorkout {
   return {
     id: workout.id,
@@ -975,16 +1052,13 @@ function convertDefaultWorkout(workout: Workout): UserWorkout {
   };
 }
 
-// Obtém plano de treino do usuário (ou padrão se não existir)
 export function getUserWorkoutPlan(): UserWorkoutPlan {
   const stored = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
 
-  // ✅ Se tiver workouts, ok
   if (stored && Array.isArray(stored.workouts) && stored.workouts.length > 0) {
     return stored;
   }
 
-  // ✅ Se existir mas vier vazio, tratamos como inválido e removemos
   if (stored && Array.isArray(stored.workouts) && stored.workouts.length === 0) {
     try {
       localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
@@ -993,7 +1067,6 @@ export function getUserWorkoutPlan(): UserWorkoutPlan {
     }
   }
 
-  // Retorna plano padrão convertido
   const defaultPlan: UserWorkoutPlan = {
     workouts: Object.values(defaultWorkouts).map(convertDefaultWorkout),
     updatedAt: new Date().toISOString(),
@@ -1002,69 +1075,17 @@ export function getUserWorkoutPlan(): UserWorkoutPlan {
   return defaultPlan;
 }
 
-// Salva plano de treino customizado do usuário
 export function saveUserWorkoutPlan(plan: UserWorkoutPlan): void {
   plan.updatedAt = new Date().toISOString();
   save(STORAGE_KEYS.USER_WORKOUT_PLAN, plan);
-
-  // CRITICAL: Also update AppState to ensure cloud sync works
-  try {
-    const APP_STATE_KEY = "levelup.appState";
-    const storedAppState = localStorage.getItem(APP_STATE_KEY);
-    if (storedAppState) {
-      const appState = JSON.parse(storedAppState);
-      appState.plan = plan;
-      appState.updatedAt = Date.now();
-      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
-    }
-  } catch (error) {
-    console.error("Failed to update AppState with workout plan:", error);
-  }
 }
 
-// Reseta plano para o padrão
 export function resetUserWorkoutPlan(): void {
   localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
 }
 
-// Verifica se existe plano customizado
 export function hasCustomWorkoutPlan(): boolean {
   return load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null) !== null;
-}
-
-// Obtém um workout específico do plano do usuário
-export function getUserWorkout(id: string): UserWorkout | undefined {
-  const plan = getUserWorkoutPlan();
-  return plan.workouts.find((w) => w.id === id);
-}
-
-// Obtém um exercício específico do plano do usuário
-export function getUserExercise(workoutId: string, exerciseId: string): UserExercise | undefined {
-  const workout = getUserWorkout(workoutId);
-  if (!workout) return undefined;
-  return workout.exercicios.find((e) => e.id === exerciseId);
-}
-
-// Obtém próximo exercício do plano do usuário
-export function getUserNextExercise(workoutId: string, currentExerciseId: string): UserExercise | null {
-  const workout = getUserWorkout(workoutId);
-  if (!workout) return null;
-
-  const currentIndex = workout.exercicios.findIndex((e) => e.id === currentExerciseId);
-  if (currentIndex === -1 || currentIndex >= workout.exercicios.length - 1) {
-    return null;
-  }
-
-  return workout.exercicios[currentIndex + 1];
-}
-
-// Verifica se é o último exercício do workout
-export function isUserLastExercise(workoutId: string, exerciseId: string): boolean {
-  const workout = getUserWorkout(workoutId);
-  if (!workout) return true;
-
-  const lastExercise = workout.exercicios[workout.exercicios.length - 1];
-  return lastExercise?.id === exerciseId;
 }
 
 // ======= WEIGHT HISTORY =======
@@ -1084,25 +1105,11 @@ export function saveWeight(weight: number): void {
     weight,
     timestamp: new Date().toISOString(),
   });
-  save(STORAGE_KEYS.WEIGHT_HISTORY, history.slice(0, 100)); // Keep last 100 entries
+  save(STORAGE_KEYS.WEIGHT_HISTORY, history.slice(0, 100));
 
-  // Mark quest as done
   const quests = getQuests();
   quests.registrarPesoDone = true;
   saveQuests(quests);
-}
-
-export function hasWeightThisWeek(): boolean {
-  const history = getWeightHistory();
-  if (history.length === 0) return false;
-
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  const lastEntry = new Date(history[0].timestamp);
-  return lastEntry >= startOfWeek;
 }
 
 // ======= WORKOUTS COMPLETED =======
@@ -1127,327 +1134,7 @@ export function saveWorkoutCompleted(workoutId: string, totalVolume: number): vo
   save(STORAGE_KEYS.WORKOUTS_COMPLETED, completed);
 }
 
-export function getTotalWorkoutsCompleted(): number {
-  return getWorkoutsCompleted().length;
-}
-
-export function getTotalVolume(): number {
-  return getWorkoutsCompleted().reduce((sum, w) => sum + w.totalVolume, 0);
-}
-
-// Count PRs (simplified: count unique exercises that have history)
-export function getPRsCount(): number {
-  const history = getExerciseHistory();
-  return Object.keys(history).length;
-}
-
-// ======= ACHIEVEMENTS SYSTEM =======
-
-export interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  color: string;
-  xp: number;
-  unlocked: boolean;
-  progress?: number;
-  target?: number;
-}
-
-export function getAchievements(): Achievement[] {
-  const profile = getProfile();
-  const totalWorkouts = getTotalWorkoutsCompleted();
-  const prsCount = getPRsCount();
-
-  return [
-    {
-      id: "streak-3",
-      name: "Consistente",
-      description: "Mantenha streak de 3 dias",
-      icon: "flame",
-      color: "from-orange-500/20 to-orange-700/20",
-      xp: 50,
-      unlocked: profile.streakDias >= 3,
-      progress: Math.min(profile.streakDias, 3),
-      target: 3,
-    },
-    {
-      id: "streak-7",
-      name: "Semana de Fogo",
-      description: "Mantenha streak de 7 dias",
-      icon: "flame",
-      color: "from-orange-500/20 to-red-700/20",
-      xp: 150,
-      unlocked: profile.streakDias >= 7,
-      progress: Math.min(profile.streakDias, 7),
-      target: 7,
-    },
-    {
-      id: "streak-30",
-      name: "Máquina Imparável",
-      description: "Mantenha streak de 30 dias",
-      icon: "crown",
-      color: "from-yellow-500/20 to-amber-700/20",
-      xp: 500,
-      unlocked: profile.streakDias >= 30,
-      progress: Math.min(profile.streakDias, 30),
-      target: 30,
-    },
-    {
-      id: "workouts-1",
-      name: "Primeiro Treino",
-      description: "Complete seu primeiro treino",
-      icon: "dumbbell",
-      color: "from-blue-500/20 to-blue-700/20",
-      xp: 50,
-      unlocked: totalWorkouts >= 1,
-      progress: Math.min(totalWorkouts, 1),
-      target: 1,
-    },
-    {
-      id: "workouts-10",
-      name: "Dedicado",
-      description: "Complete 10 treinos",
-      icon: "dumbbell",
-      color: "from-blue-500/20 to-indigo-700/20",
-      xp: 200,
-      unlocked: totalWorkouts >= 10,
-      progress: Math.min(totalWorkouts, 10),
-      target: 10,
-    },
-    {
-      id: "workouts-50",
-      name: "Atleta",
-      description: "Complete 50 treinos",
-      icon: "trophy",
-      color: "from-purple-500/20 to-purple-700/20",
-      xp: 500,
-      unlocked: totalWorkouts >= 50,
-      progress: Math.min(totalWorkouts, 50),
-      target: 50,
-    },
-    {
-      id: "workouts-100",
-      name: "Lenda",
-      description: "Complete 100 treinos",
-      icon: "crown",
-      color: "from-yellow-500/20 to-orange-700/20",
-      xp: 1000,
-      unlocked: totalWorkouts >= 100,
-      progress: Math.min(totalWorkouts, 100),
-      target: 100,
-    },
-    {
-      id: "prs-1",
-      name: "Primeiro PR",
-      description: "Registre seu primeiro exercício",
-      icon: "trending",
-      color: "from-green-500/20 to-green-700/20",
-      xp: 50,
-      unlocked: prsCount >= 1,
-      progress: Math.min(prsCount, 1),
-      target: 1,
-    },
-    {
-      id: "prs-5",
-      name: "Progredindo",
-      description: "Registre 5 exercícios diferentes",
-      icon: "trending",
-      color: "from-green-500/20 to-emerald-700/20",
-      xp: 150,
-      unlocked: prsCount >= 5,
-      progress: Math.min(prsCount, 5),
-      target: 5,
-    },
-    {
-      id: "prs-10",
-      name: "Mestre da Progressão",
-      description: "Registre 10 exercícios diferentes",
-      icon: "star",
-      color: "from-amber-500/20 to-yellow-700/20",
-      xp: 300,
-      unlocked: prsCount >= 10,
-      progress: Math.min(prsCount, 10),
-      target: 10,
-    },
-    {
-      id: "level-5",
-      name: "Nível 5",
-      description: "Alcance o nível 5",
-      icon: "zap",
-      color: "from-cyan-500/20 to-cyan-700/20",
-      xp: 100,
-      unlocked: profile.level >= 5,
-      progress: Math.min(profile.level, 5),
-      target: 5,
-    },
-    {
-      id: "level-10",
-      name: "Nível 10",
-      description: "Alcance o nível 10",
-      icon: "zap",
-      color: "from-indigo-500/20 to-indigo-700/20",
-      xp: 250,
-      unlocked: profile.level >= 10,
-      progress: Math.min(profile.level, 10),
-      target: 10,
-    },
-  ];
-}
-
-// Check if nutrition quest should be marked done (at least 1 consumed item today)
-export function checkNutritionQuestStatus(): boolean {
-  const today = getNutritionToday();
-  for (const meal of today.meals) {
-    for (const entry of meal.entries) {
-      if (entry.consumed) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// Sync quests status based on real data
-export function syncQuestsStatus(): void {
-  const quests = getQuests();
-
-  // Check nutrition
-  quests.registrarAlimentacaoDone = checkNutritionQuestStatus();
-
-  // Check weight (weekly)
-  quests.registrarPesoDone = hasWeightThisWeek();
-
-  // Treino do dia is already updated when workout is completed
-
-  saveQuests(quests);
-}
-
-// ======= PROGRESS ANALYTICS =======
-
-// Calcula e1RM usando fórmula Epley: peso * (1 + reps/30)
-export function calculateE1RM(kg: number, reps: number): number {
-  if (reps <= 0 || kg <= 0) return 0;
-  return Math.round(kg * (1 + reps / 30));
-}
-
-// Retorna dados de e1RM por sessão para um exercício
-export interface E1RMDataPoint {
-  date: string;
-  dateLabel: string;
-  e1rm: number;
-  kg: number;
-  reps: number;
-}
-
-export function getE1RMHistory(exerciseId: string): E1RMDataPoint[] {
-  const history = getExerciseHistory();
-  const snapshots = history[exerciseId];
-
-  if (!snapshots || snapshots.length === 0) return [];
-
-  return snapshots
-    .map((snapshot) => {
-      // Melhor série (maior e1RM)
-      let best = { kg: 0, reps: 0, e1rm: 0 };
-      for (const set of snapshot.workSets) {
-        const e1rm = calculateE1RM(set.kg, set.reps);
-        if (e1rm > best.e1rm) {
-          best = { kg: set.kg, reps: set.reps, e1rm };
-        }
-      }
-
-      const date = new Date(snapshot.timestamp);
-      return {
-        date: snapshot.timestamp,
-        dateLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        e1rm: best.e1rm,
-        kg: best.kg,
-        reps: best.reps,
-      };
-    })
-    .reverse(); // Ordem cronológica
-}
-
-// Volume semanal
-export interface WeeklyVolumeDataPoint {
-  weekLabel: string;
-  weekStart: string;
-  volume: number;
-}
-
-export function getWeeklyVolume(days: number = 90): WeeklyVolumeDataPoint[] {
-  const completed = getWorkoutsCompleted();
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-
-  // Agrupar por semana
-  const weekMap = new Map<string, number>();
-
-  for (const workout of completed) {
-    const date = new Date(workout.timestamp);
-    if (date < cutoff) continue;
-
-    // Início da semana (domingo)
-    const startOfWeek = new Date(date);
-    startOfWeek.setDate(date.getDate() - date.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    const weekKey = startOfWeek.toISOString().split("T")[0];
-
-    weekMap.set(weekKey, (weekMap.get(weekKey) || 0) + workout.totalVolume);
-  }
-
-  // Converter para array ordenado
-  return Array.from(weekMap.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([weekStart, volume]) => {
-      const date = new Date(weekStart);
-      return {
-        weekLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        weekStart,
-        volume,
-      };
-    });
-}
-
-// Treinos nos últimos N dias
-export function getWorkoutsInPeriod(days: number): number {
-  const completed = getWorkoutsCompleted();
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-
-  return completed.filter((w) => new Date(w.timestamp) >= cutoff).length;
-}
-
-// Consistência (% dias com treino nos últimos N dias)
-export function getConsistency(days: number): number {
-  const workouts = getWorkoutsInPeriod(days);
-  // Considera 4 treinos por semana como 100%
-  const expectedWorkouts = Math.round((days / 7) * 4);
-  return Math.min(Math.round((workouts / expectedWorkouts) * 100), 100);
-}
-
-// Lista de exercícios com histórico
-export function getExercisesWithHistory(): { id: string; name: string }[] {
-  const history = getExerciseHistory();
-  const plan = getUserWorkoutPlan();
-
-  const exerciseMap = new Map<string, string>();
-
-  // Mapear IDs para nomes do plano do usuário
-  for (const workout of plan.workouts) {
-    for (const exercise of workout.exercicios) {
-      if (history[exercise.id]) {
-        exerciseMap.set(exercise.id, exercise.nome);
-      }
-    }
-  }
-
-  return Array.from(exerciseMap.entries()).map(([id, name]) => ({ id, name }));
-}
-
-// ======= NUTRITION DAILY LOGS =======
+// ======= NUTRITION DAILY LOGS (para gráficos) =======
 
 export interface NutritionDailyLog {
   dateKey: string;
@@ -1463,115 +1150,18 @@ export function getNutritionLogs(): NutritionDailyLog[] {
 
 export function saveNutritionLog(log: NutritionDailyLog): void {
   const logs = getNutritionLogs();
-  // Atualizar ou adicionar
   const existingIndex = logs.findIndex((l) => l.dateKey === log.dateKey);
   if (existingIndex >= 0) {
     logs[existingIndex] = log;
   } else {
     logs.unshift(log);
   }
-  // Manter últimos 90 dias
   save("levelup.nutritionLogs", logs.slice(0, 90));
 }
 
-// Consolidar nutrição do dia atual e salvar log
-export function consolidateNutritionToday(): NutritionDailyLog | null {
-  // Importar foods dinamicamente para evitar circular dependency
-  const today = getNutritionToday();
+// ======= PROGRESS ANALYTICS =======
 
-  // Calcular totais consumidos (precisamos do foods)
-  // Esta função será chamada do componente que tem acesso ao foods
-  return null;
-}
-
-// Dados para gráfico de nutrição
-export interface NutritionChartData {
-  date: string;
-  dateLabel: string;
-  kcal: number;
-  kcalMeta: number;
-  protein: number;
-  proteinMeta: number;
-  carbs: number;
-  carbsMeta: number;
-  fat: number;
-  fatMeta: number;
-}
-
-export function getNutritionChartData(days: number): NutritionChartData[] {
-  const logs = getNutritionLogs();
-  const goals = getNutritionGoals();
-
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  const cutoffKey = cutoff.toISOString().split("T")[0];
-
-  return logs
-    .filter((l) => l.dateKey >= cutoffKey)
-    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
-    .map((log) => {
-      const date = new Date(log.dateKey);
-      return {
-        date: log.dateKey,
-        dateLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        kcal: log.kcal,
-        kcalMeta: goals.kcalTarget,
-        protein: log.protein,
-        proteinMeta: goals.pTarget,
-        carbs: log.carbs,
-        carbsMeta: goals.cTarget,
-        fat: log.fat,
-        fatMeta: goals.gTarget,
-      };
-    });
-}
-
-// Peso - variação semanal
-export function getWeightVariation(): { current: number; previous: number; delta: number } | null {
-  const history = getWeightHistory();
-  if (history.length === 0) return null;
-
-  const current = history[0].weight;
-
-  // Encontrar peso de ~7 dias atrás
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-
-  let previous = current;
-  for (const entry of history) {
-    const entryDate = new Date(entry.timestamp);
-    if (entryDate <= weekAgo) {
-      previous = entry.weight;
-      break;
-    }
-  }
-
-  return {
-    current,
-    previous,
-    delta: Math.round((current - previous) * 10) / 10,
-  };
-}
-
-// Dados de peso para gráfico
-export interface WeightChartData {
-  date: string;
-  dateLabel: string;
-  weight: number;
-}
-
-export function getWeightChartData(): WeightChartData[] {
-  const history = getWeightHistory();
-
-  return history
-    .slice(0, 30) // Últimos 30 registros
-    .map((entry) => {
-      const date = new Date(entry.timestamp);
-      return {
-        date: entry.timestamp,
-        dateLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        weight: entry.weight,
-      };
-    })
-    .reverse(); // Ordem cronológica
+export function calculateE1RM(kg: number, reps: number): number {
+  if (reps <= 0 || kg <= 0) return 0;
+  return Math.round(kg * (1 + reps / 30));
 }

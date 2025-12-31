@@ -640,6 +640,22 @@ export function applyDietToToday(): void {
   saveNutritionToday(today);
 }
 
+export function toggleAllMealConsumed(mealId: string): void {
+  const today = getNutritionToday();
+  const meal = today.meals.find((m) => m.id === mealId);
+  if (!meal || meal.entries.length === 0) return;
+
+  // Check if all are already consumed
+  const allConsumed = meal.entries.every((e) => e.consumed);
+  
+  // Toggle all to the opposite state
+  for (const entry of meal.entries) {
+    entry.consumed = !allConsumed;
+  }
+  
+  saveNutritionToday(today);
+}
+
 // ============= TREINO PROGRESSO =============
 
 export function getTreinoProgresso(): TreinoProgresso {

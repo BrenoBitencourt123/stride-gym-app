@@ -104,11 +104,22 @@ export function commitNutritionToday(today: NutritionToday): void {
 }
 
 export function commitNutritionTotalsLog(log: NutritionTotalsLog): void {
-  // 1. Save to legacy logs array
+  // 0. Check if log already exists with same values (avoid unnecessary saves/syncs)
   const logs = load<NutritionTotalsLog[]>(STORAGE_KEYS.NUTRITION_LOGS, []);
-  const existing = logs.findIndex((l) => l.dateKey === log.dateKey);
-  if (existing >= 0) {
-    logs[existing] = log;
+  const existing = logs.find((l) => l.dateKey === log.dateKey);
+  if (existing && 
+      existing.kcal === log.kcal && 
+      existing.p === log.p && 
+      existing.c === log.c && 
+      existing.g === log.g) {
+    // No change - skip save to avoid sync spam
+    return;
+  }
+  
+  // 1. Save to legacy logs array
+  const existingIdx = logs.findIndex((l) => l.dateKey === log.dateKey);
+  if (existingIdx >= 0) {
+    logs[existingIdx] = log;
   } else {
     logs.push(log);
   }

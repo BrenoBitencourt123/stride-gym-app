@@ -220,9 +220,9 @@ const ExerciseLogging = () => {
               {/* Último treino */}
               <p className="text-sm text-muted-foreground mb-1">
                 Último treino:{" "}
-                {lastPerformance ? (
+                {lastPerformance && lastPerformance.workSets?.[0] ? (
                   <span className="text-foreground font-medium">
-                    {lastPerformance.kg} kg × {lastPerformance.reps}
+                    {lastPerformance.workSets[0].kg} kg × {lastPerformance.workSets[0].reps}
                   </span>
                 ) : (
                   <span className="text-muted-foreground">—</span>

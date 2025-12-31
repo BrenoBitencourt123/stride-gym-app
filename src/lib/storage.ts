@@ -1165,3 +1165,466 @@ export function calculateE1RM(kg: number, reps: number): number {
   if (reps <= 0 || kg <= 0) return 0;
   return Math.round(kg * (1 + reps / 30));
 }
+
+// ======= MISSING FUNCTIONS =======
+
+// Busca um treino do plano do usuário pelo ID
+export function getUserWorkout(workoutId: string): UserWorkout | null {
+  const plan = getUserWorkoutPlan();
+  return plan.workouts.find((w) => w.id === workoutId) || null;
+}
+
+// Busca um exercício específico dentro de um treino
+export function getUserExercise(workoutId: string, exerciseId: string): UserExercise | null {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return null;
+  return workout.exercicios.find((e) => e.id === exerciseId) || null;
+}
+
+// Retorna o próximo exercício de um treino
+export function getUserNextExercise(workoutId: string, currentExerciseId: string): UserExercise | null {
+  const workout = getUserWorkout(workoutId);
+  if (!workout) return null;
+  const currentIndex = workout.exercicios.findIndex((e) => e.id === currentExerciseId);
+  if (currentIndex === -1 || currentIndex >= workout.exercicios.length - 1) return null;
+  return workout.exercicios[currentIndex + 1];
+}
+
+// Verifica se é o último exercício do treino
+export function isUserLastExercise(workoutId: string, exerciseId: string): boolean {
+  const workout = getUserWorkout(workoutId);
+  if (!workout || workout.exercicios.length === 0) return false;
+  return workout.exercicios[workout.exercicios.length - 1].id === exerciseId;
+}
+
+// Obtém última performance de um exercício
+export function getLastExercisePerformance(exerciseId: string): ExerciseSnapshot | null {
+  const history = getExerciseHistory();
+  const exerciseHistory = history[exerciseId];
+  if (!exerciseHistory || exerciseHistory.length === 0) return null;
+  return exerciseHistory[0];
+}
+
+// Obtém sugestão de progressão para um exercício
+export function getProgressionSuggestion(exerciseId: string, repsRange: string): ProgressionSuggestion {
+  const lastPerformance = getLastExercisePerformance(exerciseId);
+  const savedSuggestions = getProgressionSuggestions();
+  const savedSuggestion = savedSuggestions[exerciseId];
+
+  // Padrão: manter
+  const defaultSuggestion: ProgressionSuggestion = {
+    status: "maintain",
+    statusLabel: "Manter carga",
+    statusIcon: "🔄",
+    message: "Primeira sessão! Comece com uma carga confortável.",
+    metaHoje: repsRange,
+  };
+
+  if (!lastPerformance) return defaultSuggestion;
+
+  // Analisa a última performance
+  const lastSets = lastPerformance.workSets;
+  if (lastSets.length === 0) return defaultSuggestion;
+
+  const avgReps = lastSets.reduce((sum, s) => sum + s.reps, 0) / lastSets.length;
+  const lastKg = lastSets[0]?.kg || 0;
+  const [minReps, maxReps] = repsRange.split("–").map((r) => parseInt(r.trim()));
+
+  // Se tem sugestão salva, usar ela
+  if (savedSuggestion) {
+    return {
+      status: "ready",
+      statusLabel: "Progressão aplicada",
+      statusIcon: "✅",
+      message: `Carga sugerida: ${savedSuggestion.suggestedNextLoad}kg`,
+      metaHoje: repsRange,
+      suggestedNextLoad: savedSuggestion.suggestedNextLoad,
+    };
+  }
+
+  // Lógica de progressão
+  if (avgReps >= maxReps) {
+    const suggestedLoad = Math.round(lastKg * 1.025 * 2) / 2; // +2.5%, arredonda para 0.5kg
+    return {
+      status: "ready",
+      statusLabel: "Pronto para progredir",
+      statusIcon: "🔥",
+      message: `Atingiu ${maxReps} reps! Sugiro aumentar para ${suggestedLoad}kg`,
+      metaHoje: repsRange,
+      suggestedNextLoad: suggestedLoad,
+    };
+  }
+
+  if (avgReps < minReps) {
+    return {
+      status: "return",
+      statusLabel: "Consolidar",
+      statusIcon: "🎯",
+      message: `Média de ${avgReps.toFixed(1)} reps. Mantenha ${lastKg}kg até atingir ${minReps}+ reps.`,
+      metaHoje: repsRange,
+    };
+  }
+
+  return {
+    status: "maintain",
+    statusLabel: "Manter carga",
+    statusIcon: "🔄",
+    message: `Continue com ${lastKg}kg até atingir ${maxReps} reps em todas as séries.`,
+    metaHoje: repsRange,
+  };
+}
+
+// Formata data relativa
+export function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  if (diffDays < 7) return `${diffDays} dias atrás`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} semana${diffDays >= 14 ? "s" : ""} atrás`;
+  return `${Math.floor(diffDays / 30)} mês${diffDays >= 60 ? "es" : ""} atrás`;
+}
+
+// Obtém data do último treino de um workout específico
+export function getLastWorkoutDate(workoutId: string): string | null {
+  const completed = getWorkoutsCompleted();
+  const lastWorkout = completed.find((w) => w.workoutId === workoutId);
+  return lastWorkout?.timestamp || null;
+}
+
+// ======= ACHIEVEMENTS =======
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  xp: number;
+  unlocked: boolean;
+  unlockedAt?: string;
+  progress?: number;
+  progressMax?: number;
+  target?: number;
+  color?: string;
+}
+
+export function getAchievements(): Achievement[] {
+  const workoutsCompleted = getWorkoutsCompleted().length;
+  const weightHistory = getWeightHistory();
+  const profile = getProfile();
+
+  const achievements: Achievement[] = [
+    {
+      id: "first-workout",
+      name: "Primeiro Treino",
+      description: "Complete seu primeiro treino",
+      icon: "dumbbell",
+      xp: 50,
+      unlocked: workoutsCompleted >= 1,
+      unlockedAt: workoutsCompleted >= 1 ? getWorkoutsCompleted()[workoutsCompleted - 1]?.timestamp : undefined,
+      color: "from-blue-500 to-blue-600",
+    },
+    {
+      id: "week-warrior",
+      name: "Guerreiro da Semana",
+      description: "Complete 5 treinos",
+      icon: "flame",
+      xp: 100,
+      unlocked: workoutsCompleted >= 5,
+      progress: Math.min(workoutsCompleted, 5),
+      progressMax: 5,
+      target: 5,
+      color: "from-orange-500 to-red-500",
+    },
+    {
+      id: "consistency-king",
+      name: "Rei da Consistência",
+      description: "Mantenha 7 dias de streak",
+      icon: "crown",
+      xp: 150,
+      unlocked: profile.streakDias >= 7,
+      progress: Math.min(profile.streakDias, 7),
+      progressMax: 7,
+      target: 7,
+      color: "from-yellow-500 to-amber-500",
+    },
+    {
+      id: "weight-tracker",
+      name: "Monitoramento",
+      description: "Registre seu peso 10 vezes",
+      icon: "scale",
+      xp: 75,
+      unlocked: weightHistory.length >= 10,
+      progress: Math.min(weightHistory.length, 10),
+      progressMax: 10,
+      target: 10,
+      color: "from-green-500 to-emerald-500",
+    },
+    {
+      id: "level-10",
+      name: "Nível 10",
+      description: "Alcance o nível 10",
+      icon: "star",
+      xp: 200,
+      unlocked: profile.level >= 10,
+      progress: Math.min(profile.level, 10),
+      progressMax: 10,
+      target: 10,
+      color: "from-purple-500 to-violet-500",
+    },
+    {
+      id: "month-master",
+      name: "Mestre do Mês",
+      description: "Complete 20 treinos",
+      icon: "trophy",
+      xp: 250,
+      unlocked: workoutsCompleted >= 20,
+      progress: Math.min(workoutsCompleted, 20),
+      progressMax: 20,
+      target: 20,
+      color: "from-primary to-primary/70",
+    },
+  ];
+
+  return achievements;
+}
+
+// ======= SYNC QUESTS STATUS =======
+
+export function syncQuestsStatus(): Quests {
+  const quests = getQuests();
+  const today = getDateKey();
+
+  // Verificar se treino foi feito hoje
+  const treinoHoje = getTreinoHoje();
+  if (treinoHoje?.completedAt) {
+    const completedDate = treinoHoje.completedAt.split("T")[0];
+    if (completedDate === today) {
+      quests.treinoDoDiaDone = true;
+    }
+  }
+
+  // Verificar se peso foi registrado hoje
+  const weightHistory = getWeightHistory();
+  if (weightHistory.length > 0) {
+    const lastWeight = weightHistory[0];
+    const weightDate = lastWeight.timestamp.split("T")[0];
+    if (weightDate === today) {
+      quests.registrarPesoDone = true;
+    }
+  }
+
+  // Verificar se alimentação foi registrada hoje
+  const nutritionToday = getNutritionToday();
+  if (nutritionToday.dateKey === today) {
+    const hasConsumedFood = nutritionToday.meals.some((m) => m.entries.some((e) => e.consumed));
+    if (hasConsumedFood) {
+      quests.registrarAlimentacaoDone = true;
+    }
+  }
+
+  saveQuests(quests);
+  return quests;
+}
+
+// ======= PROFILE STATS =======
+
+export function getTotalWorkoutsCompleted(): number {
+  return getWorkoutsCompleted().length;
+}
+
+export function getTotalVolume(): number {
+  const completed = getWorkoutsCompleted();
+  return completed.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
+}
+
+// ======= PROGRESS PAGE FUNCTIONS =======
+
+export interface E1RMDataPoint {
+  date: string;
+  e1rm: number;
+  exerciseName: string;
+}
+
+export function getE1RMHistory(exerciseId: string): (E1RMDataPoint & { dateLabel: string })[] {
+  const history = getExerciseHistory();
+  const exerciseHistory = history[exerciseId];
+  if (!exerciseHistory) return [];
+
+  return exerciseHistory
+    .map((snapshot) => {
+      let bestE1rm = 0;
+      for (const set of snapshot.workSets) {
+        const e1rm = calculateE1RM(set.kg, set.reps);
+        if (e1rm > bestE1rm) bestE1rm = e1rm;
+      }
+
+      const dateStr = snapshot.timestamp.split("T")[0];
+      return {
+        date: dateStr,
+        dateLabel: new Date(dateStr).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
+        e1rm: bestE1rm,
+        exerciseName: exerciseId,
+      };
+    })
+    .reverse();
+}
+
+export function getWeeklyVolume(days: number = 30): { week: string; weekLabel: string; volume: number }[] {
+  const completed = getWorkoutsCompleted();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  
+  const weeklyData: Record<string, number> = {};
+
+  completed
+    .filter((w) => new Date(w.timestamp) >= cutoff)
+    .forEach((w) => {
+      const date = new Date(w.timestamp);
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay());
+      const weekKey = weekStart.toISOString().split("T")[0];
+
+      weeklyData[weekKey] = (weeklyData[weekKey] || 0) + (w.totalVolume || 0);
+    });
+
+  return Object.entries(weeklyData)
+    .map(([week, volume]) => ({ 
+      week, 
+      weekLabel: new Date(week).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
+      volume 
+    }))
+    .sort((a, b) => a.week.localeCompare(b.week))
+    .slice(-8);
+}
+
+export function getWorkoutsInPeriod(days: number): number {
+  const completed = getWorkoutsCompleted();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return completed.filter((w) => new Date(w.timestamp) >= cutoff).length;
+}
+
+export function getConsistency(days: number = 30): number {
+  const completed = getWorkoutsCompleted();
+  if (completed.length < 2) return 0;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  const workoutsInPeriod = completed.filter((w) => new Date(w.timestamp) >= cutoff).length;
+  const weeksInPeriod = Math.ceil(days / 7);
+  const targetWorkouts = weeksInPeriod * 3; // 3x por semana
+
+  return Math.min(Math.round((workoutsInPeriod / targetWorkouts) * 100), 100);
+}
+
+export function getPRsCount(): number {
+  const history = getExerciseHistory();
+  let prs = 0;
+
+  Object.values(history).forEach((exerciseHistory) => {
+    if (exerciseHistory.length < 2) return;
+
+    let maxE1RM = 0;
+    exerciseHistory.forEach((snapshot) => {
+      snapshot.workSets.forEach((set) => {
+        const e1rm = calculateE1RM(set.kg, set.reps);
+        if (e1rm > maxE1RM) {
+          maxE1RM = e1rm;
+          prs++;
+        }
+      });
+    });
+  });
+
+  return prs;
+}
+
+export function getExercisesWithHistory(): { id: string; name: string }[] {
+  const history = getExerciseHistory();
+  const plan = getUserWorkoutPlan();
+  const result: { id: string; name: string }[] = [];
+
+  Object.keys(history).forEach((exerciseId) => {
+    for (const workout of plan.workouts) {
+      const exercise = workout.exercicios.find((e) => e.id === exerciseId);
+      if (exercise) {
+        result.push({ id: exerciseId, name: exercise.nome });
+        break;
+      }
+    }
+  });
+
+  return result;
+}
+
+export interface NutritionChartData {
+  date: string;
+  dateLabel: string;
+  kcal: number;
+  kcalMeta: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export function getNutritionChartData(days: number = 7): NutritionChartData[] {
+  const logs = getNutritionLogs();
+  const goals = getNutritionGoals();
+  
+  return logs
+    .slice(0, days)
+    .map((log) => ({
+      date: log.dateKey,
+      dateLabel: new Date(log.dateKey).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
+      kcalMeta: goals.kcalTarget,
+      kcal: log.kcal,
+      protein: log.protein,
+      carbs: log.carbs,
+      fat: log.fat,
+    }))
+    .reverse();
+}
+
+export interface WeightChartData {
+  date: string;
+  dateLabel: string;
+  weight: number;
+}
+
+export function getWeightChartData(days: number = 30): WeightChartData[] {
+  const history = getWeightHistory();
+  return history
+    .slice(0, days)
+    .map((entry) => {
+      const dateStr = entry.timestamp.split("T")[0];
+      return {
+        date: dateStr,
+        dateLabel: new Date(dateStr).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
+        weight: entry.weight,
+      };
+    })
+    .reverse();
+}
+
+export function getWeightVariation(): { current: number; variation: number; delta: number; trend: "up" | "down" | "stable" } {
+  const history = getWeightHistory();
+  if (history.length === 0) return { current: 0, variation: 0, delta: 0, trend: "stable" };
+
+  const current = history[0].weight;
+  if (history.length === 1) return { current, variation: 0, delta: 0, trend: "stable" };
+
+  const previous = history[Math.min(history.length - 1, 7)].weight;
+  const variation = Math.round((current - previous) * 10) / 10;
+
+  let trend: "up" | "down" | "stable" = "stable";
+  if (variation > 0.5) trend = "up";
+  else if (variation < -0.5) trend = "down";
+
+  return { current, variation, delta: variation, trend };
+}

@@ -127,7 +127,15 @@ const Progresso = () => {
 
   const prsCount = useMemo(() => getPRsCount(), [refreshKey]);
   const workoutsLast30 = useMemo(() => getWorkoutsInPeriod(30), [refreshKey]);
-  const consistency = useMemo(() => getConsistency(30), [refreshKey]);
+  const consistency = useMemo(() => {
+    const data = getConsistency(30);
+    if (data.length === 0) return 0;
+    // Calculate percentage based on expected 4 workouts per week
+    const totalWeeks = data.length;
+    const totalWorkouts = data.reduce((acc, d) => acc + d.count, 0);
+    const expectedPerWeek = 4;
+    return Math.min(100, Math.round((totalWorkouts / (totalWeeks * expectedPerWeek)) * 100));
+  }, [refreshKey]);
 
   // Dados de nutrição - consolidar dados do dia atual
   const nutritionData = useMemo(() => {
@@ -161,13 +169,13 @@ const Progresso = () => {
       saveNutritionLog({
         dateKey,
         kcal: Math.round(totalKcal),
-        protein: Math.round(totalProtein),
-        carbs: Math.round(totalCarbs),
-        fat: Math.round(totalFat),
+        p: Math.round(totalProtein),
+        c: Math.round(totalCarbs),
+        g: Math.round(totalFat),
       });
     }
 
-    return getNutritionChartData(parseInt(nutritionPeriod));
+    return getNutritionChartData();
   }, [nutritionPeriod, refreshKey]);
 
   // Dados de peso

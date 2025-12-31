@@ -182,9 +182,12 @@ const ExerciseLogging = () => {
   const progression = getProgressionSuggestion(exercicioId || "", exercise.repsRange);
 
   const handleApplySuggestion = () => {
-    if (progression.suggestedNextLoad) {
-      saveProgressionSuggestion(exercicioId || "", progression.suggestedNextLoad);
-      toast.success(`Sugestão salva: ${progression.suggestedNextLoad} kg`);
+    if (progression && progression.status === "ready") {
+      const suggestedLoad = parseFloat(progression.metaHoje.split(" ")[0]) || 0;
+      if (suggestedLoad > 0) {
+        saveProgressionSuggestion(exercicioId || "", suggestedLoad);
+        toast.success(`Sugestão salva: ${suggestedLoad} kg`);
+      }
     }
   };
 
@@ -251,18 +254,22 @@ const ExerciseLogging = () => {
           </div>
           
           {/* Sugestão dinâmica */}
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
-            <p className="text-xs text-muted-foreground">{progression.message}</p>
-            {progression.status === "ready" && progression.suggestedNextLoad && (
-              <button
-                onClick={handleApplySuggestion}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
-              >
-                <Sparkles className="w-3 h-3" />
-                Aplicar
-              </button>
-            )}
-          </div>
+          {progression && (
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
+              <p className="text-xs text-muted-foreground">
+                {progression.status === "ready" ? "Você está pronto para progredir!" : "Continue trabalhando na carga atual."}
+              </p>
+              {progression.status === "ready" && (
+                <button
+                  onClick={handleApplySuggestion}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Aplicar
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Warmup Card */}

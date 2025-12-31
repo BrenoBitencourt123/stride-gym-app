@@ -101,9 +101,9 @@ const CriarDieta = () => {
     setEditingItem({ mealId, index, foodId, quantidade, unidade });
   };
 
-  const handleSaveEdit = (newQuantity: number) => {
+  const handleSaveEdit = (newQuantity: number, newUnidade?: "g" | "un" | "ml" | "scoop") => {
     if (editingItem) {
-      updateFoodInDiet(editingItem.mealId, editingItem.index, newQuantity);
+      updateFoodInDiet(editingItem.mealId, editingItem.index, newQuantity, newUnidade || editingItem.unidade);
       setRefreshKey(k => k + 1);
       toast.success("Quantidade atualizada");
     }

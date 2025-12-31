@@ -314,6 +314,32 @@ export function getNutritionGoals(): NutritionGoals {
 
 export function saveNutritionGoals(goals: NutritionGoals): void {
   save(STORAGE_KEYS.NUTRITION_GOALS, goals);
+
+  // CRITICAL: Also update AppState to ensure cloud sync works
+  try {
+    const APP_STATE_KEY = "levelup.appState";
+    const storedAppState = localStorage.getItem(APP_STATE_KEY);
+    if (storedAppState) {
+      const appState = JSON.parse(storedAppState);
+      if (!appState.nutrition) {
+        appState.nutrition = {
+          targets: { kcal: 2000, protein: 150, carbs: 200, fats: 70 },
+          dietPlan: null,
+          dailyLogs: {},
+        };
+      }
+      appState.nutrition.targets = {
+        kcal: goals.kcalTarget,
+        protein: goals.pTarget,
+        carbs: goals.cTarget,
+        fats: goals.gTarget,
+      };
+      appState.updatedAt = Date.now();
+      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
+    }
+  } catch (error) {
+    console.error("Failed to update AppState with nutrition goals:", error);
+  }
 }
 
 export function getNutritionDiet(): NutritionDiet | null {
@@ -322,6 +348,27 @@ export function getNutritionDiet(): NutritionDiet | null {
 
 export function saveNutritionDiet(diet: NutritionDiet): void {
   save(STORAGE_KEYS.NUTRITION_DIET, diet);
+
+  // CRITICAL: Also update AppState to ensure cloud sync works
+  try {
+    const APP_STATE_KEY = "levelup.appState";
+    const storedAppState = localStorage.getItem(APP_STATE_KEY);
+    if (storedAppState) {
+      const appState = JSON.parse(storedAppState);
+      if (!appState.nutrition) {
+        appState.nutrition = {
+          targets: { kcal: 2000, protein: 150, carbs: 200, fats: 70 },
+          dietPlan: null,
+          dailyLogs: {},
+        };
+      }
+      appState.nutrition.dietPlan = diet;
+      appState.updatedAt = Date.now();
+      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
+    }
+  } catch (error) {
+    console.error("Failed to update AppState with nutrition diet:", error);
+  }
 }
 
 function getDateKey(): string {
@@ -409,6 +456,30 @@ export function resetNutritionToday(): void {
 
 export function saveNutritionToday(today: NutritionToday): void {
   save(STORAGE_KEYS.NUTRITION_TODAY, today);
+
+  // CRITICAL: Also update AppState to ensure cloud sync works
+  try {
+    const APP_STATE_KEY = "levelup.appState";
+    const storedAppState = localStorage.getItem(APP_STATE_KEY);
+    if (storedAppState) {
+      const appState = JSON.parse(storedAppState);
+      if (!appState.nutrition) {
+        appState.nutrition = {
+          targets: { kcal: 2000, protein: 150, carbs: 200, fats: 70 },
+          dietPlan: null,
+          dailyLogs: {},
+        };
+      }
+      if (!appState.nutrition.dailyLogs) {
+        appState.nutrition.dailyLogs = {};
+      }
+      appState.nutrition.dailyLogs[today.dateKey] = today;
+      appState.updatedAt = Date.now();
+      localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
+    }
+  } catch (error) {
+    console.error("Failed to update AppState with nutrition today:", error);
+  }
 }
 
 export function addFoodToToday(

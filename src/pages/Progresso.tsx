@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ArrowLeft, TrendingUp, TrendingDown, Dumbbell, Award, Calendar, Scale, CalendarCheck } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -45,7 +45,7 @@ import {
 } from "@/lib/progress";
 import { foods, FoodItem } from "@/data/foods";
 import { toast } from "sonner";
-import { useSyncTrigger } from "@/hooks/useSyncTrigger";
+import { CHANGE_EVENT } from "@/lib/localStore";
 
 const Progresso = () => {
   const [searchParams] = useSearchParams();
@@ -58,8 +58,7 @@ const Progresso = () => {
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-
-  const triggerSync = useSyncTrigger();
+  const [changedTick, setChangedTick] = useState(0);
 
   // Update tab when URL changes
   useEffect(() => {
@@ -68,6 +67,13 @@ const Progresso = () => {
       setActiveTab(tab);
     }
   }, [searchParams]);
+
+  // Listen for global change events
+  useEffect(() => {
+    const handleChange = () => setChangedTick((t) => t + 1);
+    window.addEventListener(CHANGE_EVENT, handleChange);
+    return () => window.removeEventListener(CHANGE_EVENT, handleChange);
+  }, []);
 
   // ✅ Recarrega dados quando o app volta pro foco (mobile) ou quando a aba volta a ficar visível
   useEffect(() => {
@@ -91,6 +97,55 @@ const Progresso = () => {
       window.removeEventListener("app:sync", bump as any);
     };
   }, []);
+
+  // ✅ Consolidate nutrition log ONLY when on nutrition tab and data changes
+  // This is a controlled side-effect, not inside render/useMemo
+  const lastSavedLogRef = useRef<string>("");
+  
+  useEffect(() => {
+    if (activeTab !== "nutricao") return;
+    
+    const today = getNutritionToday();
+    let totalKcal = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0;
+
+    for (const meal of today.meals) {
+      for (const entry of meal.entries) {
+        if (entry.consumed) {
+          const food = foods.find((f: FoodItem) => f.id === entry.foodId);
+          if (food) {
+            const multiplier = entry.quantidade / (food.porcaoBase || 100);
+            totalKcal += food.kcal * multiplier;
+            totalProtein += food.p * multiplier;
+            totalCarbs += food.c * multiplier;
+            totalFat += food.g * multiplier;
+          }
+        }
+      }
+    }
+
+    // Only save if there's actual consumption
+    if (totalKcal > 0) {
+      const dateKey = new Date().toISOString().split("T")[0];
+      const roundedKcal = Math.round(totalKcal);
+      const roundedP = Math.round(totalProtein);
+      const roundedC = Math.round(totalCarbs);
+      const roundedG = Math.round(totalFat);
+      
+      // Create fingerprint to avoid duplicate saves
+      const fingerprint = `${dateKey}-${roundedKcal}-${roundedP}-${roundedC}-${roundedG}`;
+      
+      if (fingerprint !== lastSavedLogRef.current) {
+        lastSavedLogRef.current = fingerprint;
+        saveNutritionLog({
+          dateKey,
+          kcal: roundedKcal,
+          p: roundedP,
+          c: roundedC,
+          g: roundedG,
+        });
+      }
+    }
+  }, [activeTab, changedTick, refreshKey]);
 
   // Weight progress data
   const weightStats = useMemo(() => getWeightStats(), [refreshKey]);
@@ -137,46 +192,10 @@ const Progresso = () => {
     return Math.min(100, Math.round((totalWorkouts / (totalWeeks * expectedPerWeek)) * 100));
   }, [refreshKey]);
 
-  // Dados de nutrição - consolidar dados do dia atual
+  // Dados de nutrição - PURE useMemo, no side effects!
   const nutritionData = useMemo(() => {
-    // Consolidar nutrição do dia atual antes de buscar dados
-    const today = getNutritionToday();
-    const goals = getNutritionGoals();
-
-    let totalKcal = 0,
-      totalProtein = 0,
-      totalCarbs = 0,
-      totalFat = 0;
-
-    for (const meal of today.meals) {
-      for (const entry of meal.entries) {
-        if (entry.consumed) {
-          const food = foods.find((f: FoodItem) => f.id === entry.foodId);
-          if (food) {
-            const multiplier = entry.quantidade / (food.porcaoBase || 100);
-            totalKcal += food.kcal * multiplier;
-            totalProtein += food.p * multiplier;
-            totalCarbs += food.c * multiplier;
-            totalFat += food.g * multiplier;
-          }
-        }
-      }
-    }
-
-    // Salvar log de hoje se houver consumo
-    if (totalKcal > 0) {
-      const dateKey = new Date().toISOString().split("T")[0];
-      saveNutritionLog({
-        dateKey,
-        kcal: Math.round(totalKcal),
-        p: Math.round(totalProtein),
-        c: Math.round(totalCarbs),
-        g: Math.round(totalFat),
-      });
-    }
-
     return getNutritionChartData();
-  }, [nutritionPeriod, refreshKey]);
+  }, [nutritionPeriod, refreshKey, changedTick]);
 
   // Dados de peso
   const weightData = useMemo(() => getWeightChartData(), [refreshKey]);
@@ -705,7 +724,6 @@ const Progresso = () => {
         onClose={() => setShowWeightModal(false)}
         onSaved={() => {
           setRefreshKey((k) => k + 1);
-          triggerSync();
         }}
       />
 
@@ -715,7 +733,6 @@ const Progresso = () => {
         onClose={() => setShowCheckinModal(false)}
         onApplied={() => {
           setRefreshKey((k) => k + 1);
-          triggerSync();
         }}
       />
 

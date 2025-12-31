@@ -1,7 +1,8 @@
-// appState.ts
+// src/lib/appState.ts
 // Centralized AppState type and migration logic
 
 import { STORAGE_KEYS, load, save } from "./storage";
+import { getWeekStart } from "./weekUtils";
 
 // ============= SET DATA TYPE =============
 
@@ -218,44 +219,6 @@ export interface AppState {
 const APP_STATE_KEY = "levelup.appState";
 const APP_STATE_VERSION = 1;
 
-// ============= HELPERS (CRITICAL FIX) =============
-
-function hasPlanWorkouts(plan?: UserWorkoutPlan | null): boolean {
-  return !!(plan && Array.isArray(plan.workouts) && plan.workouts.length > 0);
-}
-
-function readLegacyPlan(): UserWorkoutPlan | null {
-  const p = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
-  return hasPlanWorkouts(p) ? p : null;
-}
-
-/**
- * Se o AppState estiver com plan vazio, mas existir um plano salvo no legacy key,
- * "hidrata" o AppState com ele para evitar sobrescrever o plano do usuário.
- */
-function hydratePlanFromLegacy(state: AppState): { changed: boolean } {
-  const legacyPlan = readLegacyPlan();
-
-  // Se estado antigo não tiver plan (ou tiver vazio), mas o legacy tiver, puxa pra cá.
-  if (!state.plan || !hasPlanWorkouts(state.plan)) {
-    if (legacyPlan) {
-      state.plan = legacyPlan;
-      return { changed: true };
-    }
-  }
-
-  // Garantir que plan sempre exista no objeto (evita undefined em versões antigas)
-  if (!state.plan) {
-    state.plan = {
-      workouts: [],
-      updatedAt: new Date().toISOString(),
-    };
-    return { changed: true };
-  }
-
-  return { changed: false };
-}
-
 // Default values for NEW users (start at Level 1)
 const DEFAULT_PROFILE_NEW_USER: Profile = {
   xpAtual: 0,
@@ -283,6 +246,116 @@ const DEFAULT_NUTRITION_GOALS: NutritionGoals = {
   gTarget: 65,
 };
 
+// ============= HELPERS (CRITICAL FIX) =============
+
+function hasPlanWorkouts(plan?: UserWorkoutPlan | null): boolean {
+  return !!(plan && Array.isArray(plan.workouts) && plan.workouts.length > 0);
+}
+
+function readLegacyPlan(): UserWorkoutPlan | null {
+  const p = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
+  return hasPlanWorkouts(p) ? p : null;
+}
+
+/**
+ * Se o AppState estiver com plan vazio, mas existir um plano salvo no legacy key,
+ * "hidrata" o AppState com ele para evitar sobrescrever o plano do usuário.
+ */
+function hydratePlanFromLegacy(state: AppState): { changed: boolean } {
+  const legacyPlan = readLegacyPlan();
+
+  if (!state.plan || !hasPlanWorkouts(state.plan)) {
+    if (legacyPlan) {
+      state.plan = legacyPlan;
+      return { changed: true };
+    }
+  }
+
+  if (!state.plan) {
+    state.plan = {
+      workouts: [],
+      updatedAt: new Date().toISOString(),
+    };
+    return { changed: true };
+  }
+
+  return { changed: false };
+}
+
+// ===== NUTRITION HYDRATION (CRITICAL: makes diet/goals GLOBAL via AppState) =====
+
+function safeStringify(v: any): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return "";
+  }
+}
+
+function deepEqual(a: any, b: any): boolean {
+  return safeStringify(a) === safeStringify(b);
+}
+
+function hydrateNutritionFromLegacy(state: AppState): { changed: boolean } {
+  let changed = false;
+
+  if (!state.nutrition) {
+    state.nutrition = {
+      targets: { kcal: 2050, protein: 160, carbs: 200, fats: 65 },
+      dailyLogs: {},
+    };
+    changed = true;
+  }
+  if (!state.nutrition.targets) {
+    state.nutrition.targets = { kcal: 2050, protein: 160, carbs: 200, fats: 65 };
+    changed = true;
+  }
+  if (!state.nutrition.dailyLogs) {
+    state.nutrition.dailyLogs = {};
+    changed = true;
+  }
+
+  // 1) Goals -> targets
+  const legacyGoals = load<NutritionGoals>(STORAGE_KEYS.NUTRITION_GOALS, DEFAULT_NUTRITION_GOALS);
+  const legacyTargets = {
+    kcal: legacyGoals.kcalTarget,
+    protein: legacyGoals.pTarget,
+    carbs: legacyGoals.cTarget,
+    fats: legacyGoals.gTarget,
+  };
+
+  if (!deepEqual(state.nutrition.targets, legacyTargets)) {
+    state.nutrition.targets = legacyTargets;
+    changed = true;
+  }
+
+  // 2) Diet plan
+  const legacyDiet = load<NutritionDiet | null>(STORAGE_KEYS.NUTRITION_DIET, null);
+  if (legacyDiet && !deepEqual(state.nutrition.dietPlan, legacyDiet)) {
+    state.nutrition.dietPlan = legacyDiet;
+    changed = true;
+  }
+
+  // 3) Today -> dailyLogs
+  const legacyToday = load<NutritionToday | null>(STORAGE_KEYS.NUTRITION_TODAY, null);
+  if (legacyToday) {
+    const existing = state.nutrition.dailyLogs[legacyToday.dateKey];
+    if (!existing || !deepEqual(existing, legacyToday)) {
+      state.nutrition.dailyLogs[legacyToday.dateKey] = legacyToday;
+      changed = true;
+    }
+  }
+
+  return { changed };
+}
+
+function hydrateFromLegacy(state: AppState): { changed: boolean } {
+  let changed = false;
+  changed = hydratePlanFromLegacy(state).changed || changed;
+  changed = hydrateNutritionFromLegacy(state).changed || changed;
+  return { changed };
+}
+
 // ============= MIGRATION =============
 
 function migrateFromLegacy(): AppState {
@@ -307,7 +380,6 @@ function migrateFromLegacy(): AppState {
     dailyLogs[nutritionToday.dateKey] = nutritionToday;
   }
 
-  // ⚠️ Importante: se o legacy tiver plan vazio, tratamos como "sem plan"
   const planFromLegacy = hasPlanWorkouts(userPlan) ? userPlan : null;
 
   const defaultPlan: UserWorkoutPlan = planFromLegacy || {
@@ -360,8 +432,8 @@ function migrateFromLegacy(): AppState {
     progressionSuggestions,
   };
 
-  // ✅ Garantir que, se existir legacy plan, o AppState não fique vazio
-  hydratePlanFromLegacy(state);
+  // ✅ CRITICAL: keep legacy plan + legacy nutrition inside AppState
+  hydrateFromLegacy(state);
 
   return state;
 }
@@ -372,8 +444,7 @@ export function getLocalState(): AppState {
   const stored = load<AppState | null>(APP_STATE_KEY, null);
 
   if (stored && stored.version) {
-    // ✅ Correção: nunca deixe o AppState com plan vazio se houver plan salvo no legacy
-    const { changed } = hydratePlanFromLegacy(stored);
+    const { changed } = hydrateFromLegacy(stored);
     if (changed) {
       setLocalState(stored);
     }
@@ -386,8 +457,8 @@ export function getLocalState(): AppState {
 }
 
 export function setLocalState(state: AppState): void {
-  // ✅ Correção: hidrata antes de salvar + evita sobrescrever plan do usuário
-  hydratePlanFromLegacy(state);
+  // ✅ CRITICAL: hydrate before saving so AppState always contains diet/goals/plan
+  hydrateFromLegacy(state);
 
   state.updatedAt = Date.now();
   save(APP_STATE_KEY, state);
@@ -398,7 +469,7 @@ export function updateLocalState(patchFn: (state: AppState) => AppState): AppSta
   const current = getLocalState();
   const updated = patchFn(current);
 
-  hydratePlanFromLegacy(updated);
+  hydrateFromLegacy(updated);
 
   updated.updatedAt = Date.now();
   setLocalState(updated);
@@ -416,6 +487,7 @@ function syncToLegacyKeys(state: AppState): void {
   };
   save(STORAGE_KEYS.PROFILE, profile);
 
+  // Nutrition goals -> legacy
   const nutritionGoals: NutritionGoals = {
     kcalTarget: state.nutrition.targets.kcal,
     pTarget: state.nutrition.targets.protein,
@@ -424,12 +496,14 @@ function syncToLegacyKeys(state: AppState): void {
   };
   save(STORAGE_KEYS.NUTRITION_GOALS, nutritionGoals);
 
+  // Diet plan -> legacy
   if (state.nutrition.dietPlan) {
     save(STORAGE_KEYS.NUTRITION_DIET, state.nutrition.dietPlan);
   }
 
+  // Today log (only today) -> legacy
   const todayKey = new Date().toISOString().split("T")[0];
-  if (state.nutrition.dailyLogs[todayKey]) {
+  if (state.nutrition.dailyLogs && state.nutrition.dailyLogs[todayKey]) {
     save(STORAGE_KEYS.NUTRITION_TODAY, state.nutrition.dailyLogs[todayKey]);
   }
 
@@ -443,7 +517,7 @@ function syncToLegacyKeys(state: AppState): void {
 
   save(STORAGE_KEYS.WORKOUTS_COMPLETED, state.workoutHistory);
 
-  // ✅ CRÍTICO: não sobrescrever o plano salvo do usuário com plan vazio do AppState
+  // ✅ CRITICAL: do not clobber user's plan with empty
   const existingPlan = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
   const stateHasPlan = hasPlanWorkouts(state.plan);
   const existingHasPlan = hasPlanWorkouts(existingPlan);
@@ -451,10 +525,8 @@ function syncToLegacyKeys(state: AppState): void {
   if (stateHasPlan) {
     save(STORAGE_KEYS.USER_WORKOUT_PLAN, state.plan);
   } else if (existingHasPlan) {
-    // mantém o que já existe (não clobbera)
     save(STORAGE_KEYS.USER_WORKOUT_PLAN, existingPlan as UserWorkoutPlan);
   } else {
-    // remove para permitir fallback para plano padrão (não deixa gravado vazio)
     try {
       localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
     } catch {
@@ -475,6 +547,7 @@ function syncToLegacyKeys(state: AppState): void {
 
 export function touchAppState(): void {
   const state = getLocalState();
+  hydrateFromLegacy(state);
   state.updatedAt = Date.now();
   save(APP_STATE_KEY, state);
 }
@@ -506,8 +579,6 @@ export function importAppState(jsonString: string): { success: boolean; error?: 
 
 // ============= NEW USER INITIALIZATION =============
 
-import { getWeekStart } from "./weekUtils";
-
 export function createNewUserState(): AppState {
   const defaultPlan: UserWorkoutPlan = {
     workouts: [],
@@ -523,12 +594,12 @@ export function createNewUserState(): AppState {
       goal: undefined,
     },
     progression: {
-      accountLevel: 1,
-      xp: 0,
-      xpToNext: 500,
-      streakDays: 0,
-      shields: 0,
-      multiplier: 1.0,
+      accountLevel: DEFAULT_PROFILE_NEW_USER.level,
+      xp: DEFAULT_PROFILE_NEW_USER.xpAtual,
+      xpToNext: DEFAULT_PROFILE_NEW_USER.xpMeta,
+      streakDays: DEFAULT_PROFILE_NEW_USER.streakDias,
+      shields: DEFAULT_PROFILE_NEW_USER.shields,
+      multiplier: DEFAULT_PROFILE_NEW_USER.multiplier,
     },
     plan: defaultPlan,
     workoutHistory: [],
@@ -559,8 +630,8 @@ export function createNewUserState(): AppState {
     weeklyCompletions: {},
   };
 
-  // ✅ Se já existir um plano no legacy, não cria usuário novo “apagando” isso
-  hydratePlanFromLegacy(state);
+  // ✅ If legacy has plan or nutrition, do not wipe
+  hydrateFromLegacy(state);
 
   return state;
 }
@@ -573,7 +644,7 @@ export function markWorkoutCompletedThisWeek(
   setsCompleted: number,
   totalVolume: number,
 ): void {
-  const state = getLocalState(); // já vem hidratado com plan se existir
+  const state = getLocalState();
   const weekStart = getWeekStart(new Date());
 
   if (!state.weeklyCompletions) {

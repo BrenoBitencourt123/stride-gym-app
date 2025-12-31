@@ -710,7 +710,18 @@ export function getExerciseHistory(): ExerciseHistoryData {
   return load<ExerciseHistoryData>(STORAGE_KEYS.EXERCISE_HISTORY, {});
 }
 
-// saveExerciseSnapshot and saveWorkoutCompleted are defined later with overloads
+export function getLastExercisePerformance(exerciseId: string): ExerciseSnapshot | null {
+  const history = getExerciseHistory();
+  const entries = history[exerciseId];
+  if (!entries || entries.length === 0) return null;
+  return entries[entries.length - 1];
+}
+
+// ============= WORKOUT HISTORY =============
+
+export function getWorkoutsCompleted(): WorkoutCompleted[] {
+  return load<WorkoutCompleted[]>(STORAGE_KEYS.WORKOUTS_COMPLETED, []);
+}
 
 export function getLastWorkoutDate(workoutId: string): string | null {
   const history = getWorkoutsCompleted();
@@ -844,63 +855,94 @@ export function getWorkoutSummaryStats(treinoId: string): {
 export interface Achievement {
   id: string;
   title: string;
+  name?: string; // alias for title
   description: string;
   icon: string;
   color: string;
   target: number;
+  progress: number;
   unlocked: boolean;
+  xp: number;
 }
 
 export function getAchievements(): Achievement[] {
   const workoutsCompleted = getWorkoutsCompleted().length;
   const exerciseHistory = getExerciseHistory();
   const totalExerciseSessions = Object.values(exerciseHistory).reduce((acc, arr) => acc + arr.length, 0);
+  const profile = getProfile();
 
   return [
     {
       id: "first-workout",
       title: "Primeiro Passo",
+      name: "Primeiro Passo",
       description: "Complete seu primeiro treino",
       icon: "🎯",
       color: "text-yellow-500",
       target: 1,
+      progress: Math.min(workoutsCompleted, 1),
       unlocked: workoutsCompleted >= 1,
+      xp: 50,
     },
     {
       id: "five-workouts",
       title: "Aquecimento",
+      name: "Aquecimento",
       description: "Complete 5 treinos",
       icon: "💪",
       color: "text-blue-500",
       target: 5,
+      progress: Math.min(workoutsCompleted, 5),
       unlocked: workoutsCompleted >= 5,
+      xp: 100,
     },
     {
       id: "ten-workouts",
       title: "Consistência",
+      name: "Consistência",
       description: "Complete 10 treinos",
       icon: "🔥",
       color: "text-orange-500",
       target: 10,
+      progress: Math.min(workoutsCompleted, 10),
       unlocked: workoutsCompleted >= 10,
+      xp: 150,
     },
     {
       id: "twenty-five-workouts",
       title: "Atleta",
+      name: "Atleta",
       description: "Complete 25 treinos",
       icon: "🏆",
       color: "text-purple-500",
       target: 25,
+      progress: Math.min(workoutsCompleted, 25),
       unlocked: workoutsCompleted >= 25,
+      xp: 250,
     },
     {
       id: "fifty-exercises",
       title: "Veterano",
+      name: "Veterano",
       description: "Complete 50 exercícios",
       icon: "⭐",
       color: "text-green-500",
       target: 50,
+      progress: Math.min(totalExerciseSessions, 50),
       unlocked: totalExerciseSessions >= 50,
+      xp: 300,
+    },
+    {
+      id: "streak-7",
+      title: "Semana de Fogo",
+      name: "Semana de Fogo",
+      description: "Mantenha um streak de 7 dias",
+      icon: "🔥",
+      color: "text-red-500",
+      target: 7,
+      progress: Math.min(profile.streakDias, 7),
+      unlocked: profile.streakDias >= 7,
+      xp: 200,
     },
   ];
 }
@@ -961,6 +1003,19 @@ export function getConsistency(days: number = 28): ConsistencyData[] {
   return Object.entries(weeksMap)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([weekLabel, count]) => ({ weekLabel, count }));
+}
+
+export function getConsistencyPercentage(days: number = 30): number {
+  const workouts = getWorkoutsCompleted();
+  const now = new Date();
+  const startDate = new Date(now);
+  startDate.setDate(startDate.getDate() - days);
+
+  const workoutsInPeriod = workouts.filter((w) => new Date(w.timestamp) >= startDate).length;
+  // Assuming 4 workouts per week as 100%
+  const expectedWorkouts = Math.ceil(days / 7) * 4;
+  const percentage = Math.round((workoutsInPeriod / expectedWorkouts) * 100);
+  return Math.min(percentage, 100);
 }
 
 export interface E1RMHistoryData {

@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const isConfigured = isFirebaseConfigured();
 
+  // Listen for online/offline events
   useEffect(() => {
     const handleOnline = () => {
       if (user) {
@@ -52,6 +53,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+    };
+  }, [user]);
+
+  // Listen for AppState changes and trigger sync
+  useEffect(() => {
+    if (!user) return;
+
+    const handleAppStateChanged = () => {
+      if (isOnline()) {
+        setSyncStatus('pending');
+        // Use debounced sync to avoid excessive calls
+        const timer = setTimeout(() => {
+          syncState(user.uid).then(result => setSyncStatus(result.status));
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    };
+
+    window.addEventListener('levelup:appstate-changed', handleAppStateChanged);
+
+    return () => {
+      window.removeEventListener('levelup:appstate-changed', handleAppStateChanged);
     };
   }, [user]);
 

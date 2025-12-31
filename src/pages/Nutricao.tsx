@@ -9,6 +9,7 @@ import {
   removeFoodFromToday,
   updateFoodInToday,
   toggleFoodConsumed,
+  toggleAllMealConsumed,
   resetNutritionToday,
   isNutritionCompletedToday
 } from "@/lib/storage";
@@ -121,7 +122,13 @@ const Nutricao = () => {
   const handleToggleConsumed = (mealId: string, entryId: string) => {
     toggleFoodConsumed(mealId, entryId);
     setRefreshKey(k => k + 1);
-    triggerSync(); // Sync when food is consumed
+    triggerSync();
+  };
+
+  const handleToggleAllMeal = (mealId: string) => {
+    toggleAllMealConsumed(mealId);
+    setRefreshKey(k => k + 1);
+    triggerSync();
   };
 
   const handleEditItem = (mealId: string, entryId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop") => {
@@ -357,6 +364,11 @@ const Nutricao = () => {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={mealComplete}
+                          onCheckedChange={() => handleToggleAllMeal(meal.id)}
+                          className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                        />
                         <span className="font-medium text-foreground">{meal.nome}</span>
                         {mealComplete && (
                           <span className="flex items-center gap-1 text-xs text-primary bg-primary/20 px-2 py-0.5 rounded-full">

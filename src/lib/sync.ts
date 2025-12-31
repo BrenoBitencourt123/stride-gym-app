@@ -1,14 +1,14 @@
+// src/lib/sync.ts
 // Sync logic for local-first with cloud backup
 
-import { getRemoteState, setRemoteState, isFirebaseConfigured } from '@/services/firebase';
-import { getLocalState, setLocalState, createNewUserState, AppState } from './appState';
+import { getRemoteState, setRemoteState, isFirebaseConfigured } from "@/services/firebase";
+import { getLocalState, setLocalState, createNewUserState, AppState } from "./appState";
 
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'pending' | 'offline' | 'error';
+export type SyncStatus = "idle" | "syncing" | "synced" | "pending" | "offline" | "error";
 
 let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const SYNC_DEBOUNCE_MS = 800;
 
-// Check if online
 export function isOnline(): boolean {
   return navigator.onLine;
 }
@@ -16,89 +16,148 @@ export function isOnline(): boolean {
 // Main sync function
 export async function syncState(uid: string): Promise<{ status: SyncStatus; message: string }> {
   if (!isFirebaseConfigured()) {
-    return { status: 'offline', message: 'Firebase não configurado' };
+    return { status: "offline", message: "Firebase não configurado" };
   }
-  
+
   if (!isOnline()) {
-    return { status: 'offline', message: 'Sem conexão' };
+    return { status: "offline", message: "Sem conexão" };
   }
-  
+
   try {
-    const local = getLocalState();
-    const remote = await getRemoteState(uid) as AppState | null;
-    
+    const local = getLocalState(); // ✅ already hydrated with legacy nutrition/plan now
+    const remote = (await getRemoteState(uid)) as AppState | null;
+
     if (!remote) {
-      // No remote state - this is a NEW user or first sync
-      // Check if local state has ANY user data worth preserving
-      const hasSignificantData = local.workoutHistory.length > 0 || 
+      // No remote state - NEW user or first sync
+      const localHasDiet = !!local.nutrition?.dietPlan;
+      const localHasDaily = !!local.nutrition?.dailyLogs && Object.keys(local.nutrition.dailyLogs).length > 0;
+
+      const hasSignificantData =
+        local.workoutHistory.length > 0 ||
         Object.keys(local.exerciseHistory).length > 0 ||
         local.bodyweight.entries.length > 0 ||
-        (local.plan && local.plan.workouts && local.plan.workouts.length > 0) || // IMPORTANT: preserve workout plan!
-        (local.treinoProgresso && Object.keys(local.treinoProgresso).length > 0);
-      
+        (local.plan && local.plan.workouts && local.plan.workouts.length > 0) ||
+        (local.treinoProgresso && Object.keys(local.treinoProgresso).length > 0) ||
+        localHasDiet ||
+        localHasDaily;
+
       if (hasSignificantData) {
-        // Push existing local data to cloud
         const success = await setRemoteState(uid, local);
         if (success) {
-          return { status: 'synced', message: 'Dados enviados para a nuvem' };
+          return { status: "synced", message: "Dados enviados para a nuvem" };
         }
-        return { status: 'error', message: 'Erro ao enviar dados' };
+        return { status: "error", message: "Erro ao enviar dados" };
       } else {
-        // Truly new user with no data - initialize fresh state but KEEP any existing plan
         const newState = createNewUserState();
-        // Preserve any existing workout plan from local
+
+        // Preserve local plan if exists
         if (local.plan && local.plan.workouts && local.plan.workouts.length > 0) {
           newState.plan = local.plan;
         }
+
+        // Preserve local nutrition if exists
+        if (local.nutrition?.dietPlan) {
+          newState.nutrition.dietPlan = local.nutrition.dietPlan;
+        }
+        if (local.nutrition?.targets) {
+          newState.nutrition.targets = local.nutrition.targets;
+        }
+        if (local.nutrition?.dailyLogs && Object.keys(local.nutrition.dailyLogs).length > 0) {
+          newState.nutrition.dailyLogs = local.nutrition.dailyLogs;
+        }
+
         setLocalState(newState);
+
         const success = await setRemoteState(uid, newState);
         if (success) {
-          return { status: 'synced', message: 'Conta inicializada' };
+          return { status: "synced", message: "Conta inicializada" };
         }
-        return { status: 'error', message: 'Erro ao enviar dados' };
+        return { status: "error", message: "Erro ao enviar dados" };
       }
     }
-    
-    // Compare updatedAt
+
     const localTime = local.updatedAt || 0;
     const remoteTime = remote.updatedAt || 0;
-    
-    // Check if local has a workout plan that remote doesn't have
-    const localHasPlan = local.plan && local.plan.workouts && local.plan.workouts.length > 0;
-    const remoteHasPlan = remote.plan && remote.plan.workouts && remote.plan.workouts.length > 0;
-    
+
+    const localHasPlan = !!(local.plan && local.plan.workouts && local.plan.workouts.length > 0);
+    const remoteHasPlan = !!(remote.plan && remote.plan.workouts && remote.plan.workouts.length > 0);
+
+    const localHasDiet = !!local.nutrition?.dietPlan;
+    const remoteHasDiet = !!remote.nutrition?.dietPlan;
+
+    const localHasTargets = !!local.nutrition?.targets;
+    const remoteHasTargets = !!remote.nutrition?.targets;
+
+    const localHasDaily = !!local.nutrition?.dailyLogs && Object.keys(local.nutrition.dailyLogs).length > 0;
+    const remoteHasDaily = !!remote.nutrition?.dailyLogs && Object.keys(remote.nutrition.dailyLogs).length > 0;
+
     if (localTime > remoteTime) {
-      // Local is newer - push to remote
       const success = await setRemoteState(uid, local);
       if (success) {
-        return { status: 'synced', message: 'Dados atualizados na nuvem' };
+        return { status: "synced", message: "Dados atualizados na nuvem" };
       }
-      return { status: 'error', message: 'Erro ao atualizar nuvem' };
+      return { status: "error", message: "Erro ao atualizar nuvem" };
     } else if (remoteTime > localTime) {
-      // Remote is newer - pull to local BUT preserve local workout plan if remote has none
-      const mergedState = { ...remote };
-      
-      // CRITICAL: If local has a plan but remote doesn't, preserve the local plan
+      // Remote is newer - pull to local BUT preserve local plan/nutrition if remote lacks
+      const mergedState: AppState = { ...remote };
+
+      let didPreserveLocal = false;
+
+      // Preserve plan
       if (localHasPlan && !remoteHasPlan) {
         mergedState.plan = local.plan;
-        mergedState.updatedAt = Date.now();
-        // Also preserve workout progress tied to the plan
+        didPreserveLocal = true;
+
+        // Preserve treinoProgresso linked to the plan
         if (local.treinoProgresso && Object.keys(local.treinoProgresso).length > 0) {
           mergedState.treinoProgresso = local.treinoProgresso;
         }
-        // Push merged state back to remote
+      }
+
+      // Ensure nutrition exists
+      if (!mergedState.nutrition) {
+        mergedState.nutrition = {
+          targets: { kcal: 2050, protein: 160, carbs: 200, fats: 65 },
+          dailyLogs: {},
+        };
+      }
+      if (!mergedState.nutrition.targets) {
+        mergedState.nutrition.targets = { kcal: 2050, protein: 160, carbs: 200, fats: 65 };
+      }
+      if (!mergedState.nutrition.dailyLogs) {
+        mergedState.nutrition.dailyLogs = {};
+      }
+
+      // Preserve nutrition targets/diet/dailyLogs if remote doesn't have
+      if (localHasTargets && !remoteHasTargets) {
+        mergedState.nutrition.targets = local.nutrition.targets;
+        didPreserveLocal = true;
+      }
+      if (localHasDiet && !remoteHasDiet) {
+        mergedState.nutrition.dietPlan = local.nutrition.dietPlan;
+        didPreserveLocal = true;
+      }
+      if (localHasDaily && !remoteHasDaily) {
+        mergedState.nutrition.dailyLogs = {
+          ...(mergedState.nutrition.dailyLogs || {}),
+          ...(local.nutrition.dailyLogs || {}),
+        };
+        didPreserveLocal = true;
+      }
+
+      if (didPreserveLocal) {
+        mergedState.updatedAt = Date.now();
         await setRemoteState(uid, mergedState);
       }
-      
+
       setLocalState(mergedState);
-      return { status: 'synced', message: 'Dados atualizados do servidor' };
+      return { status: "synced", message: "Dados atualizados do servidor" };
     }
-    
-    // Same timestamp - already synced
-    return { status: 'synced', message: 'Sincronizado' };
+
+    return { status: "synced", message: "Sincronizado" };
   } catch (error) {
-    console.error('Sync error:', error);
-    return { status: 'error', message: 'Erro de sincronização' };
+    console.error("Sync error:", error);
+    return { status: "error", message: "Erro de sincronização" };
   }
 }
 
@@ -107,11 +166,11 @@ export function debouncedSync(uid: string, onStatusChange?: (status: SyncStatus)
   if (syncDebounceTimer) {
     clearTimeout(syncDebounceTimer);
   }
-  
-  onStatusChange?.('pending');
-  
+
+  onStatusChange?.("pending");
+
   syncDebounceTimer = setTimeout(async () => {
-    onStatusChange?.('syncing');
+    onStatusChange?.("syncing");
     const result = await syncState(uid);
     onStatusChange?.(result.status);
   }, SYNC_DEBOUNCE_MS);

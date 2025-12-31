@@ -44,9 +44,9 @@ const WorkoutCard = ({ title, exercises, slug }: WorkoutCardProps) => {
             <div className="mb-3">
               <p className="text-sm text-foreground">
                 {mainExercise.nome}
-                {lastPerformance && (
+                {lastPerformance && lastPerformance.workSets?.[0] && (
                   <span className="text-muted-foreground">
-                    {" — "}{lastPerformance.kg} kg × {lastPerformance.reps}
+                    {" — "}{lastPerformance.workSets[0].kg} kg × {lastPerformance.workSets[0].reps}
                   </span>
                 )}
               </p>

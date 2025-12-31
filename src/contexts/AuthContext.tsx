@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { 
   signInWithGoogle, 
   signInWithEmail, 
@@ -8,7 +8,8 @@ import {
   isFirebaseConfigured,
   type User 
 } from '@/services/firebase';
-import { syncState, forceSync, isOnline, type SyncStatus } from '@/lib/sync';
+import { forceSync, debouncedSync, isOnline, type SyncStatus } from '@/lib/sync';
+import { CHANGE_EVENT } from '@/lib/localStore';
 
 interface AuthContextType {
   user: User | null;
@@ -29,13 +30,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const isConfigured = isFirebaseConfigured();
+  const userRef = useRef<User | null>(null);
+
+  // Keep userRef in sync
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Listen for online/offline events
   useEffect(() => {
     const handleOnline = () => {
-      if (user) {
+      if (userRef.current && isOnline()) {
         setSyncStatus('pending');
-        syncState(user.uid).then(result => setSyncStatus(result.status));
+        debouncedSync(userRef.current.uid, setSyncStatus);
       }
     };
 
@@ -54,38 +61,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user]);
+  }, []);
 
-  // Listen for AppState changes and trigger sync
+  // Centralized listener for change events - triggers debounced sync
   useEffect(() => {
-    if (!user) return;
-
-    const handleAppStateChanged = () => {
-      if (isOnline()) {
-        setSyncStatus('pending');
-        // Use debounced sync to avoid excessive calls
-        const timer = setTimeout(() => {
-          syncState(user.uid).then(result => setSyncStatus(result.status));
-        }, 1000);
-        return () => clearTimeout(timer);
+    const handleChange = () => {
+      if (userRef.current && isOnline()) {
+        debouncedSync(userRef.current.uid, setSyncStatus);
       }
     };
 
-    window.addEventListener('levelup:appstate-changed', handleAppStateChanged);
+    window.addEventListener(CHANGE_EVENT, handleChange);
 
     return () => {
-      window.removeEventListener('levelup:appstate-changed', handleAppStateChanged);
+      window.removeEventListener(CHANGE_EVENT, handleChange);
     };
-  }, [user]);
+  }, []);
 
+  // Auth state listener - force sync on login
   useEffect(() => {
-    const unsubscribe = onAuthChange((firebaseUser) => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
       
       if (firebaseUser && isOnline()) {
         setSyncStatus('syncing');
-        syncState(firebaseUser.uid).then(result => setSyncStatus(result.status));
+        const result = await forceSync(firebaseUser.uid);
+        setSyncStatus(result.status);
       }
     });
 
@@ -96,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const firebaseUser = await signInWithGoogle();
     if (firebaseUser) {
       setSyncStatus('syncing');
-      const result = await syncState(firebaseUser.uid);
+      const result = await forceSync(firebaseUser.uid);
       setSyncStatus(result.status);
     }
   }, []);
@@ -105,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const firebaseUser = await signInWithEmail(email, password);
     if (firebaseUser) {
       setSyncStatus('syncing');
-      const result = await syncState(firebaseUser.uid);
+      const result = await forceSync(firebaseUser.uid);
       setSyncStatus(result.status);
     }
   }, []);
@@ -114,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const firebaseUser = await signUpWithEmail(email, password);
     if (firebaseUser) {
       setSyncStatus('syncing');
-      const result = await syncState(firebaseUser.uid);
+      const result = await forceSync(firebaseUser.uid);
       setSyncStatus(result.status);
     }
   }, []);

@@ -1,7 +1,8 @@
 // src/lib/appState.ts
 // Centralized AppState type and migration logic
+// DOES NOT IMPORT from storage.ts to avoid circular dependency
 
-import { STORAGE_KEYS, load, save } from "./storage";
+import { load, save, STORAGE_KEYS, APP_STATE_KEY, APP_STATE_VERSION, emitAppStateChanged } from "./localStore";
 import { getWeekStart } from "./weekUtils";
 
 // ============= SET DATA TYPE =============
@@ -92,6 +93,14 @@ export interface NutritionToday {
   meals: TodayMeal[];
 }
 
+export interface NutritionTotalsLog {
+  dateKey: string;
+  kcal: number;
+  p: number;
+  c: number;
+  g: number;
+}
+
 export interface ExerciseSetSnapshot {
   kg: number;
   reps: number;
@@ -127,7 +136,7 @@ export interface UserWorkout {
   titulo: string;
   duracaoEstimada: number;
   exercicios: UserExercise[];
-  scheduledDays?: number[]; // Dias da semana: 0=Segunda, 1=Terça, ..., 6=Domingo
+  scheduledDays?: number[];
 }
 
 export interface UserWorkoutPlan {
@@ -153,6 +162,12 @@ export interface ProgressionSuggestions {
   };
 }
 
+export interface TreinoHoje {
+  treinoId: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
 // ============= APP STATE TYPE =============
 
 export interface AppStateProfile {
@@ -174,6 +189,7 @@ export interface AppStateNutrition {
   targets: { kcal: number; protein: number; carbs: number; fats: number };
   dietPlan?: NutritionDiet;
   dailyLogs: Record<string, NutritionToday>;
+  totalsLogs?: NutritionTotalsLog[];
 }
 
 export interface AppStateBodyweight {
@@ -185,7 +201,6 @@ export interface AppStateAchievements {
   updatedAt: number;
 }
 
-// Weekly workout completions
 export interface WeeklyWorkoutCompletion {
   completedAt: string;
   xpGained: number;
@@ -211,13 +226,12 @@ export interface AppState {
   bodyweight: AppStateBodyweight;
   achievements: AppStateAchievements;
   treinoProgresso?: TreinoProgresso;
+  treinoHoje?: TreinoHoje | null;
   quests?: Quests;
   progressionSuggestions?: ProgressionSuggestions;
   weeklyCompletions?: WeeklyCompletions;
+  nutritionCompleted?: Record<string, boolean>;
 }
-
-const APP_STATE_KEY = "levelup.appState";
-const APP_STATE_VERSION = 1;
 
 // Default values for NEW users (start at Level 1)
 const DEFAULT_PROFILE_NEW_USER: Profile = {
@@ -246,7 +260,7 @@ const DEFAULT_NUTRITION_GOALS: NutritionGoals = {
   gTarget: 65,
 };
 
-// ============= HELPERS (CRITICAL FIX) =============
+// ============= HELPERS =============
 
 function hasPlanWorkouts(plan?: UserWorkoutPlan | null): boolean {
   return !!(plan && Array.isArray(plan.workouts) && plan.workouts.length > 0);
@@ -257,10 +271,6 @@ function readLegacyPlan(): UserWorkoutPlan | null {
   return hasPlanWorkouts(p) ? p : null;
 }
 
-/**
- * Se o AppState estiver com plan vazio, mas existir um plano salvo no legacy key,
- * "hidrata" o AppState com ele para evitar sobrescrever o plano do usuário.
- */
 function hydratePlanFromLegacy(state: AppState): { changed: boolean } {
   const legacyPlan = readLegacyPlan();
 
@@ -281,8 +291,6 @@ function hydratePlanFromLegacy(state: AppState): { changed: boolean } {
 
   return { changed: false };
 }
-
-// ===== NUTRITION HYDRATION (CRITICAL: makes diet/goals GLOBAL via AppState) =====
 
 function safeStringify(v: any): string {
   try {
@@ -346,6 +354,24 @@ function hydrateNutritionFromLegacy(state: AppState): { changed: boolean } {
     }
   }
 
+  // 4) Totals logs
+  const legacyTotals = load<NutritionTotalsLog[]>(STORAGE_KEYS.NUTRITION_LOGS, []);
+  if (legacyTotals.length > 0) {
+    if (!state.nutrition.totalsLogs) {
+      state.nutrition.totalsLogs = legacyTotals;
+      changed = true;
+    } else if (!deepEqual(state.nutrition.totalsLogs, legacyTotals)) {
+      // Merge: keep newer entries
+      const existingKeys = new Set(state.nutrition.totalsLogs.map(l => l.dateKey));
+      for (const log of legacyTotals) {
+        if (!existingKeys.has(log.dateKey)) {
+          state.nutrition.totalsLogs.push(log);
+          changed = true;
+        }
+      }
+    }
+  }
+
   return { changed };
 }
 
@@ -363,10 +389,12 @@ function migrateFromLegacy(): AppState {
   const nutritionGoals = load<NutritionGoals>(STORAGE_KEYS.NUTRITION_GOALS, DEFAULT_NUTRITION_GOALS);
   const nutritionDiet = load<NutritionDiet | null>(STORAGE_KEYS.NUTRITION_DIET, null);
   const nutritionToday = load<NutritionToday | null>(STORAGE_KEYS.NUTRITION_TODAY, null);
+  const nutritionTotals = load<NutritionTotalsLog[]>(STORAGE_KEYS.NUTRITION_LOGS, []);
   const exerciseHistory = load<ExerciseHistoryData>(STORAGE_KEYS.EXERCISE_HISTORY, {});
   const weightHistory = load<WeightEntry[]>(STORAGE_KEYS.WEIGHT_HISTORY, []);
   const workoutsCompleted = load<WorkoutCompleted[]>(STORAGE_KEYS.WORKOUTS_COMPLETED, []);
   const treinoProgresso = load<TreinoProgresso>(STORAGE_KEYS.TREINO_PROGRESSO, {});
+  const treinoHoje = load<TreinoHoje | null>(STORAGE_KEYS.TREINO_HOJE, null);
   const quests = load<Quests>(STORAGE_KEYS.QUESTS, {
     treinoDoDiaDone: false,
     registrarAlimentacaoDone: false,
@@ -374,6 +402,7 @@ function migrateFromLegacy(): AppState {
   });
   const progressionSuggestions = load<ProgressionSuggestions>(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, {});
   const userPlan = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
+  const nutritionCompleted = load<Record<string, boolean>>(STORAGE_KEYS.NUTRITION_COMPLETED, {});
 
   const dailyLogs: Record<string, NutritionToday> = {};
   if (nutritionToday) {
@@ -415,6 +444,7 @@ function migrateFromLegacy(): AppState {
       },
       dietPlan: nutritionDiet || undefined,
       dailyLogs,
+      totalsLogs: nutritionTotals,
     },
     bodyweight: {
       entries: weightHistory.map((w) => ({
@@ -428,11 +458,12 @@ function migrateFromLegacy(): AppState {
       updatedAt: Date.now(),
     },
     treinoProgresso,
+    treinoHoje,
     quests,
     progressionSuggestions,
+    nutritionCompleted,
   };
 
-  // ✅ CRITICAL: keep legacy plan + legacy nutrition inside AppState
   hydrateFromLegacy(state);
 
   return state;
@@ -457,12 +488,11 @@ export function getLocalState(): AppState {
 }
 
 export function setLocalState(state: AppState): void {
-  // ✅ CRITICAL: hydrate before saving so AppState always contains diet/goals/plan
   hydrateFromLegacy(state);
-
   state.updatedAt = Date.now();
   save(APP_STATE_KEY, state);
   syncToLegacyKeys(state);
+  emitAppStateChanged();
 }
 
 export function updateLocalState(patchFn: (state: AppState) => AppState): AppState {
@@ -507,6 +537,11 @@ function syncToLegacyKeys(state: AppState): void {
     save(STORAGE_KEYS.NUTRITION_TODAY, state.nutrition.dailyLogs[todayKey]);
   }
 
+  // Totals logs -> legacy
+  if (state.nutrition.totalsLogs && state.nutrition.totalsLogs.length > 0) {
+    save(STORAGE_KEYS.NUTRITION_LOGS, state.nutrition.totalsLogs);
+  }
+
   save(STORAGE_KEYS.EXERCISE_HISTORY, state.exerciseHistory);
 
   const weightHistory: WeightEntry[] = state.bodyweight.entries.map((e) => ({
@@ -517,7 +552,7 @@ function syncToLegacyKeys(state: AppState): void {
 
   save(STORAGE_KEYS.WORKOUTS_COMPLETED, state.workoutHistory);
 
-  // ✅ CRITICAL: do not clobber user's plan with empty
+  // Workout plan
   const existingPlan = load<UserWorkoutPlan | null>(STORAGE_KEYS.USER_WORKOUT_PLAN, null);
   const stateHasPlan = hasPlanWorkouts(state.plan);
   const existingHasPlan = hasPlanWorkouts(existingPlan);
@@ -526,12 +561,6 @@ function syncToLegacyKeys(state: AppState): void {
     save(STORAGE_KEYS.USER_WORKOUT_PLAN, state.plan);
   } else if (existingHasPlan) {
     save(STORAGE_KEYS.USER_WORKOUT_PLAN, existingPlan as UserWorkoutPlan);
-  } else {
-    try {
-      localStorage.removeItem(STORAGE_KEYS.USER_WORKOUT_PLAN);
-    } catch {
-      // ignore
-    }
   }
 
   if (state.treinoProgresso) {
@@ -543,6 +572,9 @@ function syncToLegacyKeys(state: AppState): void {
   if (state.progressionSuggestions) {
     save(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, state.progressionSuggestions);
   }
+  if (state.nutritionCompleted) {
+    save(STORAGE_KEYS.NUTRITION_COMPLETED, state.nutritionCompleted);
+  }
 }
 
 export function touchAppState(): void {
@@ -550,6 +582,7 @@ export function touchAppState(): void {
   hydrateFromLegacy(state);
   state.updatedAt = Date.now();
   save(APP_STATE_KEY, state);
+  emitAppStateChanged();
 }
 
 export function exportAppState(): string {
@@ -612,6 +645,7 @@ export function createNewUserState(): AppState {
         fats: 65,
       },
       dailyLogs: {},
+      totalsLogs: [],
     },
     bodyweight: {
       entries: [],
@@ -630,7 +664,6 @@ export function createNewUserState(): AppState {
     weeklyCompletions: {},
   };
 
-  // ✅ If legacy has plan or nutrition, do not wipe
   hydrateFromLegacy(state);
 
   return state;

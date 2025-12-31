@@ -3,211 +3,33 @@
 // ALL saves here automatically update AppState and trigger sync
 
 import { workouts as defaultWorkouts, type Workout, type SetData } from "@/data/workouts";
+import { load, save, STORAGE_KEYS, APP_STATE_KEY, emitChange } from "./localStore";
+import {
+  commitNutritionGoals,
+  commitNutritionDiet,
+  commitNutritionToday,
+  commitNutritionTotalsLog,
+  commitProfile,
+  commitQuests,
+  commitTreinoProgresso,
+  commitTreinoHoje,
+  commitWorkoutPlan,
+  commitProgressionSuggestions,
+  commitWeightEntry,
+  commitWorkoutCompleted,
+  commitExerciseHistory,
+  commitNutritionCompleted,
+} from "./commit";
 
-// ============= STORAGE KEYS =============
+// ============= RE-EXPORT STORAGE_KEYS =============
+export { STORAGE_KEYS, load, save } from "./localStore";
 
-export const STORAGE_KEYS = {
-  PROFILE: "levelup.profile",
-  QUESTS: "levelup.quests",
-  TREINO_PROGRESSO: "levelup.treinoProgresso",
-  NUTRITION_GOALS: "levelup.nutrition.goals",
-  NUTRITION_DIET: "levelup.nutrition.diet",
-  NUTRITION_TODAY: "levelup.nutrition.today",
-  NUTRITION_COMPLETED: "levelup.nutritionCompleted",
-  EXERCISE_HISTORY: "levelup.exerciseHistory",
-  WEIGHT_HISTORY: "levelup.weightHistory",
-  WORKOUTS_COMPLETED: "levelup.workoutsCompleted",
-  USER_WORKOUT_PLAN: "levelup.userWorkoutPlan",
-  PROGRESSION_SUGGESTIONS: "levelup.progressionSuggestions",
-  TREINO_HOJE: "levelup.treinoHoje",
-};
-
-// ============= BASE LOAD/SAVE FUNCTIONS =============
-
-export function load<T>(key: string, defaultValue: T): T {
-  try {
-    const item = localStorage.getItem(key);
-    if (item === null) return defaultValue;
-    return JSON.parse(item) as T;
-  } catch {
-    return defaultValue;
-  }
-}
-
-export function save<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    // After saving, notify that state changed for sync
-    afterLocalSave(key, value);
-  } catch (error) {
-    console.error(`Error saving to localStorage (${key}):`, error);
-  }
-}
-
+// ============= LEGACY COMPATIBILITY: mergeSave =============
 export function mergeSave<T extends object>(key: string, partial: Partial<T>, defaultValue: T): T {
   const current = load<T>(key, defaultValue);
   const merged = { ...current, ...partial };
   save(key, merged);
   return merged;
-}
-
-// ============= APPSTATE SYNC HELPERS (NO CIRCULAR IMPORT) =============
-
-const APP_STATE_KEY = "levelup.appState";
-const APPSTATE_CHANGED_EVENT = "levelup:appstate-changed";
-
-let hydrationSuppressed = false;
-
-export function suppressAppStateHydration<T>(fn: () => T): T {
-  hydrationSuppressed = true;
-  try {
-    return fn();
-  } finally {
-    hydrationSuppressed = false;
-  }
-}
-
-function emitAppStateChanged() {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(APPSTATE_CHANGED_EVENT));
-}
-
-// Helper to patch AppState directly without importing appState.ts
-function patchAppState(mutator: (state: any) => void): void {
-  if (hydrationSuppressed) return;
-  
-  try {
-    const raw = localStorage.getItem(APP_STATE_KEY);
-    if (!raw) return;
-    
-    const state = JSON.parse(raw);
-    mutator(state);
-    state.updatedAt = Date.now();
-    
-    localStorage.setItem(APP_STATE_KEY, JSON.stringify(state));
-    emitAppStateChanged();
-  } catch (error) {
-    console.warn("[storage] patchAppState failed:", error);
-  }
-}
-
-function afterLocalSave(key: string, value: unknown): void {
-  // When AppState itself changes, just emit the event
-  if (key === APP_STATE_KEY) {
-    emitAppStateChanged();
-    return;
-  }
-  
-  // Don't patch if hydration is suppressed
-  if (hydrationSuppressed) return;
-  
-  // Patch AppState based on which key was saved
-  const todayKey = new Date().toISOString().split("T")[0];
-  
-  switch (key) {
-    case STORAGE_KEYS.NUTRITION_GOALS:
-      patchAppState((state) => {
-        if (!state.nutrition) state.nutrition = { targets: {}, dailyLogs: {} };
-        const g = value as any;
-        state.nutrition.targets = {
-          kcal: Number(g.kcalTarget ?? 2050),
-          protein: Number(g.pTarget ?? 160),
-          carbs: Number(g.cTarget ?? 200),
-          fats: Number(g.gTarget ?? 65),
-        };
-      });
-      break;
-      
-    case STORAGE_KEYS.NUTRITION_DIET:
-      patchAppState((state) => {
-        if (!state.nutrition) state.nutrition = { targets: {}, dailyLogs: {} };
-        state.nutrition.dietPlan = value || undefined;
-      });
-      break;
-      
-    case STORAGE_KEYS.NUTRITION_TODAY:
-      patchAppState((state) => {
-        if (!state.nutrition) state.nutrition = { targets: {}, dailyLogs: {} };
-        if (!state.nutrition.dailyLogs) state.nutrition.dailyLogs = {};
-        const tt = value as any;
-        if (tt?.dateKey) {
-          state.nutrition.dailyLogs[tt.dateKey] = tt;
-        }
-      });
-      break;
-      
-    case STORAGE_KEYS.USER_WORKOUT_PLAN:
-      patchAppState((state) => {
-        state.plan = value;
-      });
-      break;
-      
-    case STORAGE_KEYS.TREINO_PROGRESSO:
-      patchAppState((state) => {
-        state.treinoProgresso = value;
-      });
-      break;
-      
-    case STORAGE_KEYS.QUESTS:
-      patchAppState((state) => {
-        state.quests = value;
-      });
-      break;
-      
-    case STORAGE_KEYS.PROGRESSION_SUGGESTIONS:
-      patchAppState((state) => {
-        state.progressionSuggestions = value;
-      });
-      break;
-      
-    case STORAGE_KEYS.WORKOUTS_COMPLETED:
-      patchAppState((state) => {
-        state.workoutHistory = value;
-      });
-      break;
-      
-    case STORAGE_KEYS.EXERCISE_HISTORY:
-      patchAppState((state) => {
-        state.exerciseHistory = value;
-      });
-      break;
-      
-    case STORAGE_KEYS.WEIGHT_HISTORY:
-      patchAppState((state) => {
-        if (!state.bodyweight) state.bodyweight = { entries: [] };
-        state.bodyweight.entries = (value as any[]).map((w) => ({
-          date: String(w.timestamp || "").split("T")[0] || String(w.date || ""),
-          weight: Number(w.weight ?? 0),
-          updatedAt: w.timestamp ? new Date(w.timestamp).getTime() : Date.now(),
-        }));
-      });
-      break;
-      
-    case STORAGE_KEYS.PROFILE:
-      patchAppState((state) => {
-        if (!state.progression) state.progression = {};
-        const pp = value as any;
-        state.progression.accountLevel = Number(pp.level ?? state.progression.accountLevel ?? 1);
-        state.progression.xp = Number(pp.xpAtual ?? state.progression.xp ?? 0);
-        state.progression.xpToNext = Number(pp.xpMeta ?? state.progression.xpToNext ?? 500);
-        state.progression.streakDays = Number(pp.streakDias ?? state.progression.streakDays ?? 0);
-        state.progression.multiplier = Number(pp.multiplier ?? state.progression.multiplier ?? 1);
-        state.progression.shields = Number(pp.shields ?? state.progression.shields ?? 0);
-      });
-      break;
-      
-    case STORAGE_KEYS.TREINO_HOJE:
-      patchAppState((state) => {
-        state.treinoHoje = value;
-      });
-      break;
-      
-    case STORAGE_KEYS.NUTRITION_COMPLETED:
-      patchAppState((state) => {
-        state.nutritionCompleted = value;
-      });
-      break;
-  }
 }
 
 // ============= TYPES =============
@@ -404,8 +226,7 @@ export function getUserWorkoutPlan(): UserWorkoutPlan {
 }
 
 export function saveUserWorkoutPlan(plan: UserWorkoutPlan): void {
-  plan.updatedAt = new Date().toISOString();
-  save(STORAGE_KEYS.USER_WORKOUT_PLAN, plan);
+  commitWorkoutPlan(plan);
 }
 
 export function resetUserWorkoutPlan(): void {
@@ -471,7 +292,7 @@ export function getProfile(): Profile {
 }
 
 export function saveProfile(profile: Profile): void {
-  save(STORAGE_KEYS.PROFILE, profile);
+  commitProfile(profile);
 }
 
 export function getQuests(): Quests {
@@ -479,7 +300,7 @@ export function getQuests(): Quests {
 }
 
 export function saveQuests(quests: Quests): void {
-  save(STORAGE_KEYS.QUESTS, quests);
+  commitQuests(quests);
 }
 
 // ============= NUTRITION GOALS & DIET =============
@@ -496,7 +317,7 @@ export function getNutritionGoals(): NutritionGoals {
 }
 
 export function saveNutritionGoals(goals: NutritionGoals): void {
-  save(STORAGE_KEYS.NUTRITION_GOALS, goals);
+  commitNutritionGoals(goals);
 }
 
 export function getNutritionDiet(): NutritionDiet | null {
@@ -504,7 +325,7 @@ export function getNutritionDiet(): NutritionDiet | null {
 }
 
 export function saveNutritionDiet(diet: NutritionDiet): void {
-  save(STORAGE_KEYS.NUTRITION_DIET, diet);
+  commitNutritionDiet(diet);
 }
 
 function getTodayDateKey(): string {
@@ -531,14 +352,12 @@ export function getNutritionToday(): NutritionToday {
     return stored;
   }
 
-  // New day - reset
-  const empty = createEmptyToday(todayKey);
-  save(STORAGE_KEYS.NUTRITION_TODAY, empty);
-  return empty;
+  // New day - return empty (don't save in getter to avoid side effects)
+  return createEmptyToday(todayKey);
 }
 
 export function saveNutritionToday(today: NutritionToday): void {
-  save(STORAGE_KEYS.NUTRITION_TODAY, today);
+  commitNutritionToday(today);
 }
 
 export function addFoodToToday(
@@ -564,7 +383,7 @@ export function addFoodToToday(
   };
 
   meal.entries.push(entry);
-  saveNutritionToday(today);
+  commitNutritionToday(today);
 }
 
 export function removeFoodFromToday(mealId: string, entryId: string): void {
@@ -573,7 +392,7 @@ export function removeFoodFromToday(mealId: string, entryId: string): void {
   if (!meal) return;
 
   meal.entries = meal.entries.filter((e) => e.id !== entryId);
-  saveNutritionToday(today);
+  commitNutritionToday(today);
 }
 
 export function addFoodToDiet(
@@ -598,7 +417,7 @@ export function addFoodToDiet(
   if (!meal) return;
 
   meal.items.push({ foodId, quantidade, unidade });
-  saveNutritionDiet(diet);
+  commitNutritionDiet(diet);
 }
 
 export function removeFoodFromDiet(mealId: string, index: number): void {
@@ -609,7 +428,7 @@ export function removeFoodFromDiet(mealId: string, index: number): void {
   if (!meal) return;
 
   meal.items.splice(index, 1);
-  saveNutritionDiet(diet);
+  commitNutritionDiet(diet);
 }
 
 export function applyDietToToday(): void {
@@ -637,7 +456,7 @@ export function applyDietToToday(): void {
     }
   }
 
-  saveNutritionToday(today);
+  commitNutritionToday(today);
 }
 
 export function toggleAllMealConsumed(mealId: string): void {
@@ -645,15 +464,94 @@ export function toggleAllMealConsumed(mealId: string): void {
   const meal = today.meals.find((m) => m.id === mealId);
   if (!meal || meal.entries.length === 0) return;
 
-  // Check if all are already consumed
   const allConsumed = meal.entries.every((e) => e.consumed);
   
-  // Toggle all to the opposite state
   for (const entry of meal.entries) {
     entry.consumed = !allConsumed;
   }
   
-  saveNutritionToday(today);
+  commitNutritionToday(today);
+}
+
+export function toggleFoodConsumed(mealId: string, entryId: string): void {
+  const today = getNutritionToday();
+  const meal = today.meals.find((m) => m.id === mealId);
+  if (!meal) return;
+
+  const entry = meal.entries.find((e) => e.id === entryId);
+  if (!entry) return;
+
+  entry.consumed = !entry.consumed;
+  commitNutritionToday(today);
+}
+
+export function updateFoodInToday(
+  mealId: string,
+  entryId: string,
+  quantidade: number,
+  unidade: "g" | "un" | "ml" | "scoop"
+): void {
+  const today = getNutritionToday();
+  const meal = today.meals.find((m) => m.id === mealId);
+  if (!meal) return;
+
+  const entry = meal.entries.find((e) => e.id === entryId);
+  if (!entry) return;
+
+  entry.quantidade = quantidade;
+  entry.unidade = unidade;
+  commitNutritionToday(today);
+}
+
+export function updateFoodInDiet(
+  mealId: string,
+  index: number,
+  quantidade: number,
+  unidade: "g" | "un" | "ml" | "scoop"
+): void {
+  const diet = getNutritionDiet();
+  if (!diet) return;
+
+  const meal = diet.meals.find((m) => m.id === mealId);
+  if (!meal || index < 0 || index >= meal.items.length) return;
+
+  meal.items[index].quantidade = quantidade;
+  meal.items[index].unidade = unidade;
+  commitNutritionDiet(diet);
+}
+
+export function resetNutritionToday(): void {
+  const todayKey = getTodayDateKey();
+  const empty = createEmptyToday(todayKey);
+  commitNutritionToday(empty);
+}
+
+export function isNutritionCompletedToday(): boolean {
+  const completed = load<Record<string, boolean>>(STORAGE_KEYS.NUTRITION_COMPLETED, {});
+  const todayKey = getTodayDateKey();
+  return !!completed[todayKey];
+}
+
+export function completeNutritionToday(xpGained: number): void {
+  const completed = load<Record<string, boolean>>(STORAGE_KEYS.NUTRITION_COMPLETED, {});
+  const todayKey = getTodayDateKey();
+  completed[todayKey] = true;
+  commitNutritionCompleted(completed);
+
+  const profile = getProfile();
+  profile.xpAtual += xpGained;
+
+  while (profile.xpAtual >= profile.xpMeta) {
+    profile.xpAtual -= profile.xpMeta;
+    profile.level += 1;
+    profile.xpMeta = Math.round(profile.xpMeta * 1.15);
+  }
+
+  commitProfile(profile);
+
+  const quests = getQuests();
+  quests.registrarAlimentacaoDone = true;
+  commitQuests(quests);
 }
 
 // ============= TREINO PROGRESSO =============
@@ -663,7 +561,7 @@ export function getTreinoProgresso(): TreinoProgresso {
 }
 
 export function saveTreinoProgresso(progresso: TreinoProgresso): void {
-  save(STORAGE_KEYS.TREINO_PROGRESSO, progresso);
+  commitTreinoProgresso(progresso);
 }
 
 export function getExerciseProgress(treinoId: string, exercicioId: string): ExerciseProgress | null {
@@ -677,7 +575,7 @@ export function saveExerciseProgress(treinoId: string, exercicioId: string, prog
     progresso[treinoId] = {};
   }
   progresso[treinoId][exercicioId] = progress;
-  saveTreinoProgresso(progresso);
+  commitTreinoProgresso(progresso);
 }
 
 export function isExerciseComplete(treinoId: string, exercicioId: string): boolean {
@@ -698,7 +596,7 @@ export function clearTreinoProgress(treinoId: string): void {
   const progresso = getTreinoProgresso();
   if (progresso[treinoId]) {
     delete progresso[treinoId];
-    saveTreinoProgresso(progresso);
+    commitTreinoProgresso(progresso);
   }
 }
 
@@ -709,15 +607,11 @@ export function getTreinoHoje(): TreinoHoje | null {
 }
 
 export function saveTreinoHoje(treino: TreinoHoje): void {
-  save(STORAGE_KEYS.TREINO_HOJE, treino);
+  commitTreinoHoje(treino);
 }
 
 export function clearTreinoHoje(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.TREINO_HOJE);
-  } catch {
-    // ignore
-  }
+  commitTreinoHoje(null);
 }
 
 // ============= EXERCISE HISTORY =============
@@ -767,7 +661,7 @@ export function getProgressionSuggestions(): ProgressionSuggestions {
 }
 
 export function saveProgressionSuggestions(suggestions: ProgressionSuggestions): void {
-  save(STORAGE_KEYS.PROGRESSION_SUGGESTIONS, suggestions);
+  commitProgressionSuggestions(suggestions);
 }
 
 export function getProgressionSuggestion(
@@ -787,7 +681,6 @@ export function getProgressionSuggestion(
   const firstSet = lastPerf.workSets[0];
   const [minReps, maxReps] = repsRange.split("–").map((s) => parseInt(s.trim(), 10));
 
-  // If achieved max reps, ready to progress
   if (firstSet.reps >= maxReps) {
     const nextKg = firstSet.kg + 2.5;
     return {
@@ -798,7 +691,6 @@ export function getProgressionSuggestion(
     };
   }
 
-  // Maintain
   return {
     status: "maintain",
     statusIcon: "💪",
@@ -814,12 +706,7 @@ export function getWeightHistory(): WeightEntry[] {
 }
 
 export function saveWeight(weight: number): void {
-  const history = getWeightHistory();
-  history.push({
-    weight,
-    timestamp: new Date().toISOString(),
-  });
-  save(STORAGE_KEYS.WEIGHT_HISTORY, history);
+  commitWeightEntry(weight);
 }
 
 // ============= WORKOUT SUMMARY STATS =============
@@ -871,7 +758,7 @@ export function getWorkoutSummaryStats(treinoId: string): {
 export interface Achievement {
   id: string;
   title: string;
-  name?: string; // alias for title
+  name?: string;
   description: string;
   icon: string;
   color: string;
@@ -1028,7 +915,6 @@ export function getConsistencyPercentage(days: number = 30): number {
   startDate.setDate(startDate.getDate() - days);
 
   const workoutsInPeriod = workouts.filter((w) => new Date(w.timestamp) >= startDate).length;
-  // Assuming 4 workouts per week as 100%
   const expectedWorkouts = Math.ceil(days / 7) * 4;
   const percentage = Math.round((workoutsInPeriod / expectedWorkouts) * 100);
   return Math.min(percentage, 100);
@@ -1060,7 +946,6 @@ export interface NutritionChartData {
 }
 
 export function getNutritionChartData(): NutritionChartData[] {
-  // This would need daily logs history - returning empty for now
   const goals = getNutritionGoals();
   return [
     { dateLabel: new Date().toISOString().split("T")[0], kcal: 0, kcalMeta: goals.kcalTarget },
@@ -1122,91 +1007,6 @@ export function hasDietSaved(): boolean {
   return diet.meals.some((m) => m.items.length > 0);
 }
 
-export function updateFoodInToday(
-  mealId: string,
-  entryId: string,
-  quantidade: number,
-  unidade: "g" | "un" | "ml" | "scoop"
-): void {
-  const today = getNutritionToday();
-  const meal = today.meals.find((m) => m.id === mealId);
-  if (!meal) return;
-
-  const entry = meal.entries.find((e) => e.id === entryId);
-  if (!entry) return;
-
-  entry.quantidade = quantidade;
-  entry.unidade = unidade;
-  saveNutritionToday(today);
-}
-
-export function updateFoodInDiet(
-  mealId: string,
-  index: number,
-  quantidade: number,
-  unidade: "g" | "un" | "ml" | "scoop"
-): void {
-  const diet = getNutritionDiet();
-  if (!diet) return;
-
-  const meal = diet.meals.find((m) => m.id === mealId);
-  if (!meal || index < 0 || index >= meal.items.length) return;
-
-  meal.items[index].quantidade = quantidade;
-  meal.items[index].unidade = unidade;
-  saveNutritionDiet(diet);
-}
-
-export function toggleFoodConsumed(mealId: string, entryId: string): void {
-  const today = getNutritionToday();
-  const meal = today.meals.find((m) => m.id === mealId);
-  if (!meal) return;
-
-  const entry = meal.entries.find((e) => e.id === entryId);
-  if (!entry) return;
-
-  entry.consumed = !entry.consumed;
-  saveNutritionToday(today);
-}
-
-export function resetNutritionToday(): void {
-  const todayKey = getTodayDateKey();
-  const empty = createEmptyToday(todayKey);
-  save(STORAGE_KEYS.NUTRITION_TODAY, empty);
-}
-
-export function isNutritionCompletedToday(): boolean {
-  const completed = load<Record<string, boolean>>(STORAGE_KEYS.NUTRITION_COMPLETED, {});
-  const todayKey = getTodayDateKey();
-  return !!completed[todayKey];
-}
-
-export function completeNutritionToday(xpGained: number): void {
-  // Mark nutrition as completed for today
-  const completed = load<Record<string, boolean>>(STORAGE_KEYS.NUTRITION_COMPLETED, {});
-  const todayKey = getTodayDateKey();
-  completed[todayKey] = true;
-  save(STORAGE_KEYS.NUTRITION_COMPLETED, completed);
-
-  // Add XP to profile
-  const profile = getProfile();
-  profile.xpAtual += xpGained;
-
-  // Level up check
-  while (profile.xpAtual >= profile.xpMeta) {
-    profile.xpAtual -= profile.xpMeta;
-    profile.level += 1;
-    profile.xpMeta = Math.round(profile.xpMeta * 1.15);
-  }
-
-  saveProfile(profile);
-
-  // Mark quest as done
-  const quests = getQuests();
-  quests.registrarAlimentacaoDone = true;
-  saveQuests(quests);
-}
-
 export function getCompletedMealsCount(): number {
   const today = getNutritionToday();
   let count = 0;
@@ -1222,15 +1022,13 @@ export function getCompletedMealsCount(): number {
 export function syncQuestsStatus(): void {
   const quests = getQuests();
 
-  // Check if workout of day is completed this week
-  // This function is imported from appState via dynamic check
   try {
     const workoutId = localStorage.getItem("levelup.currentWorkoutId");
     if (workoutId) {
       const appStateRaw = localStorage.getItem(APP_STATE_KEY);
       if (appStateRaw) {
         const appState = JSON.parse(appStateRaw);
-        const weekStart = getWeekStart(new Date());
+        const weekStart = getWeekStartLocal(new Date());
         if (appState.weeklyCompletions?.[weekStart]?.[workoutId]) {
           quests.treinoDoDiaDone = true;
         }
@@ -1240,7 +1038,6 @@ export function syncQuestsStatus(): void {
     // Ignore errors
   }
 
-  // Check if weight was logged today
   const weightHistory = getWeightHistory();
   const todayKey = getTodayDateKey();
   const todayWeight = weightHistory.find(
@@ -1250,15 +1047,14 @@ export function syncQuestsStatus(): void {
     quests.registrarPesoDone = true;
   }
 
-  // Check if nutrition was completed today
   if (isNutritionCompletedToday()) {
     quests.registrarAlimentacaoDone = true;
   }
 
-  saveQuests(quests);
+  commitQuests(quests);
 }
 
-function getWeekStart(date: Date): string {
+function getWeekStartLocal(date: Date): string {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
@@ -1269,28 +1065,23 @@ function getWeekStart(date: Date): string {
 // ============= COMPLETE TREINO DO DIA =============
 
 export function completeTreinoDoDia(xpGained: number): void {
-  // Add XP to profile
   const profile = getProfile();
   profile.xpAtual += xpGained;
 
-  // Level up check
   while (profile.xpAtual >= profile.xpMeta) {
     profile.xpAtual -= profile.xpMeta;
     profile.level += 1;
     profile.xpMeta = Math.round(profile.xpMeta * 1.15);
   }
 
-  // Update streak
   profile.streakDias += 1;
 
-  saveProfile(profile);
+  commitProfile(profile);
 
-  // Mark quest as done
   const quests = getQuests();
   quests.treinoDoDiaDone = true;
-  saveQuests(quests);
+  commitQuests(quests);
 
-  // Clear treino hoje
   clearTreinoHoje();
 }
 
@@ -1307,7 +1098,7 @@ export function saveProgressionSuggestion(exerciseId: string, suggestedLoad: num
     suggestedNextLoad: suggestedLoad,
     appliedAt: new Date().toISOString(),
   };
-  saveProgressionSuggestions(suggestions);
+  commitProgressionSuggestions(suggestions);
 }
 
 // ============= PROFILE STATS =============
@@ -1361,7 +1152,6 @@ export function getExercisesWithHistory(): { id: string; name: string }[] {
   const result: { id: string; name: string }[] = [];
 
   for (const exerciseId of Object.keys(history)) {
-    // Find exercise name from plan
     let name = exerciseId;
     for (const workout of plan.workouts) {
       const ex = workout.exercicios.find((e) => e.id === exerciseId);
@@ -1377,19 +1167,11 @@ export function getExercisesWithHistory(): { id: string; name: string }[] {
 }
 
 export function saveNutritionLog(log: { dateKey: string; kcal: number; p: number; c: number; g: number }): void {
-  const logs = load<any[]>("levelup.nutritionLogs", []);
-  const existing = logs.findIndex((l) => l.dateKey === log.dateKey);
-  if (existing >= 0) {
-    logs[existing] = log;
-  } else {
-    logs.push(log);
-  }
-  save("levelup.nutritionLogs", logs);
+  commitNutritionTotalsLog(log);
 }
 
-// ============= OVERLOADED saveExerciseSnapshot =============
+// ============= EXERCISE SNAPSHOT =============
 
-// Update the saveExerciseSnapshot to accept either object or multiple params
 const originalSaveExerciseSnapshot = (snapshot: ExerciseSnapshot): void => {
   const history = getExerciseHistory();
   if (!history[snapshot.exerciseId]) {
@@ -1399,10 +1181,9 @@ const originalSaveExerciseSnapshot = (snapshot: ExerciseSnapshot): void => {
   if (history[snapshot.exerciseId].length > 100) {
     history[snapshot.exerciseId] = history[snapshot.exerciseId].slice(-100);
   }
-  save(STORAGE_KEYS.EXERCISE_HISTORY, history);
+  commitExerciseHistory(history);
 };
 
-// Re-export with overload support
 export function saveExerciseSnapshot(
   snapshotOrExerciseId: ExerciseSnapshot | string,
   workoutId?: string,
@@ -1410,7 +1191,6 @@ export function saveExerciseSnapshot(
   workSets?: ExerciseSetSnapshot[]
 ): void {
   if (typeof snapshotOrExerciseId === "string") {
-    // Called with multiple params
     const snapshot: ExerciseSnapshot = {
       exerciseId: snapshotOrExerciseId,
       workoutId: workoutId!,
@@ -1420,32 +1200,25 @@ export function saveExerciseSnapshot(
     };
     originalSaveExerciseSnapshot(snapshot);
   } else {
-    // Called with single object
     originalSaveExerciseSnapshot(snapshotOrExerciseId);
   }
 }
 
-// ============= OVERLOADED saveWorkoutCompleted =============
+// ============= WORKOUT COMPLETED =============
 
 export function saveWorkoutCompleted(
   completedOrWorkoutId: WorkoutCompleted | string,
   totalVolume?: number
 ): void {
-  const history = getWorkoutsCompleted();
-  
   if (typeof completedOrWorkoutId === "string") {
-    // Called with workoutId and totalVolume
-    history.push({
+    commitWorkoutCompleted({
       workoutId: completedOrWorkoutId,
       timestamp: new Date().toISOString(),
       totalVolume: totalVolume ?? 0,
     });
   } else {
-    // Called with single object
-    history.push(completedOrWorkoutId);
+    commitWorkoutCompleted(completedOrWorkoutId);
   }
-  
-  save(STORAGE_KEYS.WORKOUTS_COMPLETED, history);
 }
 
 // ============= RE-EXPORT SetData for compatibility =============

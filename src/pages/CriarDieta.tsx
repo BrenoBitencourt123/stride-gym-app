@@ -8,6 +8,8 @@ import {
   saveNutritionDiet, 
   removeFoodFromDiet,
   updateFoodInDiet,
+  applyDietToToday,
+  resetNutritionToday,
   DEFAULT_MEALS,
   type NutritionDiet,
   type DietMeal
@@ -87,6 +89,9 @@ const CriarDieta = () => {
 
   const handleSave = () => {
     saveNutritionDiet(diet);
+    // Reset today and apply the new diet template
+    resetNutritionToday();
+    applyDietToToday();
     toast.success("Dieta salva com sucesso!");
     navigate("/nutricao");
   };

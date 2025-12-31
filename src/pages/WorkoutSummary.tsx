@@ -26,7 +26,8 @@ const WorkoutSummary = () => {
   const workout = getUserWorkout(workoutId);
   const snapshotSavedRef = useRef(false);
   
-  const { completedSets, totalSets, totalVolume } = getWorkoutSummaryStats(workoutId);
+  const { totalSets, totalVolume, exercisesDone } = getWorkoutSummaryStats(workoutId);
+  const completedSets = totalSets;
 
   // Salvar snapshots de todos os exercícios ao entrar no resumo
   useEffect(() => {

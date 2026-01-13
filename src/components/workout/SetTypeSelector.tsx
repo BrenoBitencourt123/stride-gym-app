@@ -10,10 +10,12 @@ interface SetTypeSelectorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (type: SetType) => void;
+  onRemove?: () => void;
   currentType: SetType;
+  canRemove?: boolean;
 }
 
-const setTypes: { type: SetType; label: string; description: string; badge: string; badgeClass: string }[] = [
+const setTypes: { type: SetType | "remove"; label: string; description: string; badge: string; badgeClass: string }[] = [
   {
     type: "warmup",
     label: "Série de Aquecimento",
@@ -29,6 +31,13 @@ const setTypes: { type: SetType; label: string; description: string; badge: stri
     badgeClass: "bg-secondary text-foreground",
   },
   {
+    type: "drop",
+    label: "Série Back Off",
+    description: "Redução de carga (10-30%) após série pesada",
+    badge: "B",
+    badgeClass: "bg-purple-500/20 text-purple-400",
+  },
+  {
     type: "failed",
     label: "Série Falhada",
     description: "Não conseguiu completar as reps",
@@ -36,15 +45,26 @@ const setTypes: { type: SetType; label: string; description: string; badge: stri
     badgeClass: "bg-destructive/20 text-destructive",
   },
   {
-    type: "drop",
-    label: "Série Back Off",
-    description: "Redução de carga (10-30%) após série pesada",
-    badge: "B",
-    badgeClass: "bg-purple-500/20 text-purple-400",
+    type: "remove",
+    label: "Remover Série",
+    description: "Remove esta série do exercício",
+    badge: "✕",
+    badgeClass: "bg-destructive/20 text-destructive",
   },
 ];
 
-const SetTypeSelector = ({ open, onOpenChange, onSelect, currentType }: SetTypeSelectorProps) => {
+const SetTypeSelector = ({ open, onOpenChange, onSelect, onRemove, currentType, canRemove = true }: SetTypeSelectorProps) => {
+  const handleClick = (type: SetType | "remove") => {
+    if (type === "remove") {
+      onRemove?.();
+    } else {
+      onSelect(type);
+    }
+    onOpenChange(false);
+  };
+
+  const visibleTypes = canRemove ? setTypes : setTypes.filter(t => t.type !== "remove");
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-2xl">
@@ -53,14 +73,16 @@ const SetTypeSelector = ({ open, onOpenChange, onSelect, currentType }: SetTypeS
         </SheetHeader>
         
         <div className="space-y-2">
-          {setTypes.map((item) => (
+          {visibleTypes.map((item) => (
             <button
               key={item.type}
-              onClick={() => onSelect(item.type)}
+              onClick={() => handleClick(item.type)}
               className={`w-full p-4 flex items-center gap-4 rounded-xl transition-colors ${
-                currentType === item.type
-                  ? "bg-primary/10 border border-primary/30"
-                  : "bg-secondary/50 hover:bg-secondary"
+                item.type === "remove" 
+                  ? "bg-destructive/10 hover:bg-destructive/20 border border-destructive/30"
+                  : currentType === item.type
+                    ? "bg-primary/10 border border-primary/30"
+                    : "bg-secondary/50 hover:bg-secondary"
               }`}
             >
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold ${item.badgeClass}`}>

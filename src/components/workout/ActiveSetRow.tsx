@@ -1,13 +1,11 @@
 import { useCallback } from "react";
-import { Check, Minus, Plus, Trash2 } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 import { ActiveSet, SetType } from "@/pages/ActiveWorkout";
 
 interface ActiveSetRowProps {
   set: ActiveSet;
   setIndex: number;
-  canRemove: boolean;
   onChange: (field: keyof ActiveSet, value: number | boolean | SetType) => void;
-  onRemove: () => void;
   onTypeClick: () => void;
 }
 
@@ -24,7 +22,7 @@ function getSetLabel(type: SetType, index: number): { label: string; className: 
   }
 }
 
-const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClick }: ActiveSetRowProps) => {
+const ActiveSetRow = ({ set, setIndex, onChange, onTypeClick }: ActiveSetRowProps) => {
   const setLabel = getSetLabel(set.type, setIndex);
 
   const decreaseKg = useCallback(() => {
@@ -57,7 +55,7 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
 
   return (
     <div className={`px-4 py-2 transition-colors ${set.done ? "bg-primary/5" : ""}`}>
-      <div className="grid grid-cols-[40px_1fr_1fr_1fr_40px_32px] gap-2 items-center">
+      <div className="grid grid-cols-[40px_1fr_1fr_1fr_40px] gap-2 items-center">
         {/* Set number/type badge */}
         <button
           type="button"
@@ -139,21 +137,6 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
           >
             {set.done && <Check className="w-4 h-4 text-primary" />}
           </button>
-        </div>
-
-        {/* Remove button */}
-        <div className="flex items-center justify-center">
-          {canRemove ? (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          ) : (
-            <div className="w-7 h-7" />
-          )}
         </div>
       </div>
     </div>

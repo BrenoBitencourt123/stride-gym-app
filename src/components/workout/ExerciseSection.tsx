@@ -26,27 +26,19 @@ const MemoizedSetRow = memo(({
   exerciseIndex,
   set, 
   setIndex, 
-  canRemove,
   onSetChange,
-  onRemoveSet,
   onSetTypeClick,
 }: {
   exerciseId: string;
   exerciseIndex: number;
   set: ActiveSet;
   setIndex: number;
-  canRemove: boolean;
   onSetChange: (exerciseIndex: number, setIndex: number, field: keyof ActiveSet, value: number | boolean | SetType) => void;
-  onRemoveSet: (exerciseIndex: number, setIndex: number) => void;
   onSetTypeClick: (exerciseIndex: number, setIndex: number) => void;
 }) => {
   const handleChange = useCallback((field: keyof ActiveSet, value: number | boolean | SetType) => {
     onSetChange(exerciseIndex, setIndex, field, value);
   }, [onSetChange, exerciseIndex, setIndex]);
-
-  const handleRemove = useCallback(() => {
-    onRemoveSet(exerciseIndex, setIndex);
-  }, [onRemoveSet, exerciseIndex, setIndex]);
 
   const handleTypeClick = useCallback(() => {
     onSetTypeClick(exerciseIndex, setIndex);
@@ -56,9 +48,7 @@ const MemoizedSetRow = memo(({
     <ActiveSetRow
       set={set}
       setIndex={setIndex}
-      canRemove={canRemove}
       onChange={handleChange}
-      onRemove={handleRemove}
       onTypeClick={handleTypeClick}
     />
   );
@@ -148,9 +138,7 @@ const ExerciseSection = ({
             exerciseIndex={exerciseIndex}
             set={set}
             setIndex={setIndex}
-            canRemove={exercise.sets.length > 1}
             onSetChange={onSetChange}
-            onRemoveSet={onRemoveSet}
             onSetTypeClick={onSetTypeClick}
           />
         ))}

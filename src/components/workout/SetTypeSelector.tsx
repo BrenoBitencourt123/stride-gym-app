@@ -24,6 +24,13 @@ const setTypes: { type: SetType | "remove"; label: string; description: string; 
     badgeClass: "bg-yellow-500/20 text-yellow-500",
   },
   {
+    type: "failed",
+    label: "Série de Preparação",
+    description: "60-85% da carga com 2-6 reps para preparar o top set",
+    badge: "P",
+    badgeClass: "bg-blue-500/20 text-blue-400",
+  },
+  {
     type: "normal",
     label: "Série Normal",
     description: "Série padrão de trabalho",
@@ -36,13 +43,6 @@ const setTypes: { type: SetType | "remove"; label: string; description: string; 
     description: "Redução de carga (10-30%) após série pesada",
     badge: "B",
     badgeClass: "bg-purple-500/20 text-purple-400",
-  },
-  {
-    type: "failed",
-    label: "Série de Preparação",
-    description: "60-85% da carga com 2-6 reps para preparar o top set",
-    badge: "P",
-    badgeClass: "bg-blue-500/20 text-blue-400",
   },
   {
     type: "remove",

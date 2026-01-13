@@ -11,9 +11,10 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProps) => {
   const { user, loading, isConfigured } = useAuth();
   const location = useLocation();
+  const devBypass = isDevModeBypass();
 
   // Dev mode bypass - skip auth entirely
-  if (isDevModeBypass()) {
+  if (devBypass) {
     if (!skipOnboarding && !isOnboardingComplete()) {
       return <Navigate to="/onboarding" state={{ from: location }} replace />;
     }

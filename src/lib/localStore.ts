@@ -76,3 +76,18 @@ export function emitAppStateChanged(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(APPSTATE_CHANGED_EVENT));
 }
+
+// ============= DEV MODE BYPASS =============
+const DEV_MODE_KEY = "levelup.devModeBypass";
+
+export function setDevModeBypass(enabled: boolean): void {
+  if (enabled) {
+    localStorage.setItem(DEV_MODE_KEY, "true");
+  } else {
+    localStorage.removeItem(DEV_MODE_KEY);
+  }
+}
+
+export function isDevModeBypass(): boolean {
+  return localStorage.getItem(DEV_MODE_KEY) === "true";
+}

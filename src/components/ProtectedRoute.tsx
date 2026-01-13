@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { isOnboardingComplete } from '@/lib/onboarding';
+import { isDevModeBypass } from '@/lib/localStore';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,6 +11,14 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProps) => {
   const { user, loading, isConfigured } = useAuth();
   const location = useLocation();
+
+  // Dev mode bypass - skip auth entirely
+  if (isDevModeBypass()) {
+    if (!skipOnboarding && !isOnboardingComplete()) {
+      return <Navigate to="/onboarding" state={{ from: location }} replace />;
+    }
+    return <>{children}</>;
+  }
 
   // Se Firebase não está configurado, permitir acesso (desenvolvimento)
   if (!isConfigured) {

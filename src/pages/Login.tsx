@@ -253,8 +253,12 @@ const Login = () => {
         <div className="mt-8 pt-6 border-t border-border/50">
           <Button
             onClick={() => {
-              toast.success('Modo teste ativado!');
-              navigate(from, { replace: true });
+              // Import dynamically to avoid circular deps
+              import('@/lib/localStore').then(({ setDevModeBypass }) => {
+                setDevModeBypass(true);
+                toast.success('Modo teste ativado!');
+                navigate(from, { replace: true });
+              });
             }}
             variant="ghost"
             className="w-full h-10 text-sm text-muted-foreground hover:text-foreground"

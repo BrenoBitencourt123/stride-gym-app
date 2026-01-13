@@ -16,6 +16,7 @@ import {
   saveTreinoHoje,
   getWorkoutSummaryStats,
   clearTreinoProgress,
+  clearTreinoHoje,
 } from "@/lib/storage";
 import {
   AlertDialog,
@@ -316,6 +317,7 @@ const ActiveWorkout = () => {
   const confirmDiscard = () => {
     if (treinoId) {
       clearTreinoProgress(treinoId);
+      clearTreinoHoje();
     }
     navigate("/treino");
   };

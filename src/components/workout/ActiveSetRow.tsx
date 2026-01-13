@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Check, Minus, Plus } from "lucide-react";
+import { Check, Minus, Plus, Trash2 } from "lucide-react";
 import { ActiveSet, SetType } from "@/pages/ActiveWorkout";
 
 interface ActiveSetRowProps {
@@ -18,7 +18,7 @@ function getSetLabel(type: SetType, index: number): { label: string; className: 
     case "failed":
       return { label: "F", className: "bg-destructive/20 text-destructive" };
     case "drop":
-      return { label: "D", className: "bg-purple-500/20 text-purple-400" };
+      return { label: "B", className: "bg-purple-500/20 text-purple-400" };
     default:
       return { label: String(index + 1), className: "bg-secondary text-foreground" };
   }
@@ -57,7 +57,7 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
 
   return (
     <div className={`px-4 py-2 transition-colors ${set.done ? "bg-primary/5" : ""}`}>
-      <div className="grid grid-cols-[40px_1fr_1fr_1fr_40px] gap-2 items-center">
+      <div className="grid grid-cols-[40px_1fr_1fr_1fr_40px_32px] gap-2 items-center">
         {/* Set number/type badge */}
         <button
           type="button"
@@ -139,6 +139,21 @@ const ActiveSetRow = ({ set, setIndex, canRemove, onChange, onRemove, onTypeClic
           >
             {set.done && <Check className="w-4 h-4 text-primary" />}
           </button>
+        </div>
+
+        {/* Remove button */}
+        <div className="flex items-center justify-center">
+          {canRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          ) : (
+            <div className="w-7 h-7" />
+          )}
         </div>
       </div>
     </div>

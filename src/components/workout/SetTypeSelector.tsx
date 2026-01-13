@@ -37,9 +37,9 @@ const setTypes: { type: SetType; label: string; description: string; badge: stri
   },
   {
     type: "drop",
-    label: "Série Drop",
-    description: "Redução de carga sem descanso",
-    badge: "D",
+    label: "Série Back Off",
+    description: "Redução de carga (10-30%) após série pesada",
+    badge: "B",
     badgeClass: "bg-purple-500/20 text-purple-400",
   },
 ];

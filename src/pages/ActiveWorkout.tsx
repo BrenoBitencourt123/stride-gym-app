@@ -282,14 +282,20 @@ const ActiveWorkout = () => {
   }, []);
 
   const handleSetTypeSelect = useCallback((type: SetType) => {
-    setSelectedSetInfo((info) => {
-      if (info) {
-        handleSetChange(info.exerciseIndex, info.setIndex, "type", type);
-      }
-      return null;
-    });
+    if (selectedSetInfo) {
+      handleSetChange(selectedSetInfo.exerciseIndex, selectedSetInfo.setIndex, "type", type);
+    }
+    setSelectedSetInfo(null);
     setShowSetTypeSelector(false);
-  }, [handleSetChange]);
+  }, [handleSetChange, selectedSetInfo]);
+
+  const handleRemoveFromSelector = useCallback(() => {
+    if (selectedSetInfo) {
+      handleRemoveSet(selectedSetInfo.exerciseIndex, selectedSetInfo.setIndex);
+    }
+    setSelectedSetInfo(null);
+    setShowSetTypeSelector(false);
+  }, [handleRemoveSet, selectedSetInfo]);
 
   const handleFinish = () => {
     if (metrics.completedSets === 0) {
@@ -377,10 +383,16 @@ const ActiveWorkout = () => {
         open={showSetTypeSelector}
         onOpenChange={setShowSetTypeSelector}
         onSelect={handleSetTypeSelect}
+        onRemove={handleRemoveFromSelector}
         currentType={
           selectedSetInfo
             ? exercises[selectedSetInfo.exerciseIndex]?.sets[selectedSetInfo.setIndex]?.type
             : "normal"
+        }
+        canRemove={
+          selectedSetInfo
+            ? exercises[selectedSetInfo.exerciseIndex]?.sets.length > 1
+            : false
         }
       />
 

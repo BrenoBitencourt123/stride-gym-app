@@ -19,7 +19,7 @@ const setTypes: { type: SetType | "remove"; label: string; description: string; 
   {
     type: "warmup",
     label: "Série de Aquecimento",
-    description: "Preparação muscular com carga leve",
+    description: "Aquecimento muscular com 30% a 40% do melhor peso",
     badge: "W",
     badgeClass: "bg-yellow-500/20 text-yellow-500",
   },
@@ -39,10 +39,10 @@ const setTypes: { type: SetType | "remove"; label: string; description: string; 
   },
   {
     type: "failed",
-    label: "Série Falhada",
-    description: "Não conseguiu completar as reps",
-    badge: "F",
-    badgeClass: "bg-destructive/20 text-destructive",
+    label: "Série de Preparação",
+    description: "60-85% da carga com 2-6 reps para preparar o top set",
+    badge: "P",
+    badgeClass: "bg-blue-500/20 text-blue-400",
   },
   {
     type: "remove",

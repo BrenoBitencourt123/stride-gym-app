@@ -19,17 +19,17 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
     stateLoading,
     hasUser: !!user,
     hasState: !!state,
-    onboardingComplete: isOnboardingComplete(),
+    onboardingComplete: state ? isOnboardingComplete() : 'waiting',
     skipOnboarding
   });
 
-  // Loading spinner while checking auth or loading state
-  if (authLoading || stateLoading) {
+  // Loading spinner while checking auth
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-muted-foreground">Carregando...</p>
+          <p className="text-muted-foreground">Verificando autenticação...</p>
         </div>
       </div>
     );
@@ -41,7 +41,19 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Authenticated but onboarding not complete → Onboarding
+  // Authenticated but state still loading → Show loading
+  if (stateLoading || state === null) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Authenticated, state loaded, but onboarding not complete → Onboarding
   if (!skipOnboarding && !isOnboardingComplete()) {
     console.log('[ProtectedRoute] Onboarding not complete - redirecting to onboarding');
     return <Navigate to="/onboarding" state={{ from: location }} replace />;

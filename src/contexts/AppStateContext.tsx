@@ -12,7 +12,11 @@ import {
   hasBeenMigrated
 } from '@/lib/firebase/firestoreRepo';
 import { getLocalState, createNewUserState, type AppState, type OnboardingData } from '@/lib/appState';
+import { isDevModeBypass, save, load } from '@/lib/localStore';
 import type { NutritionToday, NutritionDiet, Quests, TreinoHoje, TreinoProgresso, UserWorkoutPlan } from '@/lib/appState';
+
+// ============= CONSTANTS =============
+const DEV_STATE_KEY = 'levelup.devState.v1';
 
 // ============= TYPES =============
 
@@ -70,9 +74,25 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const migrationDoneRef = useRef(false);
+  const devModeBypass = isDevModeBypass();
   
   // Initialize and subscribe to state
   useEffect(() => {
+    // Dev mode bypass - use localStorage instead of Firebase
+    if (devModeBypass && !user) {
+      const devState = load<AppState | null>(DEV_STATE_KEY, null);
+      if (devState) {
+        setState(devState);
+      } else {
+        const newState = createNewUserState();
+        setState(newState);
+        save(DEV_STATE_KEY, newState);
+      }
+      setLoading(false);
+      setSyncState('synced');
+      return;
+    }
+    
     if (!user) {
       setState(null);
       setLoading(false);
@@ -186,7 +206,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // ============= CORE ACTIONS =============
   
   const updateState = useCallback(async (updates: Partial<AppState>): Promise<boolean> => {
-    if (!user || !state) return false;
+    if (!state) return false;
     
     const newState: AppState = {
       ...state,
@@ -198,7 +218,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(newState);
     setSyncState('syncing');
     
+    // Dev mode - save to localStorage instead of Firebase
+    if (devModeBypass && !user) {
+      save(DEV_STATE_KEY, newState);
+      setSyncState('synced');
+      return true;
+    }
+    
     // Persist to Firestore
+    if (!user) {
+      setSyncState('error');
+      return false;
+    }
+    
     const success = await setUserState(user.uid, newState);
     
     if (success) {
@@ -210,7 +242,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
     
     return success;
-  }, [user, state]);
+  }, [user, state, devModeBypass]);
   
   const refreshState = useCallback(async () => {
     if (!user) return;
@@ -353,8 +385,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state, updateState]);
   
   const updateOnboarding = useCallback(async (data: OnboardingData | null) => {
-    if (!user) return false;
-    
     // Handle case where state is not yet initialized (new users during onboarding)
     const currentState = state || createNewUserState();
     
@@ -385,7 +415,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(newState);
     setSyncState('syncing');
     
+    // Dev mode - save to localStorage instead of Firebase
+    if (devModeBypass && !user) {
+      save(DEV_STATE_KEY, newState);
+      setSyncState('synced');
+      return true;
+    }
+    
     // Persist to Firestore
+    if (!user) {
+      setSyncState('error');
+      return false;
+    }
+    
     const success = await setUserState(user.uid, newState);
     
     if (success) {
@@ -396,7 +438,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
     
     return success;
-  }, [user, state]);
+  }, [user, state, devModeBypass]);
   
   // ============= CONTEXT VALUE =============
   

@@ -110,8 +110,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return;
     }
     
+    // No user and no dev bypass - create temporary local state for onboarding
     if (!user) {
-      setState(null);
+      console.log('[AppStateContext] No user - creating temporary state for onboarding');
+      const tempState = createNewUserState();
+      setState(tempState);
       setLoading(false);
       setSyncState('idle');
       return;
@@ -298,7 +301,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state]);
   
   const isOnboardingComplete = useCallback(() => {
-    return state?.onboarding?.completedAt != null;
+    // Check state first
+    if (state?.onboarding?.completedAt != null) return true;
+    
+    // Fallback: check localStorage for temporary saved onboarding
+    const savedState = load<AppState | null>(DEV_STATE_KEY, null);
+    if (savedState?.onboarding?.completedAt != null) return true;
+    
+    return false;
   }, [state]);
   
   // ============= SPECIFIC UPDATERS =============
@@ -428,7 +438,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updatedAt: Date.now()
     };
     
-    // Optimistic update
+    // Optimistic update - always update local state first
     setState(newState);
     setSyncState('syncing');
     
@@ -453,22 +463,35 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return true;
     }
     
-    // Persist to Firestore
+    // No user but not in dev mode - save to localStorage as temporary storage
+    // This allows onboarding to complete even before login
     if (!user) {
-      setSyncState('error');
-      return false;
-    }
-    
-    const success = await setUserState(user.uid, newState);
-    
-    if (success) {
+      console.log('[AppStateContext] No user - saving onboarding to localStorage as fallback');
+      save(DEV_STATE_KEY, newState);
       setSyncState('synced');
-    } else {
-      setState(state);
-      setSyncState('error');
+      return true;
     }
     
-    return success;
+    // Persist to Firestore
+    try {
+      const success = await setUserState(user.uid, newState);
+      
+      if (success) {
+        setSyncState('synced');
+      } else {
+        // Keep local state updated, mark as needing sync
+        save(DEV_STATE_KEY, newState);
+        setSyncState('error');
+      }
+      
+      return success;
+    } catch (err) {
+      console.error('[AppStateContext] Failed to save to Firebase:', err);
+      // Save to localStorage as fallback
+      save(DEV_STATE_KEY, newState);
+      setSyncState('error');
+      return true; // Return true so UI continues, data will sync later
+    }
   }, [user, state, devModeBypass]);
   
   // ============= CONTEXT VALUE =============

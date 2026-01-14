@@ -1,7 +1,10 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppStateContext } from '@/contexts/AppStateContext';
-import { isDevModeBypass } from '@/lib/localStore';
+import { isDevModeBypass, load } from '@/lib/localStore';
+import type { AppState } from '@/lib/appState';
+
+const DEV_STATE_KEY = 'levelup.devState.v1';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -14,6 +17,18 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
   const location = useLocation();
   const devBypass = isDevModeBypass();
 
+  // Enhanced onboarding check - includes localStorage fallback
+  const checkOnboardingComplete = (): boolean => {
+    // Check context first
+    if (isOnboardingComplete()) return true;
+    
+    // Fallback: check localStorage directly
+    const savedState = load<AppState | null>(DEV_STATE_KEY, null);
+    if (savedState?.onboarding?.completedAt != null) return true;
+    
+    return false;
+  };
+
   // Debug log
   console.log('[ProtectedRoute] Check:', {
     path: location.pathname,
@@ -21,7 +36,7 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
     stateLoading,
     hasState: !!state,
     onboardingCompletedAt: state?.onboarding?.completedAt,
-    isComplete: isOnboardingComplete(),
+    isComplete: checkOnboardingComplete(),
     skipOnboarding
   });
 
@@ -40,7 +55,7 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
       );
     }
     
-    const onboardingComplete = isOnboardingComplete();
+    const onboardingComplete = checkOnboardingComplete();
     console.log('[ProtectedRoute] Dev mode - onboarding check:', { skipOnboarding, onboardingComplete });
     
     if (!skipOnboarding && !onboardingComplete) {
@@ -64,7 +79,7 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
       );
     }
     
-    if (!skipOnboarding && !isOnboardingComplete()) {
+    if (!skipOnboarding && !checkOnboardingComplete()) {
       return <Navigate to="/onboarding" state={{ from: location }} replace />;
     }
     return <>{children}</>;
@@ -88,7 +103,7 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
   }
 
   // Verifica se onboarding está completo (exceto em rotas específicas)
-  if (!skipOnboarding && !isOnboardingComplete()) {
+  if (!skipOnboarding && !checkOnboardingComplete()) {
     return <Navigate to="/onboarding" state={{ from: location }} replace />;
   }
 

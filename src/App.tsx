@@ -53,7 +53,7 @@ function AppRoutes() {
         } />
         
         {/* Protected routes */}
-        <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+        <Route path="/" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
         <Route path="/treino" element={<ProtectedRoute><Treino /></ProtectedRoute>} />
         <Route path="/treino/ajustar" element={<ProtectedRoute><AjustarPlano /></ProtectedRoute>} />
         <Route path="/treino/:treinoId" element={<ProtectedRoute><WorkoutDetail /></ProtectedRoute>} />

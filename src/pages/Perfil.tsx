@@ -5,7 +5,7 @@ import BottomNav from "@/components/BottomNav";
 import AvatarFrame from "@/components/AvatarFrame";
 import XPBar from "@/components/XPBar";
 import { Button } from "@/components/ui/button";
-import { exportAppState, importAppState } from "@/lib/appState";
+import { importAppState } from "@/lib/appState";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppStateContext } from "@/contexts/AppStateContext";
 import { toast } from "sonner";
@@ -98,7 +98,12 @@ const Perfil = () => {
 
   const handleExport = () => {
     try {
-      const json = exportAppState();
+      // Export from Firebase state (AppStateContext) instead of localStorage
+      if (!state) {
+        toast.error('Nenhum dado para exportar');
+        return;
+      }
+      const json = JSON.stringify(state, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

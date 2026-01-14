@@ -1,13 +1,9 @@
 // Onboarding types and calculation utilities
 // Implements Mifflin-St Jeor BMR, TDEE, and macro calculations
 // Data is persisted to Firebase Firestore for cross-device sync
-// Legacy localStorage functions kept for backward compatibility during migration
+// NOTE: All localStorage functions have been removed - use Firebase via AppStateContext
 
 import type { OnboardingData } from './appState';
-import { load, save } from './localStore';
-
-// Legacy storage key (for backward compatibility during migration)
-const ONBOARDING_KEY = 'levelup.onboarding.v1';
 
 // ========== RE-EXPORT TYPES ==========
 
@@ -51,65 +47,45 @@ export interface OnboardingPlan {
 // Re-export the OnboardingData type from appState for convenience
 export type { OnboardingData } from './appState';
 
-// ========== LEGACY FUNCTIONS (for backward compatibility) ==========
-// These read/write to localStorage but will be synced to Firebase via AppStateContext
+// ========== DEPRECATED LEGACY FUNCTIONS ==========
+// These functions are DEPRECATED - use AppStateContext for onboarding data
+// Kept only for migration compatibility - will be removed in future versions
 
+/** @deprecated Use AppStateContext.state.onboarding instead */
 export function getOnboardingData(): OnboardingData | null {
-  return load<OnboardingData | null>(ONBOARDING_KEY, null);
+  console.warn('[DEPRECATED] getOnboardingData - use AppStateContext.state.onboarding instead');
+  return null;
 }
 
-export function saveOnboardingData(data: OnboardingData): void {
-  save(ONBOARDING_KEY, data);
+/** @deprecated Use AppStateContext.updateOnboarding instead */
+export function saveOnboardingData(_data: OnboardingData): void {
+  console.warn('[DEPRECATED] saveOnboardingData - use AppStateContext.updateOnboarding instead');
 }
 
+/** @deprecated Use AppStateContext.state.onboarding?.completedAt instead */
 export function isOnboardingComplete(): boolean {
-  const data = getOnboardingData();
-  return data !== null && !!data.completedAt;
+  console.warn('[DEPRECATED] isOnboardingComplete - use AppStateContext.state.onboarding?.completedAt instead');
+  return false;
 }
 
+/** @deprecated Onboarding data is managed via Firebase, no need to clear localStorage */
 export function clearOnboarding(): void {
-  try {
-    localStorage.removeItem(ONBOARDING_KEY);
-  } catch {
-    // ignore
-  }
+  console.warn('[DEPRECATED] clearOnboarding - onboarding is now managed via Firebase');
 }
 
+/** @deprecated Use AppStateContext.updateOnboarding with createOnboardingData instead */
 export function completeOnboarding(
   profile: OnboardingProfile,
   objective: OnboardingObjective
 ): OnboardingData {
-  const plan = calculatePlan(profile, objective);
-  
-  const data: OnboardingData = {
-    profile,
-    objective,
-    plan,
-    completedAt: new Date().toISOString(),
-    version: 1,
-  };
-  
-  saveOnboardingData(data);
-  
-  return data;
+  console.warn('[DEPRECATED] completeOnboarding - use AppStateContext.updateOnboarding instead');
+  return createOnboardingData(profile, objective);
 }
 
-export function updateObjective(newObjective: OnboardingObjective): OnboardingData | null {
-  const existing = getOnboardingData();
-  if (!existing) return null;
-  
-  const plan = calculatePlan(existing.profile, newObjective);
-  
-  const updated: OnboardingData = {
-    ...existing,
-    objective: newObjective,
-    plan,
-    completedAt: new Date().toISOString(),
-  };
-  
-  saveOnboardingData(updated);
-  
-  return updated;
+/** @deprecated Use AppStateContext.updateOnboarding with recalculateWithNewObjective instead */
+export function updateObjective(_newObjective: OnboardingObjective): OnboardingData | null {
+  console.warn('[DEPRECATED] updateObjective - use AppStateContext.updateOnboarding instead');
+  return null;
 }
 
 // ========== AGE CALCULATION ==========

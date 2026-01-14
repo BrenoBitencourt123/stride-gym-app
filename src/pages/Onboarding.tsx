@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
+import { useAppStateContext } from "@/contexts/AppStateContext";
+import { createOnboardingData } from "@/lib/onboarding";
+import type { OnboardingData } from "@/lib/appState";
 import {
   OnboardingProfile,
   OnboardingObjective,
@@ -17,7 +20,6 @@ import {
   calculateAge,
   isAdult,
   calculatePlan,
-  completeOnboarding,
   getActivityLabel,
   getActivityDescription,
   getObjectiveLabel,
@@ -31,6 +33,7 @@ const STEPS: Step[] = ['age', 'basics', 'activity', 'objective', 'summary'];
 const Onboarding = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { updateOnboarding, updateNutritionTargets } = useAppStateContext();
   const from = location.state?.from?.pathname || '/';
 
   const [currentStep, setCurrentStep] = useState<Step>('age');
@@ -129,7 +132,7 @@ const Onboarding = () => {
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!canGoNext()) return;
 
     setIsSubmitting(true);
@@ -147,12 +150,34 @@ const Onboarding = () => {
       targetWeightKg: parseFloat(targetWeightKg) || parseFloat(weightKg),
     };
 
-    completeOnboarding(profile, obj);
+    try {
+      // Create onboarding data with calculated plan
+      const onboardingData = createOnboardingData(profile, obj);
+      
+      // Save to Firebase via context
+      await updateOnboarding(onboardingData);
+      
+      // Also update nutrition targets directly from the plan
+      await updateNutritionTargets({
+        kcal: onboardingData.plan.targetKcal,
+        protein: onboardingData.plan.proteinG,
+        carbs: onboardingData.plan.carbsG,
+        fats: onboardingData.plan.fatG,
+      });
+      
+      console.log('[Onboarding] Saved to Firebase:', {
+        targetKcal: onboardingData.plan.targetKcal,
+        proteinG: onboardingData.plan.proteinG,
+      });
 
-    // Navigate to the original route or home
-    setTimeout(() => {
-      navigate(from, { replace: true });
-    }, 500);
+      // Navigate to the original route or home
+      setTimeout(() => {
+        navigate(from, { replace: true });
+      }, 500);
+    } catch (error) {
+      console.error('[Onboarding] Error saving:', error);
+      setIsSubmitting(false);
+    }
   };
 
   const stepIcons: Record<Step, React.ReactNode> = {

@@ -27,18 +27,8 @@ const ObjectiveOnboarding = () => {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load current data from Firebase context, with localStorage fallback
-  const existingData = getOnboarding() || (() => {
-    const localData = localStorage.getItem('levelup.onboarding.v1');
-    if (localData) {
-      try {
-        return JSON.parse(localData);
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  })();
+  // Load current data from Firebase context only (single source of truth)
+  const existingData = getOnboarding();
 
   const [objective, setObjective] = useState<Objective>(
     existingData?.objective?.objective || 'maintain'

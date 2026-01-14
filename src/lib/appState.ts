@@ -306,6 +306,10 @@ function hydratePlanFromLegacy(state: AppState): { changed: boolean } {
       state.plan = legacyPlan;
       return { changed: true };
     }
+    
+    // If no legacy plan exists, use default workouts
+    // We can't import getDefaultWorkoutPlan here due to circular dependency risk
+    // So we'll just return false and let createNewUserState handle it
   }
 
   if (!state.plan) {
@@ -639,11 +643,37 @@ export function importAppState(jsonString: string): { success: boolean; error?: 
 
 // ============= NEW USER INITIALIZATION =============
 
-export function createNewUserState(): AppState {
-  const defaultPlan: UserWorkoutPlan = {
-    workouts: [],
+// Import default workouts data
+import { workouts as defaultWorkoutsData } from "@/data/workouts";
+
+function getDefaultWorkoutPlan(): UserWorkoutPlan {
+  // Convert default workouts to UserWorkout format
+  const convertedWorkouts: UserWorkout[] = Object.values(defaultWorkoutsData).map((workout) => ({
+    id: workout.id,
+    titulo: workout.titulo,
+    duracaoEstimada: workout.duracaoEstimada,
+    exercicios: workout.exercicios.map((ex) => ({
+      id: ex.id,
+      nome: ex.nome,
+      muscleGroup: ex.tags.find((t) => t !== "Principal" && t !== "Acessório") || "Outro",
+      tags: ex.tags,
+      repsRange: ex.repsRange,
+      descansoSeg: ex.descansoSeg,
+      warmupEnabled: ex.warmupEnabled,
+      feederSetsDefault: ex.feederSetsDefault,
+      workSetsDefault: ex.workSetsDefault,
+    })),
+  }));
+
+  return {
+    workouts: convertedWorkouts,
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function createNewUserState(): AppState {
+  // Get default workout plan with all exercises
+  const defaultPlan = getDefaultWorkoutPlan();
 
   // Check for legacy onboarding data
   const legacyOnboarding = load<OnboardingData | null>('levelup.onboarding.v1', null);

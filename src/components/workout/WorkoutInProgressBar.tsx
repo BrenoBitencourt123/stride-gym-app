@@ -1,7 +1,7 @@
 import { Play, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getTreinoHoje, clearTreinoProgress, saveTreinoHoje } from "@/lib/storage";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useWorkoutPlan } from "@/contexts/AppStateContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,21 +18,9 @@ interface WorkoutInProgressBarProps {
 }
 
 const WorkoutInProgressBar = ({ onDiscard }: WorkoutInProgressBarProps) => {
-  const [treinoHoje, setTreinoHoje] = useState(getTreinoHoje());
+  const { treinoHoje, updateTreinoHoje, updateTreinoProgresso, treinoProgresso } = useWorkoutPlan();
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [elapsedTime, setElapsedTime] = useState("0:00");
-
-  useEffect(() => {
-    const checkTreino = () => {
-      setTreinoHoje(getTreinoHoje());
-    };
-
-    // Check on mount and periodically
-    checkTreino();
-    const interval = setInterval(checkTreino, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (!treinoHoje?.startedAt || treinoHoje.completedAt) return;
@@ -52,16 +40,19 @@ const WorkoutInProgressBar = ({ onDiscard }: WorkoutInProgressBarProps) => {
     return () => clearInterval(interval);
   }, [treinoHoje]);
 
-  const handleDiscard = () => {
+  const handleDiscard = useCallback(async () => {
     if (treinoHoje?.treinoId) {
-      clearTreinoProgress(treinoHoje.treinoId);
+      // Clear treino progress for this workout
+      const updatedProgresso = { ...treinoProgresso };
+      delete updatedProgresso[treinoHoje.treinoId];
+      await updateTreinoProgresso(updatedProgresso);
+      
       // Clear treino hoje
-      localStorage.removeItem("levelup.treinoHoje");
-      setTreinoHoje(null);
+      await updateTreinoHoje(null);
     }
     setShowDiscardDialog(false);
     onDiscard?.();
-  };
+  }, [treinoHoje, treinoProgresso, updateTreinoProgresso, updateTreinoHoje, onDiscard]);
 
   // Don't show if no active workout or if completed
   if (!treinoHoje || treinoHoje.completedAt) return null;

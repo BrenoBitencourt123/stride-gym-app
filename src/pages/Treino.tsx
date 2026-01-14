@@ -1,27 +1,32 @@
 import { useState } from "react";
-import { ChevronDown, Settings, Play, ChevronRight, CheckCircle, BarChart3 } from "lucide-react";
+import { ChevronDown, Settings, Play, ChevronRight, CheckCircle, BarChart3, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import WorkoutInProgressBar from "@/components/workout/WorkoutInProgressBar";
-import { getUserWorkoutPlan, getTreinoHoje, saveTreinoHoje } from "@/lib/storage";
-import { getWorkoutOfDay, getWeekStart } from "@/lib/weekUtils";
-import { getWeeklyCompletions } from "@/lib/appState";
+import { useWorkoutPlan, useAppStateContext } from "@/contexts/AppStateContext";
+import { getWeekStart, getWorkoutOfDay } from "@/lib/weekUtils";
 
 const Treino = () => {
   const navigate = useNavigate();
-  const userPlan = getUserWorkoutPlan();
+  const { loading } = useAppStateContext();
+  const { 
+    plan: userPlan, 
+    treinoHoje, 
+    getWeeklyCompletions,
+    updateTreinoHoje 
+  } = useWorkoutPlan();
+  
   const todayWorkoutId = getWorkoutOfDay();
   const weekStart = getWeekStart();
-  const weeklyCompletions = getWeeklyCompletions(weekStart);
-  const treinoHoje = getTreinoHoje();
+  const weeklyCompletions = getWeeklyCompletions(weekStart) || {};
   
   // Count completed workouts this week
   const completedCount = Object.keys(weeklyCompletions).length;
   const weeklyGoal = 4; // Could be configurable
   const progressPercent = Math.min(100, (completedCount / weeklyGoal) * 100);
 
-  const handleStartWorkout = (workoutId: string) => {
-    saveTreinoHoje({
+  const handleStartWorkout = async (workoutId: string) => {
+    await updateTreinoHoje({
       treinoId: workoutId,
       startedAt: new Date().toISOString(),
     });
@@ -34,11 +39,23 @@ const Treino = () => {
     }
   };
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Default empty plan if none exists
+  const workouts = userPlan?.workouts || [];
+
   // Find next workout (today's or first uncompleted)
-  const nextWorkout = userPlan.workouts.find((w) => {
+  const nextWorkout = workouts.find((w) => {
     if (w.id === todayWorkoutId && !weeklyCompletions[w.id]) return true;
     return false;
-  }) || userPlan.workouts.find((w) => !weeklyCompletions[w.id]);
+  }) || workouts.find((w) => !weeklyCompletions[w.id]);
 
   const hasActiveWorkout = treinoHoje && !treinoHoje.completedAt;
 
@@ -171,7 +188,7 @@ const Treino = () => {
           </div>
 
           <div className="space-y-3">
-            {userPlan.workouts.map((workout) => {
+            {workouts.map((workout) => {
               const isCompleted = !!weeklyCompletions[workout.id];
               const isToday = workout.id === todayWorkoutId;
               const isActiveNow = hasActiveWorkout && treinoHoje?.treinoId === workout.id;
@@ -224,7 +241,7 @@ const Treino = () => {
         </div>
 
         {/* Empty state if no workouts */}
-        {userPlan.workouts.length === 0 && (
+        {workouts.length === 0 && (
           <div className="card-glass p-8 text-center">
             <p className="text-muted-foreground mb-4">Nenhum treino configurado</p>
             <Link

@@ -2,7 +2,7 @@
 // Global AppState context with Firebase-first persistence
 // Replaces localStorage-based state management
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import {
   getUserState,
@@ -114,6 +114,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           const newState = createNewUserState();
           await setUserState(user.uid, newState);
           firestoreState = newState;
+        } else {
+          // Check if existing user has empty workout plan
+          const hasPlan = firestoreState.plan && 
+                          Array.isArray(firestoreState.plan.workouts) && 
+                          firestoreState.plan.workouts.length > 0;
+          
+          if (!hasPlan) {
+            // Merge default plan into existing state
+            const defaultState = createNewUserState();
+            firestoreState = {
+              ...firestoreState,
+              plan: defaultState.plan,
+            };
+            await setUserState(user.uid, firestoreState);
+            console.log('[AppStateContext] Added default workout plan to existing user');
+          }
         }
         
         if (isMounted) {

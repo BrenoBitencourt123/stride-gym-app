@@ -2,6 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // Firebase config is public and safe to include in client code
 // These are publishable keys - they identify the project but don't grant access
@@ -21,7 +22,10 @@ const isConfigured = true;
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
+
+export { ref, uploadBytes, getDownloadURL };
 
 export const isFirebaseConfigured = () => true;
 

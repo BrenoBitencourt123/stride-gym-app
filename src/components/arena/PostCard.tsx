@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Post } from "@/lib/arena/types";
 import { getEloFrameStyles, EloTier } from "@/lib/arena/eloUtils";
 import EloFrame from "./EloFrame";
+import UserAvatar from "./UserAvatar";
 import { useState, useEffect } from "react";
 import { hasGivenKudos } from "@/lib/arena/arenaFirestore";
 import { useAuth } from "@/contexts/AuthContext";
@@ -90,12 +91,13 @@ const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
       >
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
-          <div 
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-            style={{ background: eloStyles.gradient }}
-          >
-            {post.author.displayName.charAt(0).toUpperCase()}
-          </div>
+          <UserAvatar
+            photoURL={post.author.photoURL}
+            avatarId={post.author.avatarId}
+            displayName={post.author.displayName}
+            eloTier={eloTier}
+            size="md"
+          />
           <div className="flex-1">
             <p className="font-semibold text-foreground">{post.author.displayName}</p>
             <p className="text-xs text-muted-foreground">{timeAgo}</p>

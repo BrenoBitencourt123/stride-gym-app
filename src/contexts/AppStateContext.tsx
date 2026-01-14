@@ -1,6 +1,7 @@
 // src/contexts/AppStateContext.tsx
 // Global AppState context with Firebase-first persistence
 // Replaces localStorage-based state management
+// v2: Fixed context initialization
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';

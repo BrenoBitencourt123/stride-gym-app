@@ -138,9 +138,16 @@ export function getEloDisplayString(elo: EloInfo): string {
 /**
  * Get display name for tier and division
  */
-export function getEloDisplayName(tier: EloTier, division: number): string {
+export function getEloDisplayName(eloOrTier: EloInfo | EloTier, division?: number): string {
+  // Handle EloInfo object
+  if (typeof eloOrTier === 'object' && eloOrTier !== null) {
+    return getEloDisplayString(eloOrTier);
+  }
+  
+  // Handle tier + division parameters
+  const tier = eloOrTier as EloTier;
   const tierName = getEloTierName(tier);
-  const divisionRoman = ['I', 'II', 'III', 'IV'][division - 1] || 'IV';
+  const divisionRoman = ['I', 'II', 'III', 'IV'][(division || 4) - 1] || 'IV';
   
   // Top tiers don't show division
   if (['master', 'grandmaster', 'challenger'].includes(tier)) {
@@ -148,6 +155,17 @@ export function getEloDisplayName(tier: EloTier, division: number): string {
   }
   
   return `${tierName} ${divisionRoman}`;
+}
+
+/**
+ * Get frame styles for elo tier (inline CSS)
+ */
+export function getEloStyles(tier: EloTier): {
+  borderColor: string;
+  gradient: string;
+  shadow: string;
+} {
+  return getEloFrameStyles(tier);
 }
 
 /**

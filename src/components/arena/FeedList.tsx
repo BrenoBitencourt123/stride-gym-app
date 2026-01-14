@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { useArenaFeed, useArenaClan } from "@/hooks/useArenaFirestore";
 import PostCard from "./PostCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import WelcomePostCard from "./WelcomePostCard";
+import EmptyFeedCard from "./EmptyFeedCard";
 
 interface FeedListProps {
   type: "global" | "clan";
@@ -59,24 +61,26 @@ const FeedList = ({ type }: FeedListProps) => {
         </Button>
       </div>
 
-      {/* Posts */}
-      {posts.length > 0 ? (
-        posts.map((post) => (
-          <PostCard 
-            key={post.id} 
-            post={post}
-            onKudosToggle={toggleKudos}
-          />
-        ))
-      ) : (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">
-            {type === "global" 
-              ? "Nenhum post ainda. Seja o primeiro a compartilhar um treino!"
-              : "Nenhum post do clã ainda."
-            }
-          </p>
+      {/* Welcome card for global feed */}
+      {type === "global" && (
+        <div className="mb-4">
+          <WelcomePostCard />
         </div>
+      )}
+
+      {/* Posts or empty state */}
+      {posts.length > 0 ? (
+        <div className="space-y-4">
+          {posts.map((post) => (
+            <PostCard 
+              key={post.id} 
+              post={post}
+              onKudosToggle={toggleKudos}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyFeedCard type={type} />
       )}
     </div>
   );

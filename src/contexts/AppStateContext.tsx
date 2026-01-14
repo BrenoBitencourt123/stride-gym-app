@@ -337,7 +337,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state, updateState]);
   
   const updateOnboarding = useCallback(async (data: OnboardingData | null) => {
-    if (!state) return false;
+    if (!user) return false;
+    
+    // Handle case where state is not yet initialized (new users during onboarding)
+    const currentState = state || createNewUserState();
     
     // Also update nutrition targets based on onboarding plan
     const updates: Partial<AppState> = {
@@ -346,7 +349,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     
     if (data?.plan) {
       updates.nutrition = {
-        ...state.nutrition,
+        ...currentState.nutrition,
         targets: {
           kcal: data.plan.targetKcal,
           protein: data.plan.proteinG,
@@ -356,8 +359,28 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       };
     }
     
-    return updateState(updates);
-  }, [state, updateState]);
+    const newState: AppState = {
+      ...currentState,
+      ...updates,
+      updatedAt: Date.now()
+    };
+    
+    // Optimistic update
+    setState(newState);
+    setSyncState('syncing');
+    
+    // Persist to Firestore
+    const success = await setUserState(user.uid, newState);
+    
+    if (success) {
+      setSyncState('synced');
+    } else {
+      setState(state);
+      setSyncState('error');
+    }
+    
+    return success;
+  }, [user, state]);
   
   // ============= CONTEXT VALUE =============
   

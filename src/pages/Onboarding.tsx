@@ -33,7 +33,7 @@ const STEPS: Step[] = ['age', 'basics', 'activity', 'objective', 'summary'];
 const Onboarding = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { updateOnboarding, updateNutritionTargets } = useAppStateContext();
+  const { updateOnboarding } = useAppStateContext();
   const from = location.state?.from?.pathname || '/';
 
   const [currentStep, setCurrentStep] = useState<Step>('age');
@@ -154,16 +154,11 @@ const Onboarding = () => {
       // Create onboarding data with calculated plan
       const onboardingData = createOnboardingData(profile, obj);
       
+      // Save to localStorage as backup (for legacy compatibility and redundancy)
+      localStorage.setItem('levelup.onboarding.v1', JSON.stringify(onboardingData));
+      
       // Save to Firebase via context
       await updateOnboarding(onboardingData);
-      
-      // Also update nutrition targets directly from the plan
-      await updateNutritionTargets({
-        kcal: onboardingData.plan.targetKcal,
-        protein: onboardingData.plan.proteinG,
-        carbs: onboardingData.plan.carbsG,
-        fats: onboardingData.plan.fatG,
-      });
       
       console.log('[Onboarding] Saved to Firebase:', {
         targetKcal: onboardingData.plan.targetKcal,

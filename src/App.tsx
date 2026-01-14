@@ -26,6 +26,10 @@ import Onboarding from "./pages/Onboarding";
 import ObjectiveOnboarding from "./pages/ObjectiveOnboarding";
 import NotFound from "./pages/NotFound";
 import Arena from "./pages/Arena";
+import PostDetail from "./pages/PostDetail";
+import ClanHub from "./pages/ClanHub";
+import CreateClan from "./pages/CreateClan";
+import JoinClan from "./pages/JoinClan";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +54,11 @@ const App = () => (
             <Route path="/treino/:treinoId/:exercicioId" element={<ProtectedRoute><ExerciseLogging /></ProtectedRoute>} />
             <Route path="/treino/:treinoId/resumo" element={<ProtectedRoute><WorkoutSummary /></ProtectedRoute>} />
             <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
+            <Route path="/arena/post/:id" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
+            <Route path="/arena/clan" element={<ProtectedRoute><ClanHub /></ProtectedRoute>} />
+            <Route path="/arena/clan/create" element={<ProtectedRoute><CreateClan /></ProtectedRoute>} />
+            <Route path="/arena/clan/join" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />
+            <Route path="/arena/clan/invite/:code" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />
             <Route path="/nutricao" element={<ProtectedRoute><Nutricao /></ProtectedRoute>} />
             <Route path="/nutricao/criar-dieta" element={<ProtectedRoute><CriarDieta /></ProtectedRoute>} />
             <Route path="/nutricao/adicionar-alimento" element={<ProtectedRoute><AdicionarAlimento /></ProtectedRoute>} />

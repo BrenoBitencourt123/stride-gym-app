@@ -1,6 +1,6 @@
-import { Trophy, ArrowRight, CheckCircle, Dumbbell } from "lucide-react";
+import { Trophy, ArrowRight, CheckCircle, Dumbbell, Share2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { 
   getUserWorkout,
   completeTreinoDoDia, 
@@ -14,6 +14,8 @@ import { markWorkoutCompletedThisWeek } from "@/lib/appState";
 import { getWorkoutOfDay } from "@/lib/weekUtils";
 import BottomNav from "@/components/BottomNav";
 import { useSyncTrigger } from "@/hooks/useSyncTrigger";
+import WorkoutCompleteShareModal from "@/components/arena/WorkoutCompleteShareModal";
+import { WorkoutSnapshot } from "@/lib/arena/types";
 
 const XP_PER_WORKOUT = 150;
 
@@ -25,6 +27,8 @@ const WorkoutSummary = () => {
   const workoutId = treinoId || defaultWorkoutId;
   const workout = getUserWorkout(workoutId);
   const snapshotSavedRef = useRef(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [workoutSnapshotData, setWorkoutSnapshotData] = useState<WorkoutSnapshot | null>(null);
   
   const { totalSets, totalVolume, exercisesDone } = getWorkoutSummaryStats(workoutId);
   const completedSets = totalSets;
@@ -36,6 +40,9 @@ const WorkoutSummary = () => {
     
     const progresso = getTreinoProgresso();
     const workoutProgress = progresso[workoutId];
+    
+    const exerciseSnapshots: WorkoutSnapshot['exercises'] = [];
+    let totalReps = 0;
     
     if (workoutProgress) {
       for (const exercise of workout.exercicios) {
@@ -53,16 +60,40 @@ const WorkoutSummary = () => {
               exercise.repsRange,
               completedSetsData
             );
+            
+            exerciseSnapshots.push({
+              exerciseId: exercise.id,
+              exerciseName: exercise.nome,
+              sets: completedSetsData.map(s => ({ kg: s.kg, reps: s.reps })),
+            });
+            
+            totalReps += completedSetsData.reduce((sum, s) => sum + s.reps, 0);
           }
         }
       }
     }
+    
+    // Create workout snapshot for sharing
+    const snapshot: WorkoutSnapshot = {
+      workoutId: workout.id,
+      workoutTitle: workout.titulo,
+      duration: 45 * 60, // Default 45 min in seconds
+      totalSets: completedSets,
+      totalReps,
+      totalVolume,
+      prsCount: 0,
+      exercises: exerciseSnapshots,
+    };
+    setWorkoutSnapshotData(snapshot);
     
     // Save workout completed record
     saveWorkoutCompleted(workout.id, totalVolume);
     
     // Mark workout as completed this week
     markWorkoutCompletedThisWeek(workout.id, XP_PER_WORKOUT, completedSets, totalVolume);
+    
+    // Show share modal automatically
+    setTimeout(() => setShowShareModal(true), 500);
   }, [workout, workoutId, totalVolume, completedSets]);
 
   const handleConcluir = () => {
@@ -148,6 +179,22 @@ const WorkoutSummary = () => {
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Share Modal */}
+      {workoutSnapshotData && (
+        <WorkoutCompleteShareModal
+          open={showShareModal}
+          onOpenChange={setShowShareModal}
+          workoutSnapshot={workoutSnapshotData}
+          summary={{
+            duration: 45,
+            totalSets: completedSets,
+            totalVolume,
+            xpGained: XP_PER_WORKOUT,
+          }}
+          onPostToArena={() => setShowShareModal(false)}
+        />
+      )}
 
       {/* Bottom Nav */}
       <BottomNav />

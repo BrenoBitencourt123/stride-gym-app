@@ -1,9 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { Home, Dumbbell, Apple } from "lucide-react";
+import { Home, Dumbbell, Swords, Apple } from "lucide-react";
 
 const tabs = [
   { to: "/", label: "Início", icon: Home, end: true },
   { to: "/treino", label: "Treino", icon: Dumbbell },
+  { to: "/arena", label: "Arena", icon: Swords },
   { to: "/nutricao", label: "Nutrição", icon: Apple },
 ];
 

@@ -10,6 +10,9 @@ import {
   ClanMember 
 } from './types';
 
+// Re-export EloTier for use in components
+export type { EloTier } from './types';
+
 // ============= ELO CONSTANTS =============
 
 export const WEEKLY_TARGET_POINTS = 100;
@@ -130,6 +133,51 @@ export function getEloDisplayString(elo: EloInfo): string {
   }
   
   return `${tierName} ${divisionRoman}`;
+}
+
+/**
+ * Get display name for tier and division
+ */
+export function getEloDisplayName(tier: EloTier, division: number): string {
+  const tierName = getEloTierName(tier);
+  const divisionRoman = ['I', 'II', 'III', 'IV'][division - 1] || 'IV';
+  
+  // Top tiers don't show division
+  if (['master', 'grandmaster', 'challenger'].includes(tier)) {
+    return tierName;
+  }
+  
+  return `${tierName} ${divisionRoman}`;
+}
+
+/**
+ * Get frame styles for elo tier (CSS values)
+ */
+export function getEloFrameStyles(tier: EloTier): {
+  borderColor: string;
+  gradient: string;
+  shadow: string;
+} {
+  const colorMap: Record<EloTier, { h: number; s: number; l: number }> = {
+    iron: { h: 0, s: 0, l: 50 },
+    bronze: { h: 30, s: 60, l: 40 },
+    silver: { h: 210, s: 10, l: 70 },
+    gold: { h: 45, s: 90, l: 50 },
+    platinum: { h: 185, s: 60, l: 55 },
+    emerald: { h: 145, s: 60, l: 45 },
+    diamond: { h: 210, s: 80, l: 60 },
+    master: { h: 280, s: 70, l: 55 },
+    grandmaster: { h: 0, s: 75, l: 55 },
+    challenger: { h: 45, s: 100, l: 55 },
+  };
+  
+  const c = colorMap[tier];
+  
+  return {
+    borderColor: `hsl(${c.h}, ${c.s}%, ${c.l}%)`,
+    gradient: `linear-gradient(135deg, hsl(${c.h}, ${c.s}%, ${c.l + 10}%), hsl(${c.h}, ${c.s}%, ${c.l - 10}%))`,
+    shadow: `0 0 15px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.4)`,
+  };
 }
 
 /**

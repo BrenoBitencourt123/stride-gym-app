@@ -25,6 +25,7 @@ import RestDay from "./pages/RestDay";
 import Onboarding from "./pages/Onboarding";
 import ObjectiveOnboarding from "./pages/ObjectiveOnboarding";
 import NotFound from "./pages/NotFound";
+import Arena from "./pages/Arena";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/treino/:treinoId/ativo" element={<ProtectedRoute><ActiveWorkout /></ProtectedRoute>} />
             <Route path="/treino/:treinoId/:exercicioId" element={<ProtectedRoute><ExerciseLogging /></ProtectedRoute>} />
             <Route path="/treino/:treinoId/resumo" element={<ProtectedRoute><WorkoutSummary /></ProtectedRoute>} />
+            <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
             <Route path="/nutricao" element={<ProtectedRoute><Nutricao /></ProtectedRoute>} />
             <Route path="/nutricao/criar-dieta" element={<ProtectedRoute><CriarDieta /></ProtectedRoute>} />
             <Route path="/nutricao/adicionar-alimento" element={<ProtectedRoute><AdicionarAlimento /></ProtectedRoute>} />

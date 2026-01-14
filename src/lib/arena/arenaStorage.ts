@@ -15,6 +15,7 @@ import {
   InAppNotification,
   EloInfo,
   PostVisibility,
+  DailyMemberStatus,
   ARENA_STATE_KEY,
   ARENA_STATE_VERSION,
 } from './types';
@@ -23,8 +24,34 @@ import {
   createDefaultSchedule, 
   calculateWorkoutPoints,
   getSaoPauloDayIndex,
-  applyPendingScheduleIfDue
+  applyPendingScheduleIfDue,
+  getMemberDailyStatus
 } from './scheduleUtils';
+
+// Re-export types for components
+export type { 
+  WorkoutSnapshot, 
+  ClanMember,
+  DailyMemberStatus,
+  Post,
+  ClanRankingEntry,
+} from './types';
+
+// Type aliases for backwards compatibility
+export type ArenaPost = Post;
+export type ClanRanking = ClanRankingEntry;
+
+// Alias functions
+export const getGlobalFeed = () => getFeedPosts('global');
+export const getClanFeed = (clanId: string) => getFeedPosts('clan');
+export const getUserClan = getMyClan;
+export const getPostKudos = (postId: string) => {
+  const post = getPostById(postId);
+  return post ? Array(post.kudosCount).fill({ type: 'kudos' }) : [];
+};
+export const hasUserKudos = hasGivenKudos;
+export const getClanRanking = (period: 'weekly' | 'monthly') => 
+  period === 'weekly' ? getWeeklyRankings() : getMonthlyRankings();
 
 // ============= DEFAULT STATE =============
 

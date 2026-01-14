@@ -18,6 +18,7 @@ import { toast } from "sonner";
 const ObjectiveOnboarding = () => {
   const navigate = useNavigate();
   const { 
+    state,
     loading, 
     getOnboarding, 
     updateOnboarding, 
@@ -26,8 +27,18 @@ const ObjectiveOnboarding = () => {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load current data from Firebase context
-  const existingData = getOnboarding();
+  // Load current data from Firebase context, with localStorage fallback
+  const existingData = getOnboarding() || (() => {
+    const localData = localStorage.getItem('levelup.onboarding.v1');
+    if (localData) {
+      try {
+        return JSON.parse(localData);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  })();
 
   const [objective, setObjective] = useState<Objective>(
     existingData?.objective?.objective || 'maintain'
@@ -42,7 +53,7 @@ const ObjectiveOnboarding = () => {
       setObjective(existingData.objective?.objective || 'maintain');
       setTargetWeightKg(existingData.objective?.targetWeightKg?.toString() || '');
     }
-  }, [existingData]);
+  }, [existingData?.objective?.objective, existingData?.objective?.targetWeightKg]);
 
   // Preview of new plan
   const [previewKcal, setPreviewKcal] = useState<number | null>(null);
@@ -104,7 +115,8 @@ const ObjectiveOnboarding = () => {
     }
   };
 
-  if (loading) {
+  // Show loading while state is being fetched
+  if (loading || (!state && !existingData)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />

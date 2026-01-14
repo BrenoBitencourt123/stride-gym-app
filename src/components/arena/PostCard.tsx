@@ -91,15 +91,29 @@ const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
       >
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
-          <UserAvatar
-            photoURL={post.author.photoURL}
-            avatarId={post.author.avatarId}
-            displayName={post.author.displayName}
-            eloTier={eloTier}
-            size="md"
-          />
-          <div className="flex-1">
-            <p className="font-semibold text-foreground">{post.author.displayName}</p>
+          <div 
+            className="cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/arena/profile/${post.author.userId}`);
+            }}
+          >
+            <UserAvatar
+              photoURL={post.author.photoURL}
+              avatarId={post.author.avatarId}
+              displayName={post.author.displayName}
+              eloTier={eloTier}
+              size="md"
+            />
+          </div>
+          <div 
+            className="flex-1 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/arena/profile/${post.author.userId}`);
+            }}
+          >
+            <p className="font-semibold text-foreground hover:underline">{post.author.displayName}</p>
             <p className="text-xs text-muted-foreground">{timeAgo}</p>
           </div>
           <div 

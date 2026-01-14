@@ -5,6 +5,7 @@ import PostCard from "./PostCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import WelcomePostCard from "./WelcomePostCard";
 import EmptyFeedCard from "./EmptyFeedCard";
+import SuggestedAthletesRow from "./SuggestedAthletesRow";
 
 interface FeedListProps {
   type: "global" | "clan";
@@ -46,6 +47,32 @@ const FeedList = ({ type }: FeedListProps) => {
     );
   }
 
+  // For global feed with no posts, show suggestions first then empty CTA
+  if (type === "global" && posts.length === 0) {
+    return (
+      <div>
+        {/* Refresh Button */}
+        <div className="flex justify-end mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={refresh}
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+        </div>
+
+        {/* Suggested Athletes first */}
+        <SuggestedAthletesRow className="mb-6" />
+
+        {/* Then empty state */}
+        <EmptyFeedCard type={type} />
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Refresh Button */}
@@ -68,16 +95,25 @@ const FeedList = ({ type }: FeedListProps) => {
         </div>
       )}
 
-      {/* Posts or empty state */}
+      {/* Posts with suggested athletes interspersed */}
       {posts.length > 0 ? (
         <div className="space-y-4">
-          {posts.map((post) => (
-            <PostCard 
-              key={post.id} 
-              post={post}
-              onKudosToggle={toggleKudos}
-            />
+          {posts.map((post, index) => (
+            <div key={post.id}>
+              <PostCard 
+                post={post}
+                onKudosToggle={toggleKudos}
+              />
+              {/* Show suggested athletes after the 2nd post (index 1) for global feed */}
+              {type === "global" && index === 1 && (
+                <SuggestedAthletesRow className="my-6" />
+              )}
+            </div>
           ))}
+          {/* If fewer than 3 posts, show suggestions at the end */}
+          {type === "global" && posts.length > 0 && posts.length <= 2 && (
+            <SuggestedAthletesRow className="mt-6" />
+          )}
         </div>
       ) : (
         <EmptyFeedCard type={type} />

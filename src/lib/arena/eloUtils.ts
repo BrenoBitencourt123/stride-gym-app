@@ -10,8 +10,9 @@ import {
   ClanMember 
 } from './types';
 
-// Re-export EloTier for use in components
+// Re-export types for use in components
 export type { EloTier } from './types';
+export { ELO_TIER_NAMES } from './types';
 
 // ============= ELO CONSTANTS =============
 

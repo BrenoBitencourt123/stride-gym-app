@@ -31,6 +31,7 @@ import PostDetail from "./pages/PostDetail";
 import ClanHub from "./pages/ClanHub";
 import CreateClan from "./pages/CreateClan";
 import JoinClan from "./pages/JoinClan";
+import AthleteProfile from "./pages/AthleteProfile";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ function AppRoutes() {
         <Route path="/treino/:treinoId/resumo" element={<ProtectedRoute><WorkoutSummary /></ProtectedRoute>} />
         <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
         <Route path="/arena/post/:id" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
+        <Route path="/arena/profile/:userId" element={<ProtectedRoute><AthleteProfile /></ProtectedRoute>} />
         <Route path="/arena/clan" element={<ProtectedRoute><ClanHub /></ProtectedRoute>} />
         <Route path="/arena/clan/create" element={<ProtectedRoute><CreateClan /></ProtectedRoute>} />
         <Route path="/arena/clan/join" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />

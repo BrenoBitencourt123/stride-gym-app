@@ -1,33 +1,61 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { ArrowLeft, Award, Flame, Dumbbell, TrendingUp, Scale, Edit2, ChevronRight, Cloud, CloudOff, RefreshCw, LogOut, Download, Upload, Check, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import AvatarFrame from "@/components/AvatarFrame";
 import XPBar from "@/components/XPBar";
 import { Button } from "@/components/ui/button";
-import { getProfile, getAchievements, getTotalWorkoutsCompleted, getTotalVolume } from "@/lib/storage";
 import { exportAppState, importAppState } from "@/lib/appState";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAppStateContext } from "@/contexts/AppStateContext";
 import { toast } from "sonner";
 
 const Perfil = () => {
   const navigate = useNavigate();
   const { user, syncStatus, isConfigured, logout, triggerSync } = useAuth();
+  const { state, loading, getProfile: getProfileFromContext } = useAppStateContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
   
-  const profile = getProfile();
-  const achievements = getAchievements();
-  const unlockedCount = achievements.filter(a => a.unlocked).length;
-  const totalWorkouts = getTotalWorkoutsCompleted();
-  const totalVolume = getTotalVolume();
+  // Get data from Firebase state
+  const profile = getProfileFromContext();
+  const progression = state?.progression;
+  
+  // Calculate achievements from state
+  const unlockedAchievements = useMemo(() => {
+    return state?.achievements?.unlocked || [];
+  }, [state]);
+  
+  const unlockedCount = unlockedAchievements.length;
+  
+  // Calculate stats from state
+  const totalWorkouts = useMemo(() => {
+    let count = 0;
+    Object.values(state?.weeklyCompletions || {}).forEach((week: any) => {
+      count += Object.keys(week || {}).length;
+    });
+    return count;
+  }, [state?.weeklyCompletions]);
+  
+  const totalVolume = useMemo(() => {
+    let vol = 0;
+    Object.values(state?.weeklyCompletions || {}).forEach((week: any) => {
+      Object.values(week || {}).forEach((completion: any) => {
+        vol += completion?.totalVolume || 0;
+      });
+    });
+    return vol;
+  }, [state?.weeklyCompletions]);
+  
+  // Get streak from progression (use bestStreak or default)
+  const streak = 0; // TODO: Add streak tracking to progression
   
   const stats = [
-    { icon: Flame, label: "Streak atual", value: `${profile.streakDias} dias`, color: "text-orange-500" },
+    { icon: Flame, label: "Streak atual", value: `${streak} dias`, color: "text-orange-500" },
     { icon: Dumbbell, label: "Treinos concluídos", value: String(totalWorkouts), color: "text-blue-500" },
     { icon: TrendingUp, label: "Volume total", value: `${(totalVolume / 1000).toFixed(1)}t`, color: "text-green-500" },
-    { icon: Award, label: "Conquistas", value: `${unlockedCount}/${achievements.length}`, color: "text-yellow-500" },
+    { icon: Award, label: "Conquistas", value: `${unlockedCount}/12`, color: "text-yellow-500" },
   ];
 
   const getSyncStatusInfo = () => {
@@ -124,6 +152,20 @@ const Perfil = () => {
   const syncInfo = getSyncStatusInfo();
   const SyncIcon = syncInfo.icon;
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Use progression for level/XP display
+  const displayLevel = progression?.accountLevel || 1;
+  const displayXP = progression?.xp || 0;
+  const displayXPMeta = progression?.xpToNext || 500;
+
   return (
     <div className="min-h-screen bg-background pb-28">
       {/* Background */}
@@ -154,8 +196,8 @@ const Perfil = () => {
 
         {/* Avatar & Level */}
         <div className="flex flex-col items-center mb-6">
-          <AvatarFrame level={profile.level} />
-          <h2 className="mt-4 text-xl font-bold text-foreground">Nível {profile.level}</h2>
+          <AvatarFrame level={displayLevel} />
+          <h2 className="mt-4 text-xl font-bold text-foreground">Nível {displayLevel}</h2>
           <p className="text-sm text-muted-foreground">
             {user ? user.email : 'Atleta Dedicado'}
           </p>
@@ -165,9 +207,9 @@ const Perfil = () => {
         <div className="card-glass p-4 mb-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-foreground font-medium">XP para próximo nível</span>
-            <span className="text-sm text-muted-foreground">{profile.xpAtual} / {profile.xpMeta}</span>
+            <span className="text-sm text-muted-foreground">{displayXP} / {displayXPMeta}</span>
           </div>
-          <XPBar current={profile.xpAtual} max={profile.xpMeta} />
+          <XPBar current={displayXP} max={displayXPMeta} />
         </div>
 
         {/* Sync Status Card */}

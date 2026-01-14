@@ -154,10 +154,7 @@ const Onboarding = () => {
       // Create onboarding data with calculated plan
       const onboardingData = createOnboardingData(profile, obj);
       
-      // Save to localStorage as backup (for legacy compatibility and redundancy)
-      localStorage.setItem('levelup.onboarding.v1', JSON.stringify(onboardingData));
-      
-      // Save to Firebase via context
+      // Save to Firebase via context (single source of truth)
       await updateOnboarding(onboardingData);
       
       console.log('[Onboarding] Saved to Firebase:', {

@@ -1,23 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronDown, MoreVertical, Plus, Timer, Dumbbell, CheckCircle2 } from "lucide-react";
+import { ChevronDown, MoreVertical, Plus, Timer, Dumbbell, CheckCircle2, Loader2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import WorkoutMetrics from "@/components/workout/WorkoutMetrics";
 import ExerciseSection from "@/components/workout/ExerciseSection";
 import SetTypeSelector from "@/components/workout/SetTypeSelector";
 import RestTimerModal from "@/components/workout/RestTimerModal";
-import {
-  getUserWorkout,
-  getExerciseProgress,
-  saveExerciseProgress,
-  SetProgress,
-  ExerciseProgress,
-  getTreinoHoje,
-  saveTreinoHoje,
-  getWorkoutSummaryStats,
-  clearTreinoProgress,
-  clearTreinoHoje,
-} from "@/lib/storage";
+import { useWorkoutPlan, useAppStateContext } from "@/contexts/AppStateContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +20,19 @@ import {
 import { toast } from "sonner";
 
 export type SetType = "warmup" | "normal" | "failed" | "drop";
+
+export interface SetProgress {
+  kg: number;
+  reps: number;
+  done: boolean;
+}
+
+export interface ExerciseProgress {
+  warmupDone: boolean;
+  feederSets: SetProgress[];
+  workSets: SetProgress[];
+  updatedAt: string;
+}
 
 export interface ActiveSet extends SetProgress {
   type: SetType;
@@ -49,12 +51,14 @@ export interface ActiveExercise {
 const ActiveWorkout = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
+  const { loading: appLoading } = useAppStateContext();
+  const { plan, treinoHoje, treinoProgresso, updateTreinoHoje, updateTreinoProgresso } = useWorkoutPlan();
   
-  // Memoize workout to prevent new object reference on every render
+  // Get workout from Firebase plan
   const workout = useMemo(() => {
-    if (!treinoId) return null;
-    return getUserWorkout(treinoId);
-  }, [treinoId]);
+    if (!treinoId || !plan?.workouts) return null;
+    return plan.workouts.find(w => w.id === treinoId) || null;
+  }, [treinoId, plan]);
   
   // Track if we've already initialized for this workout
   const initializedRef = useRef<string | null>(null);
@@ -71,29 +75,32 @@ const ActiveWorkout = () => {
 
   // Initialize workout - runs only ONCE per treinoId
   useEffect(() => {
-    if (!workout || !treinoId) return;
+    if (!workout || !treinoId || appLoading) return;
     
     // Prevent re-initialization if already done for this workout
     if (initializedRef.current === treinoId) return;
     initializedRef.current = treinoId;
 
-    const treinoHoje = getTreinoHoje();
-    
-    // Set start time
+    // Set start time from Firebase
     if (treinoHoje?.treinoId === treinoId && treinoHoje.startedAt) {
       setStartTime(new Date(treinoHoje.startedAt));
     } else {
       const now = new Date();
       setStartTime(now);
-      saveTreinoHoje({
+      updateTreinoHoje({
         treinoId: workout.id,
         startedAt: now.toISOString(),
       });
     }
+    
+    // Get saved progress from Firebase
+    const getExerciseProgress = (exId: string): ExerciseProgress | null => {
+      return treinoProgresso?.[treinoId]?.[exId] || null;
+    };
 
     // Initialize exercises from workout data and saved progress
     const initialExercises: ActiveExercise[] = workout.exercicios.map((ex) => {
-      const savedProgress = getExerciseProgress(treinoId, ex.id);
+      const savedProgress = getExerciseProgress(ex.id);
       
       if (savedProgress) {
         // Convert saved progress to active sets
@@ -153,7 +160,7 @@ const ActiveWorkout = () => {
     });
 
     setExercises(initialExercises);
-  }, [workout, treinoId]);
+  }, [workout, treinoId, appLoading, treinoHoje, treinoProgresso, updateTreinoHoje]);
 
   // Timer
   useEffect(() => {
@@ -172,7 +179,12 @@ const ActiveWorkout = () => {
   useEffect(() => {
     if (!treinoId || exercises.length === 0) return;
 
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
+      const newProgresso = { ...(treinoProgresso || {}) };
+      if (!newProgresso[treinoId]) {
+        newProgresso[treinoId] = {};
+      }
+      
       exercises.forEach((ex) => {
         const warmupSets = ex.sets.filter((s) => s.type === "warmup");
         const workSets = ex.sets.filter((s) => s.type !== "warmup");
@@ -184,12 +196,14 @@ const ActiveWorkout = () => {
           updatedAt: new Date().toISOString(),
         };
 
-        saveExerciseProgress(treinoId, ex.id, progress);
+        newProgresso[treinoId][ex.id] = progress;
       });
-    }, 300);
+      
+      await updateTreinoProgresso(newProgresso);
+    }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [treinoId, exercises]);
+  }, [treinoId, exercises, treinoProgresso, updateTreinoProgresso]);
 
   // Metrics calculation
   const metrics = useMemo(() => {
@@ -314,13 +328,26 @@ const ActiveWorkout = () => {
     setShowDiscardDialog(true);
   };
 
-  const confirmDiscard = () => {
+  const confirmDiscard = async () => {
     if (treinoId) {
-      clearTreinoProgress(treinoId);
-      clearTreinoHoje();
+      // Clear progress in Firebase
+      const newProgresso = { ...(treinoProgresso || {}) };
+      delete newProgresso[treinoId];
+      await updateTreinoProgresso(newProgresso);
+      await updateTreinoHoje(null);
     }
     navigate("/treino");
   };
+
+  // Loading state
+  if (appLoading) {
+    return (
+      <div className="min-h-screen bg-background pb-32 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <BottomNav />
+      </div>
+    );
+  }
 
   if (!workout) {
     return (

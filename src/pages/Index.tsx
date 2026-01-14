@@ -1,13 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Settings, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Settings, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus, Loader2 } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import HelpIcon from "@/components/HelpIcon";
 import BottomNav from "@/components/BottomNav";
-import { getProfile, getQuests, syncQuestsStatus, getAchievements, saveTreinoHoje, getUserWorkout, getWeightHistory } from "@/lib/storage";
+import { useAppStateContext, useWorkoutPlan } from "@/contexts/AppStateContext";
 import { getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
 import { isWorkoutCompletedThisWeek } from "@/lib/appState";
 import { Progress } from "@/components/ui/progress";
-import { getOnboardingData, getObjectiveLabel } from "@/lib/onboarding";
+import { getObjectiveLabel } from "@/lib/onboarding";
 import { 
   getWeightStats, 
   isCheckinAvailable, 
@@ -19,28 +19,32 @@ import {
 
 const Index = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState(getProfile());
-  const [quests, setQuests] = useState(getQuests());
-  const [achievements, setAchievements] = useState(getAchievements());
+  const { state, loading, getOnboarding, getQuests: getQuestsFromContext, getProfile: getProfileFromContext } = useAppStateContext();
+  const { plan, updateTreinoHoje } = useWorkoutPlan();
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Firebase state
+  const profile = getProfileFromContext();
+  const quests = getQuestsFromContext();
+  const onboardingData = getOnboarding();
+
   useEffect(() => {
-    syncQuestsStatus();
-    setQuests(getQuests());
-    setAchievements(getAchievements());
-    setProfile(getProfile());
-    
     // Initialize plan history from onboarding if needed
     initializePlanHistoryFromOnboarding();
   }, []);
 
-  const unlockedCount = achievements.filter(a => a.unlocked).length;
-  const totalCount = achievements.length;
+  // Calculate achievements from state
+  const achievements = useMemo(() => {
+    const achievementsList = state?.achievements?.unlocked || [];
+    return achievementsList;
+  }, [state]);
+
+  const unlockedCount = achievements.length;
+  const totalCount = 12; // Fixed number of total achievements
   const nextRewardIn = Math.max(1, 3 - (unlockedCount % 3));
 
   // Onboarding data
-  const onboardingData = getOnboardingData();
   const hasOnboarding = !!onboardingData?.plan;
 
   // Weight progress data
@@ -50,12 +54,14 @@ const Index = () => {
   const nextCheckinDate = getNextCheckinDueDate();
   const weighingFrequency = getWeighingFrequency();
 
+  // Get workout from plan
+  const getUserWorkout = (id: string) => {
+    if (!plan?.workouts) return null;
+    return plan.workouts.find(w => w.id === id) || null;
+  };
+
   // Weight goal data - use onboarding target if available
-  const weightHistory = getWeightHistory();
-  const currentWeight = latestWeight?.weightKg || 
-    (weightHistory.length > 0 
-      ? weightHistory[weightHistory.length - 1].weight 
-      : (onboardingData?.profile?.weightKg || 0));
+  const currentWeight = latestWeight?.weightKg || (onboardingData?.profile?.weightKg || 0);
   const goalWeight = onboardingData?.objective?.targetWeightKg || 70;
   const startWeight = onboardingData?.profile?.weightKg || 76;
   const remaining = Math.abs(currentWeight - goalWeight);
@@ -69,13 +75,13 @@ const Index = () => {
   const isCompletedThisWeek = workoutIdOfDay ? isWorkoutCompletedThisWeek(workoutIdOfDay) : false;
   const workout = workoutIdOfDay ? getUserWorkout(workoutIdOfDay) : null;
 
-  const handleStartWorkout = () => {
+  const handleStartWorkout = async () => {
     if (isRest) {
       navigate('/descanso');
       return;
     }
     if (workoutIdOfDay) {
-      saveTreinoHoje({
+      await updateTreinoHoje({
         treinoId: workoutIdOfDay,
         startedAt: new Date().toISOString(),
       });
@@ -85,7 +91,6 @@ const Index = () => {
 
   const handleWeightSaved = () => {
     setRefreshKey(k => k + 1);
-    setQuests(getQuests());
   };
 
   // Trend icon
@@ -101,21 +106,21 @@ const Index = () => {
       icon: Dumbbell, 
       label: "Fazer treino do dia", 
       xp: 150,
-      completed: quests.treinoDoDiaDone,
+      completed: quests?.treinoDoDiaDone || false,
     },
     { 
       id: "2", 
       icon: Apple, 
       label: "Registrar alimentação", 
       xp: 80,
-      completed: quests.registrarAlimentacaoDone,
+      completed: quests?.registrarAlimentacaoDone || false,
     },
     { 
       id: "3", 
       icon: Scale, 
       label: "Registrar peso", 
       xp: 50,
-      completed: quests.registrarPesoDone,
+      completed: quests?.registrarPesoDone || false,
       onClick: () => setShowWeightModal(true),
     },
   ];
@@ -123,6 +128,15 @@ const Index = () => {
   const completedGoals = goals.filter(g => g.completed).length;
   const totalGoals = goals.length;
   const goalsProgress = (completedGoals / totalGoals) * 100;
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-28">

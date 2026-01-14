@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { ClanMember, sendMotivation } from "@/lib/arena/arenaStorage";
 import { getMemberDayStatus, DayStatus } from "@/lib/arena/scheduleUtils";
+import UserAvatar from "./UserAvatar";
 
 interface PresenceListProps {
   members: ClanMember[];
@@ -79,9 +80,13 @@ const PresenceList = ({ members, onMotivate }: PresenceListProps) => {
               className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-                  {member.displayName.charAt(0).toUpperCase()}
-                </div>
+                <UserAvatar
+                  photoURL={member.photoURL}
+                  avatarId={member.avatarId}
+                  displayName={member.displayName}
+                  eloTier={member.elo?.tier || 'iron'}
+                  size="sm"
+                />
                 <div>
                   <p className="font-medium text-foreground">{member.displayName}</p>
                   <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${config.color}`}>

@@ -59,6 +59,7 @@ export interface ArenaProfile {
   userId: string;
   displayName: string;
   photoURL?: string;
+  avatarId?: string;
   elo: EloInfo;
   schedule: ArenaScheduleState;
   weeklyPoints: number; // Points earned this week
@@ -108,6 +109,7 @@ export interface PostAuthor {
   userId: string;
   displayName: string;
   photoURL?: string;
+  avatarId?: string;
   elo: EloInfo;
 }
 
@@ -155,6 +157,7 @@ export interface ClanMember {
   userId: string;
   displayName: string;
   photoURL?: string;
+  avatarId?: string;
   role: ClanRole;
   status: MemberStatus;
   elo: EloInfo;

@@ -56,6 +56,7 @@ const notificationsCol = (uid: string) => collection(db, 'notifications', uid, '
 export interface FirestoreArenaProfile {
   displayName: string;
   photoURL?: string;
+  avatarId?: string;
   elo: EloInfo;
   scheduleCurrent: WeeklySchedule;
   scheduleNext?: WeeklySchedule | null;
@@ -89,6 +90,7 @@ export async function getArenaProfile(uid: string): Promise<ArenaProfile | null>
       userId: uid,
       displayName: data.displayName,
       photoURL: data.photoURL,
+      avatarId: data.avatarId,
       elo: data.elo,
       schedule: {
         current: data.scheduleCurrent,

@@ -1,11 +1,14 @@
 import { useNavigate } from "react-router-dom";
-import { Shield, Trophy, Users, Share2 } from "lucide-react";
+import { Trophy, Users, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProgression } from "@/hooks/useProgression";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useArenaProfile } from "@/hooks/useArenaFirestore";
+import UserAvatar from "./UserAvatar";
 
 const PlayerCard = () => {
   const navigate = useNavigate();
+  const { profile, updateProfile } = useArenaProfile();
   const {
     level,
     xp,
@@ -13,6 +16,7 @@ const PlayerCard = () => {
     xpProgress,
     eloDisplayName,
     eloStyles,
+    eloTier,
     weekPoints,
     clanId,
     loading,
@@ -48,12 +52,17 @@ const PlayerCard = () => {
       {/* Header with Elo */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div 
-            className="w-12 h-12 rounded-full flex items-center justify-center"
-            style={{ background: eloStyles.gradient }}
-          >
-            <Shield className="w-6 h-6 text-white" />
-          </div>
+          <UserAvatar
+            photoURL={profile?.photoURL}
+            avatarId={profile?.avatarId}
+            displayName={profile?.displayName || 'Atleta'}
+            eloTier={eloTier}
+            size="lg"
+            editable={true}
+            onAvatarChange={async (photoURL, avatarId) => {
+              await updateProfile({ photoURL, avatarId });
+            }}
+          />
           <div>
             <h3 className="font-bold text-foreground">
               {eloDisplayName}

@@ -78,12 +78,28 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   
   // Initialize and subscribe to state
   useEffect(() => {
+    console.log('[AppStateContext] Init effect - devModeBypass:', devModeBypass, 'user:', !!user);
+    
     // Dev mode bypass - use localStorage instead of Firebase
     if (devModeBypass && !user) {
       const devState = load<AppState | null>(DEV_STATE_KEY, null);
-      if (devState) {
+      console.log('[AppStateContext] Dev mode - loaded state:', {
+        hasState: !!devState,
+        hasOnboarding: !!devState?.onboarding,
+        completedAt: devState?.onboarding?.completedAt
+      });
+      
+      if (devState && devState.onboarding?.completedAt) {
+        // Estado existente com onboarding completo - SEMPRE usar
+        console.log('[AppStateContext] Using existing dev state with completed onboarding');
+        setState(devState);
+      } else if (devState) {
+        // Estado existe mas sem onboarding completo - usar mesmo assim
+        console.log('[AppStateContext] Using existing dev state (onboarding incomplete)');
         setState(devState);
       } else {
+        // Nenhum estado - criar novo
+        console.log('[AppStateContext] Creating new dev state');
         const newState = createNewUserState();
         setState(newState);
         save(DEV_STATE_KEY, newState);
@@ -415,9 +431,23 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(newState);
     setSyncState('syncing');
     
+    console.log('[AppStateContext] updateOnboarding - saving:', {
+      completedAt: newState.onboarding?.completedAt,
+      devModeBypass,
+      hasUser: !!user
+    });
+    
     // Dev mode - save to localStorage instead of Firebase
     if (devModeBypass && !user) {
       save(DEV_STATE_KEY, newState);
+      
+      // Verificar se realmente salvou
+      const verification = load<AppState | null>(DEV_STATE_KEY, null);
+      console.log('[AppStateContext] Dev mode verification:', {
+        saved: !!verification,
+        completedAt: verification?.onboarding?.completedAt
+      });
+      
       setSyncState('synced');
       return true;
     }

@@ -21,31 +21,9 @@ import BottomNav from "@/components/BottomNav";
 import WeightLogModal from "@/components/WeightLogModal";
 import WeeklyCheckinModal from "@/components/WeeklyCheckinModal";
 import HelpIcon from "@/components/HelpIcon";
-import {
-  getE1RMHistory,
-  getWeeklyVolume,
-  getWorkoutsInPeriod,
-  getConsistency,
-  getPRsCount,
-  getExercisesWithHistory,
-  getNutritionChartData,
-  getNutritionGoals,
-  saveNutritionLog,
-  getNutritionToday,
-  getWeightChartData,
-  getWeightHistory,
-  getWeightVariation,
-} from "@/lib/storage";
-import {
-  getWeightStats,
-  isCheckinAvailable,
-  getNextCheckinDueDate,
-  getWeighingFrequency,
-  getPlanHistory,
-} from "@/lib/progress";
+import { useProgressData } from "@/hooks/useProgressData";
+import { useAppStateContext } from "@/contexts/AppStateContext";
 import { foods, FoodItem } from "@/data/foods";
-import { toast } from "sonner";
-import { CHANGE_EVENT } from "@/lib/localStore";
 
 const Progresso = () => {
   const [searchParams] = useSearchParams();
@@ -58,7 +36,10 @@ const Progresso = () => {
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [changedTick, setChangedTick] = useState(0);
+
+  // Use Firebase-based progress data hook
+  const progressData = useProgressData();
+  const { state, updateState } = useAppStateContext();
 
   // Update tab when URL changes
   useEffect(() => {
@@ -68,47 +49,19 @@ const Progresso = () => {
     }
   }, [searchParams]);
 
-  // Listen for global change events
-  useEffect(() => {
-    const handleChange = () => setChangedTick((t) => t + 1);
-    window.addEventListener(CHANGE_EVENT, handleChange);
-    return () => window.removeEventListener(CHANGE_EVENT, handleChange);
-  }, []);
-
-  // ✅ Recarrega dados quando o app volta pro foco (mobile) ou quando a aba volta a ficar visível
-  useEffect(() => {
-    const bump = () => setRefreshKey((k) => k + 1);
-
-    const onVisibility = () => {
-      if (!document.hidden) bump();
-    };
-
-    window.addEventListener("focus", bump);
-    document.addEventListener("visibilitychange", onVisibility);
-
-    // se em algum lugar do app você dispara evento de sync, isso também ajuda
-    window.addEventListener("sync", bump as any);
-    window.addEventListener("app:sync", bump as any);
-
-    return () => {
-      window.removeEventListener("focus", bump);
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("sync", bump as any);
-      window.removeEventListener("app:sync", bump as any);
-    };
-  }, []);
-
-  // ✅ Consolidate nutrition log ONLY when on nutrition tab and data changes
-  // This is a controlled side-effect, not inside render/useMemo
+  // ✅ Consolidate nutrition log when on nutrition tab
   const lastSavedLogRef = useRef<string>("");
   
   useEffect(() => {
-    if (activeTab !== "nutricao") return;
+    if (activeTab !== "nutricao" || !state?.nutrition?.dailyLogs) return;
     
-    const today = getNutritionToday();
+    const todayKey = new Date().toISOString().split("T")[0];
+    const todayLog = state.nutrition.dailyLogs[todayKey];
+    if (!todayLog) return;
+    
     let totalKcal = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0;
 
-    for (const meal of today.meals) {
+    for (const meal of todayLog.meals) {
       for (const entry of meal.entries) {
         if (entry.consumed) {
           const food = foods.find((f: FoodItem) => f.id === entry.foodId);
@@ -124,35 +77,39 @@ const Progresso = () => {
     }
 
     // Only save if there's actual consumption
-    if (totalKcal > 0) {
-      const dateKey = new Date().toISOString().split("T")[0];
+    if (totalKcal > 0 && state) {
       const roundedKcal = Math.round(totalKcal);
       const roundedP = Math.round(totalProtein);
       const roundedC = Math.round(totalCarbs);
       const roundedG = Math.round(totalFat);
       
       // Create fingerprint to avoid duplicate saves
-      const fingerprint = `${dateKey}-${roundedKcal}-${roundedP}-${roundedC}-${roundedG}`;
+      const fingerprint = `${todayKey}-${roundedKcal}-${roundedP}-${roundedC}-${roundedG}`;
       
       if (fingerprint !== lastSavedLogRef.current) {
         lastSavedLogRef.current = fingerprint;
-        saveNutritionLog({
-          dateKey,
-          kcal: roundedKcal,
-          p: roundedP,
-          c: roundedC,
-          g: roundedG,
+        
+        // Save to Firebase via updateState
+        const newLog = { dateKey: todayKey, kcal: roundedKcal, p: roundedP, c: roundedC, g: roundedG };
+        const existingLogs = state.nutrition.totalsLogs || [];
+        const filtered = existingLogs.filter(l => l.dateKey !== todayKey);
+        
+        updateState({
+          nutrition: {
+            ...state.nutrition,
+            totalsLogs: [...filtered, newLog]
+          }
         });
       }
     }
-  }, [activeTab, changedTick, refreshKey]);
+  }, [activeTab, state?.nutrition?.dailyLogs, updateState]);
 
-  // Weight progress data
-  const weightStats = useMemo(() => getWeightStats(), [refreshKey]);
-  const checkinAvailable = useMemo(() => isCheckinAvailable(), [refreshKey]);
-  const nextCheckinDate = useMemo(() => getNextCheckinDueDate(), [refreshKey]);
-  const weighingFrequency = useMemo(() => getWeighingFrequency(), [refreshKey]);
-  const planHistory = useMemo(() => getPlanHistory(), [refreshKey]);
+  // Computed data from Firebase
+  const weightStats = useMemo(() => progressData.getWeightStats(), [progressData, refreshKey]);
+  const checkinAvailable = useMemo(() => progressData.isCheckinAvailable(), [progressData, refreshKey]);
+  const nextCheckinDate = useMemo(() => progressData.getNextCheckinDueDate(), [progressData, refreshKey]);
+  const weighingFrequency = useMemo(() => progressData.getWeighingFrequency(), [progressData, refreshKey]);
+  const planHistory = useMemo(() => progressData.getPlanHistory(), [progressData, refreshKey]);
 
   // Trend icon
   const TrendIcon =
@@ -165,7 +122,7 @@ const Progresso = () => {
       : null;
 
   // Exercícios disponíveis
-  const exercisesWithHistory = useMemo(() => getExercisesWithHistory(), [refreshKey]);
+  const exercisesWithHistory = useMemo(() => progressData.getExercisesWithHistory(), [progressData, refreshKey]);
 
   // Selecionar primeiro exercício se não selecionado
   const currentExercise = selectedExercise || exercisesWithHistory[0]?.id || "";
@@ -173,34 +130,33 @@ const Progresso = () => {
   // Dados de força
   const e1rmData = useMemo(() => {
     if (!currentExercise) return [];
-    return getE1RMHistory(currentExercise);
-  }, [currentExercise, refreshKey]);
+    return progressData.getE1RMHistory(currentExercise);
+  }, [currentExercise, progressData, refreshKey]);
 
   const weeklyVolumeData = useMemo(() => {
-    return getWeeklyVolume(parseInt(period));
-  }, [period, refreshKey]);
+    return progressData.getWeeklyVolume(parseInt(period));
+  }, [period, progressData, refreshKey]);
 
-  const prsCount = useMemo(() => getPRsCount(), [refreshKey]);
-  const workoutsLast30 = useMemo(() => getWorkoutsInPeriod(30), [refreshKey]);
+  const prsCount = useMemo(() => progressData.getPRsCount(), [progressData, refreshKey]);
+  const workoutsLast30 = useMemo(() => progressData.getWorkoutsInPeriod(30), [progressData, refreshKey]);
   const consistency = useMemo(() => {
-    const data = getConsistency(30);
+    const data = progressData.getConsistency(30);
     if (data.length === 0) return 0;
-    // Calculate percentage based on expected 4 workouts per week
     const totalWeeks = data.length;
     const totalWorkouts = data.reduce((acc, d) => acc + d.count, 0);
     const expectedPerWeek = 4;
     return Math.min(100, Math.round((totalWorkouts / (totalWeeks * expectedPerWeek)) * 100));
-  }, [refreshKey]);
+  }, [progressData, refreshKey]);
 
-  // Dados de nutrição - PURE useMemo, no side effects!
+  // Dados de nutrição from Firebase
   const nutritionData = useMemo(() => {
-    return getNutritionChartData();
-  }, [nutritionPeriod, refreshKey, changedTick]);
+    return progressData.getNutritionChartData(parseInt(nutritionPeriod));
+  }, [nutritionPeriod, progressData, refreshKey]);
 
-  // Dados de peso
-  const weightData = useMemo(() => getWeightChartData(), [refreshKey]);
-  const weightVariation = useMemo(() => getWeightVariation(), [refreshKey]);
-  const weightHistory = useMemo(() => getWeightHistory(), [refreshKey]);
+  // Dados de peso from Firebase
+  const weightData = useMemo(() => progressData.getWeightChartData(), [progressData, refreshKey]);
+  const weightVariation = useMemo(() => progressData.getWeightVariation(), [progressData, refreshKey]);
+  const weightHistory = useMemo(() => progressData.getWeightHistory(), [progressData, refreshKey]);
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -468,7 +424,7 @@ const Progresso = () => {
 
           {/* Peso Tab */}
           <TabsContent value="peso" className="space-y-4">
-            {/* Progress Card - Full version from Home */}
+            {/* Progress Card */}
             <div className="card-glass p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -489,29 +445,14 @@ const Progresso = () => {
 
               {/* Stats grid */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                {weighingFrequency === "daily" ? (
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Média 7 dias</p>
-                    {weightStats.currentAvg7 !== null ? (
-                      <p className="text-xl font-bold text-foreground">{weightStats.currentAvg7} kg</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        {weightStats.logsNeeded > 0 ? `Faltam ${weightStats.logsNeeded} registros` : "Sem dados"}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Último check-in</p>
-                    {weightStats.weeklyModeStats.currentWeight !== null ? (
-                      <p className="text-xl font-bold text-foreground">
-                        {weightStats.weeklyModeStats.currentWeight} kg
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Nenhum ainda</p>
-                    )}
-                  </div>
-                )}
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Peso atual</p>
+                  {weightStats.currentWeight !== null ? (
+                    <p className="text-xl font-bold text-foreground">{weightStats.currentWeight} kg</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Sem dados</p>
+                  )}
+                </div>
 
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground mb-1">Tendência</p>
@@ -529,10 +470,6 @@ const Progresso = () => {
                       {weightStats.trendKg > 0 ? "+" : ""}
                       {weightStats.trendKg} kg
                     </div>
-                  ) : weighingFrequency === "weekly" && weightStats.weeklyModeStats.checkinsNeeded > 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      +{weightStats.weeklyModeStats.checkinsNeeded} check-in(s)
-                    </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">Aguardando dados</p>
                   )}
@@ -565,28 +502,30 @@ const Progresso = () => {
             </div>
 
             {/* Weight Stats Card */}
-            {weightVariation && (
+            {weightVariation.current !== null && (
               <div className="card-glass p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Peso atual</p>
                     <p className="text-2xl font-bold text-foreground">{weightVariation.current} kg</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Δ 7 dias</p>
-                    <p
-                      className={`text-xl font-bold ${
-                        weightVariation.delta > 0
-                          ? "text-red-500"
-                          : weightVariation.delta < 0
-                            ? "text-green-500"
-                            : "text-muted-foreground"
-                      }`}
-                    >
-                      {weightVariation.delta > 0 ? "+" : ""}
-                      {weightVariation.delta} kg
-                    </p>
-                  </div>
+                  {weightVariation.delta !== null && (
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Variação total</p>
+                      <p
+                        className={`text-xl font-bold ${
+                          weightVariation.delta > 0
+                            ? "text-orange-500"
+                            : weightVariation.delta < 0
+                              ? "text-green-500"
+                              : "text-muted-foreground"
+                        }`}
+                      >
+                        {weightVariation.delta > 0 ? "+" : ""}
+                        {weightVariation.delta} kg
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -687,8 +626,8 @@ const Progresso = () => {
               <div className="card-glass p-4">
                 <h3 className="text-sm font-semibold text-foreground mb-3">Últimos registros</h3>
                 <div className="space-y-2">
-                  {weightHistory.slice(0, 5).map((entry, idx) => {
-                    const date = new Date(entry.timestamp);
+                  {weightHistory.slice(-5).reverse().map((entry, idx) => {
+                    const date = new Date(entry.date);
                     return (
                       <div
                         key={idx}

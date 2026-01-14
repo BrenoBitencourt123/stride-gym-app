@@ -3,23 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CalendarCheck, TrendingDown, TrendingUp, Minus, AlertCircle, CheckCircle2, Scale, Settings2 } from "lucide-react";
-import { 
-  getWeightStats, 
-  suggestCalorieAdjustment, 
-  applyCalorieAdjustment,
-  recordCheckin,
-  isCheckinAvailable,
-  isAdjustmentAvailable,
-  getNextCheckinDueDate,
-  getWeighingFrequency,
-  setWeighingFrequency,
-  recordWeeklyCheckinWithWeight,
-  WeighingFrequency
-} from "@/lib/progress";
-import { getOnboardingData, getObjectiveLabel } from "@/lib/onboarding";
+import { CalendarCheck, TrendingDown, TrendingUp, Minus, AlertCircle, CheckCircle2, Scale } from "lucide-react";
+import { useAppStateContext } from "@/contexts/AppStateContext";
+import { getObjectiveLabel, calculateMacros } from "@/lib/onboarding";
 import { toast } from "sonner";
-import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 
 interface WeeklyCheckinModalProps {
   open: boolean;
@@ -28,89 +15,191 @@ interface WeeklyCheckinModalProps {
 }
 
 export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyCheckinModalProps) {
-  const triggerSync = useSyncTrigger();
+  const { state, getOnboarding, updateOnboarding, updateState } = useAppStateContext();
   const [isApplying, setIsApplying] = useState(false);
   const [applied, setApplied] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [weight, setWeight] = useState("");
   
-  const onboarding = getOnboardingData();
-  const stats = getWeightStats();
-  const frequency = getWeighingFrequency();
-  const available = isCheckinAvailable();
-  const adjustmentAvailable = isAdjustmentAvailable();
+  const onboarding = getOnboarding();
   
-  // Calculate suggestion based on mode
-  const suggestion = onboarding && stats.trendKg !== null
-    ? suggestCalorieAdjustment(
-        onboarding.objective.objective,
-        stats.trendKg,
-        onboarding.plan.targetKcal,
-        onboarding.profile.weightKg,
-        onboarding.profile.sex
-      )
-    : null;
+  // Calculate weight stats from Firebase data
+  const bodyweightEntries = state?.bodyweight?.entries || [];
+  const sortedEntries = [...bodyweightEntries].sort((a, b) => a.date.localeCompare(b.date));
+  
+  // Calculate trend
+  let trendKg: number | null = null;
+  let currentWeight: number | null = null;
+  let previousWeight: number | null = null;
+  
+  if (sortedEntries.length > 0) {
+    currentWeight = sortedEntries[sortedEntries.length - 1].weight;
+    
+    if (sortedEntries.length >= 2) {
+      const recentEntries = sortedEntries.slice(-14);
+      const midpoint = Math.floor(recentEntries.length / 2);
+      const firstHalf = recentEntries.slice(0, midpoint);
+      const secondHalf = recentEntries.slice(midpoint);
+      
+      if (firstHalf.length > 0 && secondHalf.length > 0) {
+        const firstAvg = firstHalf.reduce((sum, e) => sum + e.weight, 0) / firstHalf.length;
+        const secondAvg = secondHalf.reduce((sum, e) => sum + e.weight, 0) / secondHalf.length;
+        previousWeight = Math.round(firstAvg * 10) / 10;
+        trendKg = Math.round((secondAvg - firstAvg) * 10) / 10;
+      }
+    }
+  }
+  
+  // Check if check-in is available (7 days since last)
+  const isAvailable = (): boolean => {
+    if (!onboarding?.completedAt) return false;
+    const lastDate = new Date(onboarding.completedAt);
+    const nextDue = new Date(lastDate);
+    nextDue.setDate(nextDue.getDate() + 7);
+    return new Date() >= nextDue;
+  };
+  
+  const available = isAvailable();
+  const adjustmentAvailable = trendKg !== null && sortedEntries.length >= 2;
+  
+  // Calculate calorie adjustment suggestion
+  const getSuggestion = () => {
+    if (!onboarding || trendKg === null) return null;
+    
+    const goal = onboarding.objective.objective;
+    const currentCalories = onboarding.plan.targetKcal;
+    const sex = onboarding.profile.sex;
+    
+    const minCalories = sex === 'male' ? 1500 : 1200;
+    const maxCalories = 5000;
+    const maxAdjustment = 150;
+    
+    let delta = 0;
+    let reason = '';
+    
+    if (goal === 'lose_fat') {
+      if (trendKg > -0.2) {
+        delta = -100;
+        reason = 'Perda de peso abaixo do esperado. Redução moderada sugerida.';
+      } else if (trendKg >= -0.7) {
+        delta = 0;
+        reason = 'Progresso adequado. Manter plano atual.';
+      } else {
+        delta = 100;
+        reason = 'Perda rápida demais. Aumento sugerido para preservar massa muscular.';
+      }
+    } else if (goal === 'gain_muscle') {
+      if (trendKg < 0.1) {
+        delta = 100;
+        reason = 'Ganho de peso abaixo do esperado. Aumento moderado sugerido.';
+      } else if (trendKg <= 0.4) {
+        delta = 0;
+        reason = 'Progresso adequado. Manter plano atual.';
+      } else {
+        delta = -100;
+        reason = 'Ganho rápido demais. Redução sugerida para minimizar gordura.';
+      }
+    } else {
+      if (Math.abs(trendKg) <= 0.2) {
+        delta = 0;
+        reason = 'Peso estável. Manter plano atual.';
+      } else if (trendKg > 0.2) {
+        delta = -100;
+        reason = 'Leve ganho de peso. Redução moderada sugerida.';
+      } else {
+        delta = 100;
+        reason = 'Leve perda de peso. Aumento moderado sugerido.';
+      }
+    }
+    
+    // Apply limits
+    delta = Math.max(-maxAdjustment, Math.min(maxAdjustment, delta));
+    
+    const newCalories = currentCalories + delta;
+    if (newCalories < minCalories) {
+      delta = minCalories - currentCalories;
+      if (delta >= 0) {
+        delta = 0;
+        reason = `Já está no mínimo seguro (${minCalories} kcal). Não é possível reduzir mais.`;
+      }
+    }
+    if (newCalories > maxCalories) {
+      delta = maxCalories - currentCalories;
+      reason = `Próximo do limite máximo. Ajuste limitado.`;
+    }
+    
+    return { delta, reason };
+  };
+  
+  const suggestion = getSuggestion();
 
-  const TrendIcon = stats.trendKg !== null 
-    ? stats.trendKg < 0 ? TrendingDown 
-    : stats.trendKg > 0 ? TrendingUp 
+  const TrendIcon = trendKg !== null 
+    ? trendKg < 0 ? TrendingDown 
+    : trendKg > 0 ? TrendingUp 
     : Minus
     : null;
 
-  const handleApply = () => {
+  const handleApply = async () => {
     if (!onboarding) return;
     
     setIsApplying(true);
     
     try {
-      // For weekly mode: first record the weight if provided
-      if (frequency === 'weekly' && weight) {
+      // Record weight if provided
+      if (weight) {
         const parsedWeight = parseFloat(weight.replace(",", "."));
         if (!isNaN(parsedWeight) && parsedWeight >= 30 && parsedWeight <= 300) {
-          recordWeeklyCheckinWithWeight(parsedWeight);
+          const todayKey = new Date().toISOString().split('T')[0];
+          const existingEntries = state?.bodyweight?.entries || [];
+          const filtered = existingEntries.filter(e => e.date !== todayKey);
+          const newEntry = {
+            date: todayKey,
+            weight: parsedWeight,
+            updatedAt: Date.now(),
+          };
+          
+          await updateState({
+            bodyweight: {
+              entries: [...filtered, newEntry].sort((a, b) => a.date.localeCompare(b.date)),
+            },
+          });
         }
       }
       
-      // Apply the adjustment if available
+      // Apply calorie adjustment if available
       if (suggestion && suggestion.delta !== 0 && adjustmentAvailable) {
-        applyCalorieAdjustment(suggestion.delta, 'auto_adjust');
-      }
-      
-      // Record the check-in
-      if (frequency === 'daily' && stats.currentAvg7) {
-        recordCheckin({
-          avg7: stats.currentAvg7,
-          prevAvg7: stats.prevAvg7,
-          trendKg: stats.trendKg,
-          suggestedDelta: suggestion?.delta || 0,
-          appliedDelta: adjustmentAvailable ? (suggestion?.delta || 0) : null,
-          notes: suggestion?.reason,
+        const newCalories = onboarding.plan.targetKcal + suggestion.delta;
+        const macros = calculateMacros(
+          newCalories,
+          onboarding.profile.weightKg,
+          onboarding.objective.objective
+        );
+        
+        await updateOnboarding({
+          ...onboarding,
+          plan: {
+            ...onboarding.plan,
+            targetKcal: newCalories,
+            proteinG: macros.proteinG,
+            carbsG: macros.carbsG,
+            fatG: macros.fatG,
+            fiberG: macros.fiberG,
+          },
+          completedAt: new Date().toISOString(), // Update timestamp to mark check-in
         });
-      } else if (frequency === 'weekly') {
-        const parsedWeight = parseFloat(weight.replace(",", "."));
-        const { currentWeight, prevWeight, trendKg } = stats.weeklyModeStats;
-        recordCheckin({
-          weightKg: !isNaN(parsedWeight) ? parsedWeight : currentWeight || undefined,
-          prevWeightKg: prevWeight,
-          trendKg: trendKg,
-          suggestedDelta: suggestion?.delta || 0,
-          appliedDelta: adjustmentAvailable ? (suggestion?.delta || 0) : null,
-          notes: suggestion?.reason || 'Check-in semanal registrado',
-        });
-      }
-      
-      triggerSync();
-      setApplied(true);
-      
-      if (suggestion?.delta !== 0 && adjustmentAvailable) {
-        toast.success(`Meta ajustada: ${suggestion!.delta > 0 ? '+' : ''}${suggestion!.delta} kcal`);
+        
+        toast.success(`Meta ajustada: ${suggestion.delta > 0 ? '+' : ''}${suggestion.delta} kcal`);
       } else {
+        // Just update the check-in timestamp
+        await updateOnboarding({
+          ...onboarding,
+          completedAt: new Date().toISOString(),
+        });
         toast.success("Check-in registrado!");
       }
       
+      setApplied(true);
       onApplied?.();
       
-      // Close after a short delay to show success state
       setTimeout(() => onClose(), 1500);
     } catch {
       toast.error("Erro ao aplicar ajuste");
@@ -119,23 +208,12 @@ export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyC
     }
   };
 
-  const handleSkip = () => {
-    // Record check-in but don't apply adjustment
-    if (frequency === 'daily' && stats.currentAvg7) {
-      recordCheckin({
-        avg7: stats.currentAvg7,
-        prevAvg7: stats.prevAvg7,
-        trendKg: stats.trendKg,
-        suggestedDelta: suggestion?.delta || 0,
-        appliedDelta: null,
-        notes: 'Usuário optou por não ajustar',
-      });
-    } else {
-      recordCheckin({
-        trendKg: stats.weeklyModeStats.trendKg,
-        suggestedDelta: suggestion?.delta || 0,
-        appliedDelta: null,
-        notes: 'Usuário optou por adiar',
+  const handleSkip = async () => {
+    if (onboarding) {
+      // Just update the check-in timestamp without applying adjustment
+      await updateOnboarding({
+        ...onboarding,
+        completedAt: new Date().toISOString(),
       });
     }
     
@@ -143,17 +221,10 @@ export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyC
     onClose();
   };
 
-  const handleFrequencyChange = (newFreq: WeighingFrequency) => {
-    setWeighingFrequency(newFreq);
-    setShowSettings(false);
-    toast.success(`Modo alterado para ${newFreq === 'weekly' ? 'semanal' : 'diário'}`);
-  };
-
   // Reset state when modal opens
   useEffect(() => {
     if (open) {
       setApplied(false);
-      setShowSettings(false);
       setWeight("");
     }
   }, [open]);
@@ -165,67 +236,26 @@ export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyC
   const currentCalories = onboarding.plan.targetKcal;
   const newCalories = currentCalories + (suggestion?.delta || 0);
 
-  // For weekly mode: show current stats differently
-  const displayWeight = frequency === 'weekly' 
-    ? stats.weeklyModeStats.currentWeight
-    : stats.currentAvg7;
-  const displayPrevWeight = frequency === 'weekly'
-    ? stats.weeklyModeStats.prevWeight
-    : stats.prevAvg7;
+  // Next check-in date
+  const getNextCheckinDate = () => {
+    if (!onboarding?.completedAt) return null;
+    const lastDate = new Date(onboarding.completedAt);
+    const nextDue = new Date(lastDate);
+    nextDue.setDate(nextDue.getDate() + 7);
+    return nextDue;
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[380px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CalendarCheck className="w-5 h-5 text-primary" />
-              Check-in Semanal
-            </div>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={() => setShowSettings(!showSettings)}
-            >
-              <Settings2 className="w-4 h-4" />
-            </Button>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarCheck className="w-5 h-5 text-primary" />
+            Check-in Semanal
           </DialogTitle>
         </DialogHeader>
         
-        {showSettings ? (
-          <div className="py-4 space-y-4">
-            <p className="text-sm text-muted-foreground">Frequência de pesagem:</p>
-            <div className="space-y-2">
-              <button
-                onClick={() => handleFrequencyChange('weekly')}
-                className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                  frequency === 'weekly' 
-                    ? 'border-primary bg-primary/10' 
-                    : 'border-border hover:bg-muted/30'
-                }`}
-              >
-                <p className="font-medium text-sm">Semanal (recomendado)</p>
-                <p className="text-xs text-muted-foreground">
-                  Um registro por semana. Menos fricção, mais praticidade.
-                </p>
-              </button>
-              <button
-                onClick={() => handleFrequencyChange('daily')}
-                className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                  frequency === 'daily' 
-                    ? 'border-primary bg-primary/10' 
-                    : 'border-border hover:bg-muted/30'
-                }`}
-              >
-                <p className="font-medium text-sm">Diário (avançado)</p>
-                <p className="text-xs text-muted-foreground">
-                  Registro diário com média móvel de 7 dias. Mais preciso.
-                </p>
-              </button>
-            </div>
-          </div>
-        ) : applied ? (
+        {applied ? (
           <div className="py-8 flex flex-col items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
               <CheckCircle2 className="w-8 h-8 text-green-500" />
@@ -244,43 +274,34 @@ export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyC
               <AlertCircle className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="text-sm font-medium">Check-in indisponível</p>
-                {frequency === 'daily' && stats.logsNeeded > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Você precisa registrar mais <span className="font-medium text-primary">{stats.logsNeeded}</span> peso(s) 
-                    nos últimos 7 dias para calcular sua média.
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    O próximo check-in estará disponível em{' '}
-                    <span className="font-medium text-primary">
-                      {getNextCheckinDueDate()?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                    </span>.
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  O próximo check-in estará disponível em{' '}
+                  <span className="font-medium text-primary">
+                    {getNextCheckinDate()?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                  </span>.
+                </p>
               </div>
             </div>
           </div>
         ) : (
           <div className="space-y-4 py-2">
-            {/* Weekly mode: weight input */}
-            {frequency === 'weekly' && (
-              <div className="space-y-2">
-                <Label htmlFor="checkin-weight" className="flex items-center gap-2">
-                  <Scale className="w-4 h-4" />
-                  Peso desta semana (kg)
-                </Label>
-                <Input
-                  id="checkin-weight"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="Ex: 75.5"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  className="text-lg font-medium text-center"
-                  autoFocus
-                />
-              </div>
-            )}
+            {/* Weight input */}
+            <div className="space-y-2">
+              <Label htmlFor="checkin-weight" className="flex items-center gap-2">
+                <Scale className="w-4 h-4" />
+                Peso desta semana (kg)
+              </Label>
+              <Input
+                id="checkin-weight"
+                type="text"
+                inputMode="decimal"
+                placeholder="Ex: 75.5"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="text-lg font-medium text-center"
+                autoFocus
+              />
+            </div>
             
             {/* Current stats */}
             <div className="bg-muted/30 rounded-lg p-4 space-y-3">
@@ -289,41 +310,30 @@ export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyC
                 <span className="text-sm font-medium">{getObjectiveLabel(onboarding.objective.objective)}</span>
               </div>
               
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Modo</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
-                  {frequency === 'weekly' ? 'Semanal' : 'Diário'}
-                </span>
-              </div>
-              
-              {displayWeight !== null && (
+              {currentWeight !== null && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">
-                    {frequency === 'weekly' ? 'Último check-in' : 'Média 7 dias'}
-                  </span>
-                  <span className="text-sm font-medium">{displayWeight} kg</span>
+                  <span className="text-sm text-muted-foreground">Último peso</span>
+                  <span className="text-sm font-medium">{currentWeight} kg</span>
                 </div>
               )}
               
-              {displayPrevWeight !== null && (
+              {previousWeight !== null && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">
-                    {frequency === 'weekly' ? 'Check-in anterior' : 'Média anterior'}
-                  </span>
-                  <span className="text-sm font-medium">{displayPrevWeight} kg</span>
+                  <span className="text-sm text-muted-foreground">Peso anterior</span>
+                  <span className="text-sm font-medium">{previousWeight} kg</span>
                 </div>
               )}
               
-              {stats.trendKg !== null && TrendIcon && (
+              {trendKg !== null && TrendIcon && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Tendência</span>
                   <span className={`flex items-center gap-1 text-sm font-medium ${
-                    stats.trendKg < 0 ? "text-green-500" : 
-                    stats.trendKg > 0 ? "text-orange-500" : 
+                    trendKg < 0 ? "text-green-500" : 
+                    trendKg > 0 ? "text-orange-500" : 
                     "text-muted-foreground"
                   }`}>
                     <TrendIcon className="w-4 h-4" />
-                    {stats.trendKg > 0 ? "+" : ""}{stats.trendKg} kg/semana
+                    {trendKg > 0 ? "+" : ""}{trendKg} kg/semana
                   </span>
                 </div>
               )}
@@ -353,14 +363,14 @@ export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyC
                   </div>
                 )}
               </div>
-            ) : frequency === 'weekly' && stats.weeklyModeStats.checkinsNeeded > 0 ? (
+            ) : (
               <div className="rounded-lg p-4 border border-border bg-muted/20">
                 <p className="text-sm font-medium mb-1">Ajuste automático indisponível</p>
                 <p className="text-xs text-muted-foreground">
-                  Precisa de mais {stats.weeklyModeStats.checkinsNeeded} check-in(s) para calcular tendência e sugerir ajustes.
+                  Precisa de mais registros de peso para calcular tendência e sugerir ajustes.
                 </p>
               </div>
-            ) : null}
+            )}
             
             {/* Safety note */}
             <p className="text-xs text-muted-foreground text-center italic">
@@ -369,21 +379,21 @@ export default function WeeklyCheckinModal({ open, onClose, onApplied }: WeeklyC
           </div>
         )}
         
-        {!showSettings && !applied && available && (
+        {!applied && available && (
           <DialogFooter className="flex gap-2">
             <Button variant="outline" onClick={handleSkip} disabled={isApplying}>
               Adiar
             </Button>
             <Button 
               onClick={handleApply} 
-              disabled={isApplying || (frequency === 'weekly' && !weight.trim())}
+              disabled={isApplying || !weight.trim()}
             >
               {!adjustmentAvailable || suggestion?.delta === 0 ? 'Registrar' : 'Aplicar ajuste'}
             </Button>
           </DialogFooter>
         )}
         
-        {!showSettings && !applied && !available && (
+        {!applied && !available && (
           <DialogFooter>
             <Button onClick={onClose}>Fechar</Button>
           </DialogFooter>

@@ -4,14 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Scale, TrendingDown, TrendingUp, Minus } from "lucide-react";
-import { 
-  upsertWeightLog, 
-  getLocalDateISO, 
-  getTodayLog, 
-  getWeightStats,
-  getWeighingFrequency 
-} from "@/lib/progress";
-import { getQuests, saveQuests } from "@/lib/storage";
+import { useAppStateContext } from "@/contexts/AppStateContext";
 import { toast } from "sonner";
 
 interface WeightLogModalProps {
@@ -21,14 +14,39 @@ interface WeightLogModalProps {
 }
 
 export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModalProps) {
-  const todayLog = getTodayLog();
-  const [weight, setWeight] = useState(todayLog?.weightKg?.toString() || "");
+  const { state, updateState, updateQuests } = useAppStateContext();
+  const [weight, setWeight] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const stats = getWeightStats();
-  const frequency = getWeighingFrequency();
+  // Get today's date key
+  const todayKey = new Date().toISOString().split('T')[0];
+  
+  // Check if already logged today
+  const bodyweightEntries = state?.bodyweight?.entries || [];
+  const todayLog = bodyweightEntries.find(e => e.date === todayKey);
+  
+  // Calculate trend from recent entries
+  const sortedEntries = [...bodyweightEntries].sort((a, b) => a.date.localeCompare(b.date));
+  const recentEntries = sortedEntries.slice(-14); // Last 2 weeks
+  
+  let trendKg: number | null = null;
+  if (recentEntries.length >= 2) {
+    const midpoint = Math.floor(recentEntries.length / 2);
+    const firstHalf = recentEntries.slice(0, midpoint);
+    const secondHalf = recentEntries.slice(midpoint);
+    
+    if (firstHalf.length > 0 && secondHalf.length > 0) {
+      const firstAvg = firstHalf.reduce((sum, e) => sum + e.weight, 0) / firstHalf.length;
+      const secondAvg = secondHalf.reduce((sum, e) => sum + e.weight, 0) / secondHalf.length;
+      trendKg = Math.round((secondAvg - firstAvg) * 10) / 10;
+    }
+  }
+  
+  const currentWeight = sortedEntries.length > 0 
+    ? sortedEntries[sortedEntries.length - 1].weight 
+    : null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Parse weight - accept comma or period
     const parsedWeight = parseFloat(weight.replace(",", "."));
     
@@ -46,17 +64,28 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
     setIsSubmitting(true);
     
     try {
-      const dateISO = getLocalDateISO();
-      upsertWeightLog(dateISO, parsedWeight);
+      // Update bodyweight entries in Firebase
+      const existingEntries = state?.bodyweight?.entries || [];
+      const filtered = existingEntries.filter(e => e.date !== todayKey);
+      const newEntry = {
+        date: todayKey,
+        weight: parsedWeight,
+        updatedAt: Date.now(),
+      };
+      
+      await updateState({
+        bodyweight: {
+          entries: [...filtered, newEntry].sort((a, b) => a.date.localeCompare(b.date)),
+        },
+      });
       
       // Mark quest as done
-      const quests = getQuests();
-      if (!quests.registrarPesoDone) {
-        quests.registrarPesoDone = true;
-        saveQuests(quests);
+      if (state?.quests && !state.quests.registrarPesoDone) {
+        await updateQuests({ registrarPesoDone: true });
       }
       
       toast.success(todayLog ? "Peso atualizado!" : "Peso registrado!");
+      setWeight("");
       onSaved?.();
       onClose();
     } catch {
@@ -66,15 +95,11 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
     }
   };
 
-  const TrendIcon = stats.trendKg !== null 
-    ? stats.trendKg < 0 ? TrendingDown 
-    : stats.trendKg > 0 ? TrendingUp 
+  const TrendIcon = trendKg !== null 
+    ? trendKg < 0 ? TrendingDown 
+    : trendKg > 0 ? TrendingUp 
     : Minus
     : null;
-
-  // Show different stats based on frequency mode
-  const showDailyStats = frequency === 'daily' && stats.currentAvg7 !== null;
-  const showWeeklyStats = frequency === 'weekly' && stats.weeklyModeStats.currentWeight !== null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -82,7 +107,7 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Scale className="w-5 h-5 text-primary" />
-            {frequency === 'weekly' ? 'Registrar Peso Extra' : 'Registrar Peso'}
+            Registrar Peso
           </DialogTitle>
         </DialogHeader>
         
@@ -94,7 +119,7 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
               id="weight"
               type="text"
               inputMode="decimal"
-              placeholder="Ex: 75.5"
+              placeholder={todayLog ? `Atual: ${todayLog.weight} kg` : "Ex: 75.5"}
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
               className="text-lg font-medium text-center"
@@ -102,67 +127,28 @@ export default function WeightLogModal({ open, onClose, onSaved }: WeightLogModa
             />
           </div>
           
-          {/* Stats display - Daily mode */}
-          {showDailyStats && (
+          {/* Stats display */}
+          {currentWeight !== null && (
             <div className="bg-muted/30 rounded-lg p-3 space-y-2">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Média 7 dias</span>
-                <span className="font-medium">{stats.currentAvg7} kg</span>
+                <span className="text-muted-foreground">Peso atual</span>
+                <span className="font-medium">{currentWeight} kg</span>
               </div>
               
-              {stats.trendKg !== null && TrendIcon && (
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Tendência semanal</span>
-                  <span className={`flex items-center gap-1 font-medium ${
-                    stats.trendKg < 0 ? "text-green-500" : 
-                    stats.trendKg > 0 ? "text-orange-500" : 
-                    "text-muted-foreground"
-                  }`}>
-                    <TrendIcon className="w-4 h-4" />
-                    {stats.trendKg > 0 ? "+" : ""}{stats.trendKg} kg
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Stats display - Weekly mode */}
-          {showWeeklyStats && (
-            <div className="bg-muted/30 rounded-lg p-3 space-y-2">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Último check-in</span>
-                <span className="font-medium">{stats.weeklyModeStats.currentWeight} kg</span>
-              </div>
-              
-              {stats.weeklyModeStats.trendKg !== null && TrendIcon && (
+              {trendKg !== null && TrendIcon && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Tendência</span>
                   <span className={`flex items-center gap-1 font-medium ${
-                    stats.weeklyModeStats.trendKg < 0 ? "text-green-500" : 
-                    stats.weeklyModeStats.trendKg > 0 ? "text-orange-500" : 
+                    trendKg < 0 ? "text-green-500" : 
+                    trendKg > 0 ? "text-orange-500" : 
                     "text-muted-foreground"
                   }`}>
                     <TrendIcon className="w-4 h-4" />
-                    {stats.weeklyModeStats.trendKg > 0 ? "+" : ""}{stats.weeklyModeStats.trendKg} kg
+                    {trendKg > 0 ? "+" : ""}{trendKg} kg
                   </span>
                 </div>
               )}
             </div>
-          )}
-          
-          {/* Progress indicator - only for daily mode */}
-          {frequency === 'daily' && stats.logsNeeded > 0 && (
-            <p className="text-xs text-muted-foreground text-center">
-              Faltam <span className="font-medium text-primary">{stats.logsNeeded}</span> registros 
-              para calcular a média de 7 dias
-            </p>
-          )}
-          
-          {/* Info for weekly mode */}
-          {frequency === 'weekly' && (
-            <p className="text-xs text-muted-foreground text-center">
-              Este registro é opcional. O check-in semanal é o principal.
-            </p>
           )}
           
           {/* Tip */}

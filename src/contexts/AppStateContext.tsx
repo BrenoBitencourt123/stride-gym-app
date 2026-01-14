@@ -11,7 +11,7 @@ import {
   migrateLocalStorageToFirestore,
   hasBeenMigrated
 } from '@/lib/firebase/firestoreRepo';
-import { getLocalState, createNewUserState, type AppState } from '@/lib/appState';
+import { getLocalState, createNewUserState, type AppState, type OnboardingData } from '@/lib/appState';
 import type { NutritionToday, NutritionDiet, Quests, TreinoHoje, TreinoProgresso, UserWorkoutPlan } from '@/lib/appState';
 
 // ============= TYPES =============
@@ -40,6 +40,7 @@ interface AppStateContextType {
   getTreinoHoje: () => TreinoHoje | null;
   getTreinoProgresso: () => TreinoProgresso | null;
   getWeeklyCompletions: (weekStart: string) => Record<string, any> | null;
+  getOnboarding: () => OnboardingData | null;
   
   // Specific updaters
   updateProfile: (updates: Partial<AppState['profile']>) => Promise<boolean>;
@@ -53,6 +54,8 @@ interface AppStateContextType {
   updateTreinoProgresso: (progresso: TreinoProgresso) => Promise<boolean>;
   markWorkoutCompleted: (workoutId: string, weekStart: string, completion: any) => Promise<boolean>;
   addXP: (amount: number) => Promise<boolean>;
+  updateOnboarding: (data: OnboardingData | null) => Promise<boolean>;
+  isOnboardingComplete: () => boolean;
 }
 
 const AppStateContext = createContext<AppStateContextType | undefined>(undefined);
@@ -225,6 +228,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return state?.weeklyCompletions?.[weekStart] || null;
   }, [state]);
   
+  const getOnboarding = useCallback(() => {
+    return state?.onboarding || null;
+  }, [state]);
+  
+  const isOnboardingComplete = useCallback(() => {
+    return state?.onboarding?.completedAt != null;
+  }, [state]);
+  
   // ============= SPECIFIC UPDATERS =============
   
   const updateProfile = useCallback(async (updates: Partial<AppState['profile']>) => {
@@ -325,6 +336,29 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
   }, [state, updateState]);
   
+  const updateOnboarding = useCallback(async (data: OnboardingData | null) => {
+    if (!state) return false;
+    
+    // Also update nutrition targets based on onboarding plan
+    const updates: Partial<AppState> = {
+      onboarding: data
+    };
+    
+    if (data?.plan) {
+      updates.nutrition = {
+        ...state.nutrition,
+        targets: {
+          kcal: data.plan.targetKcal,
+          protein: data.plan.proteinG,
+          carbs: data.plan.carbsG,
+          fats: data.plan.fatG,
+        }
+      };
+    }
+    
+    return updateState(updates);
+  }, [state, updateState]);
+  
   // ============= CONTEXT VALUE =============
   
   const value: AppStateContextType = {
@@ -344,6 +378,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     getTreinoHoje,
     getTreinoProgresso,
     getWeeklyCompletions,
+    getOnboarding,
     updateProfile,
     updateProgression,
     updatePlan,
@@ -354,7 +389,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     updateTreinoHoje,
     updateTreinoProgresso,
     markWorkoutCompleted,
-    addXP
+    addXP,
+    updateOnboarding,
+    isOnboardingComplete
   };
   
   return (

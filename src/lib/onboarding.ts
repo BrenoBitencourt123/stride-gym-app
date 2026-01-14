@@ -1,9 +1,15 @@
 // Onboarding types and calculation utilities
 // Implements Mifflin-St Jeor BMR, TDEE, and macro calculations
+// Data is persisted to Firebase Firestore for cross-device sync
+// Legacy localStorage functions kept for backward compatibility during migration
 
-import { load, save, STORAGE_KEYS, saveNutritionGoals } from './storage';
+import type { OnboardingData } from './appState';
+import { load, save } from './localStore';
 
-// ========== TYPES ==========
+// Legacy storage key (for backward compatibility during migration)
+const ONBOARDING_KEY = 'levelup.onboarding.v1';
+
+// ========== RE-EXPORT TYPES ==========
 
 export type Sex = 'male' | 'female';
 
@@ -42,17 +48,11 @@ export interface OnboardingPlan {
   fiberG: number;          // Grams of fiber
 }
 
-export interface OnboardingData {
-  profile: OnboardingProfile;
-  objective: OnboardingObjective;
-  plan: OnboardingPlan;
-  completedAt: string;     // ISO date string
-  version: number;         // For future migrations
-}
+// Re-export the OnboardingData type from appState for convenience
+export type { OnboardingData } from './appState';
 
-// ========== STORAGE ==========
-
-const ONBOARDING_KEY = 'levelup.onboarding.v1';
+// ========== LEGACY FUNCTIONS (for backward compatibility) ==========
+// These read/write to localStorage but will be synced to Firebase via AppStateContext
 
 export function getOnboardingData(): OnboardingData | null {
   return load<OnboardingData | null>(ONBOARDING_KEY, null);
@@ -60,14 +60,6 @@ export function getOnboardingData(): OnboardingData | null {
 
 export function saveOnboardingData(data: OnboardingData): void {
   save(ONBOARDING_KEY, data);
-  
-  // Also sync to nutrition goals
-  saveNutritionGoals({
-    kcalTarget: data.plan.targetKcal,
-    pTarget: data.plan.proteinG,
-    cTarget: data.plan.carbsG,
-    gTarget: data.plan.fatG,
-  });
 }
 
 export function isOnboardingComplete(): boolean {
@@ -76,7 +68,48 @@ export function isOnboardingComplete(): boolean {
 }
 
 export function clearOnboarding(): void {
-  localStorage.removeItem(ONBOARDING_KEY);
+  try {
+    localStorage.removeItem(ONBOARDING_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function completeOnboarding(
+  profile: OnboardingProfile,
+  objective: OnboardingObjective
+): OnboardingData {
+  const plan = calculatePlan(profile, objective);
+  
+  const data: OnboardingData = {
+    profile,
+    objective,
+    plan,
+    completedAt: new Date().toISOString(),
+    version: 1,
+  };
+  
+  saveOnboardingData(data);
+  
+  return data;
+}
+
+export function updateObjective(newObjective: OnboardingObjective): OnboardingData | null {
+  const existing = getOnboardingData();
+  if (!existing) return null;
+  
+  const plan = calculatePlan(existing.profile, newObjective);
+  
+  const updated: OnboardingData = {
+    ...existing,
+    objective: newObjective,
+    plan,
+    completedAt: new Date().toISOString(),
+  };
+  
+  saveOnboardingData(updated);
+  
+  return updated;
 }
 
 // ========== AGE CALCULATION ==========
@@ -272,43 +305,35 @@ export function calculatePlan(
   };
 }
 
-// ========== COMPLETE ONBOARDING ==========
+// ========== CREATE ONBOARDING DATA ==========
 
-export function completeOnboarding(
+export function createOnboardingData(
   profile: OnboardingProfile,
   objective: OnboardingObjective
 ): OnboardingData {
   const plan = calculatePlan(profile, objective);
   
-  const data: OnboardingData = {
+  return {
     profile,
     objective,
     plan,
     completedAt: new Date().toISOString(),
     version: 1,
   };
-  
-  saveOnboardingData(data);
-  
-  return data;
 }
 
-// ========== UPDATE OBJECTIVE ONLY ==========
+// ========== UPDATE OBJECTIVE (RECALCULATE PLAN) ==========
 
-export function updateObjective(newObjective: OnboardingObjective): OnboardingData | null {
-  const existing = getOnboardingData();
-  if (!existing) return null;
+export function recalculateWithNewObjective(
+  existingData: OnboardingData,
+  newObjective: OnboardingObjective
+): OnboardingData {
+  const plan = calculatePlan(existingData.profile, newObjective);
   
-  const plan = calculatePlan(existing.profile, newObjective);
-  
-  const updated: OnboardingData = {
-    ...existing,
+  return {
+    ...existingData,
     objective: newObjective,
     plan,
     completedAt: new Date().toISOString(),
   };
-  
-  saveOnboardingData(updated);
-  
-  return updated;
 }

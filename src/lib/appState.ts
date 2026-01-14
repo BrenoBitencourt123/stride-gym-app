@@ -214,6 +214,32 @@ export interface WeeklyCompletions {
   };
 }
 
+// Onboarding data stored globally for cross-device sync
+export interface OnboardingData {
+  profile: {
+    birthDate: string;
+    sex: 'male' | 'female';
+    heightCm: number;
+    weightKg: number;
+    activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'athlete';
+  };
+  objective: {
+    objective: 'lose_fat' | 'maintain' | 'gain_muscle';
+    targetWeightKg: number;
+  };
+  plan: {
+    bmr: number;
+    tdee: number;
+    targetKcal: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+    fiberG: number;
+  };
+  completedAt: string;
+  version: number;
+}
+
 export interface AppState {
   version: number;
   updatedAt: number;
@@ -231,6 +257,7 @@ export interface AppState {
   progressionSuggestions?: ProgressionSuggestions;
   weeklyCompletions?: WeeklyCompletions;
   nutritionCompleted?: Record<string, boolean>;
+  onboarding?: OnboardingData | null;
 }
 
 // Default values for NEW users (start at Level 1)
@@ -618,6 +645,9 @@ export function createNewUserState(): AppState {
     updatedAt: new Date().toISOString(),
   };
 
+  // Check for legacy onboarding data
+  const legacyOnboarding = load<OnboardingData | null>('levelup.onboarding.v1', null);
+
   const state: AppState = {
     version: APP_STATE_VERSION,
     updatedAt: Date.now(),
@@ -639,10 +669,10 @@ export function createNewUserState(): AppState {
     exerciseHistory: {},
     nutrition: {
       targets: {
-        kcal: 2050,
-        protein: 160,
-        carbs: 200,
-        fats: 65,
+        kcal: legacyOnboarding?.plan?.targetKcal ?? 2050,
+        protein: legacyOnboarding?.plan?.proteinG ?? 160,
+        carbs: legacyOnboarding?.plan?.carbsG ?? 200,
+        fats: legacyOnboarding?.plan?.fatG ?? 65,
       },
       dailyLogs: {},
       totalsLogs: [],
@@ -662,6 +692,7 @@ export function createNewUserState(): AppState {
     },
     progressionSuggestions: {},
     weeklyCompletions: {},
+    onboarding: legacyOnboarding,
   };
 
   hydrateFromLegacy(state);

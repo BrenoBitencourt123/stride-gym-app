@@ -36,8 +36,27 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isAuthenticated() && isOwner(userId);
       
-      match /arena/{document=**} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
+      match /arena/{document} {
+        // Allow reading public profiles for anyone authenticated
+        allow read: if isAuthenticated() && (
+          isOwner(userId) ||
+          document == 'profile' ||
+          document == 'publicProfile'
+        );
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // Following subcollection - users can manage their own following list
+      match /following/{targetUid} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // Followers subcollection - anyone can add themselves as a follower
+      match /followers/{followerUid} {
+        allow read: if isAuthenticated();
+        // Users can only add/remove themselves as followers
+        allow create, delete: if isAuthenticated() && isOwner(followerUid);
       }
       
       match /workoutLogs/{logId} {

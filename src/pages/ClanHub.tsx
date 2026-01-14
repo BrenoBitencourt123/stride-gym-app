@@ -3,19 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Copy, Link, Users, Shield, Crown, Settings, UserMinus, ChevronUp, ChevronDown, Snowflake, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { 
-  getMyClan, 
-  getClanMembers, 
-  getArenaProfile,
-  getPendingFreezeRequests,
-  reviewFreezeRequest,
-  leaveClan
-} from "@/lib/arena/arenaStorage";
+import { useArenaClan, useArenaProfile } from "@/hooks/useArenaFirestore";
 import { calculateMedianElo, getEloDisplayName } from "@/lib/arena/eloUtils";
 import PresenceList from "@/components/arena/PresenceList";
 import FreezeRequestModal from "@/components/arena/FreezeRequestModal";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,13 +25,43 @@ import {
 const ClanHub = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("presence");
-  const [refreshKey, setRefreshKey] = useState(0);
   const [freezeModalOpen, setFreezeModalOpen] = useState(false);
   
-  const clan = getMyClan();
-  const members = getClanMembers();
-  const profile = getArenaProfile();
-  const freezeRequests = getPendingFreezeRequests();
+  const { 
+    clan, 
+    members, 
+    freezeRequests,
+    loading, 
+    refresh,
+    leaveClan,
+    reviewFreeze,
+    updateMemberRole,
+    removeMember,
+  } = useArenaClan();
+  
+  const { profile } = useArenaProfile();
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background pb-28">
+        <div className="max-w-md mx-auto px-4 pt-4">
+          <div className="flex items-center gap-3 mb-6">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <Skeleton className="h-6 w-24" />
+          </div>
+          <Skeleton className="h-32 w-full rounded-xl mb-6" />
+          <Skeleton className="h-10 w-full rounded-lg mb-4" />
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
 
   // If no clan, show CTA
   if (!clan) {
@@ -107,22 +131,54 @@ const ClanHub = () => {
     toast.success("Link copiado!");
   };
 
-  const handleFreezeReview = (requestId: string, approved: boolean) => {
-    if (profile) {
-      reviewFreezeRequest(requestId, approved, profile.userId);
-      setRefreshKey(k => k + 1);
+  const handleFreezeReview = async (requestId: string, approved: boolean) => {
+    try {
+      await reviewFreeze(requestId, approved);
       toast.success(approved ? "Freeze aprovado" : "Freeze negado");
+    } catch (error) {
+      toast.error("Erro ao processar pedido");
     }
   };
 
-  const handleLeaveClan = () => {
-    leaveClan();
-    navigate("/arena");
-    toast.success("Você saiu do clã");
+  const handleLeaveClan = async () => {
+    try {
+      await leaveClan();
+      navigate("/arena");
+      toast.success("Você saiu do clã");
+    } catch (error) {
+      toast.error("Erro ao sair do clã");
+    }
+  };
+
+  const handlePromote = async (userId: string) => {
+    try {
+      await updateMemberRole(userId, 'officer');
+      toast.success("Membro promovido a oficial");
+    } catch (error) {
+      toast.error("Erro ao promover membro");
+    }
+  };
+
+  const handleDemote = async (userId: string) => {
+    try {
+      await updateMemberRole(userId, 'member');
+      toast.success("Membro rebaixado");
+    } catch (error) {
+      toast.error("Erro ao rebaixar membro");
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    try {
+      await removeMember(userId);
+      toast.success("Membro removido do clã");
+    } catch (error) {
+      toast.error("Erro ao remover membro");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background pb-28" key={refreshKey}>
+    <div className="min-h-screen bg-background pb-28">
       <div className="max-w-md mx-auto px-4 pt-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
@@ -282,15 +338,31 @@ const ClanHub = () => {
                         {member.role !== 'gm' && profile?.userId !== member.userId && (
                           <div className="flex gap-1">
                             {member.role === 'member' ? (
-                              <Button size="sm" variant="ghost" title="Promover">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                title="Promover"
+                                onClick={() => handlePromote(member.userId)}
+                              >
                                 <ChevronUp className="w-4 h-4" />
                               </Button>
                             ) : (
-                              <Button size="sm" variant="ghost" title="Rebaixar">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                title="Rebaixar"
+                                onClick={() => handleDemote(member.userId)}
+                              >
                                 <ChevronDown className="w-4 h-4" />
                               </Button>
                             )}
-                            <Button size="sm" variant="ghost" className="text-destructive" title="Remover">
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-destructive" 
+                              title="Remover"
+                              onClick={() => handleRemoveMember(member.userId)}
+                            >
                               <UserMinus className="w-4 h-4" />
                             </Button>
                           </div>
@@ -334,7 +406,7 @@ const ClanHub = () => {
         open={freezeModalOpen} 
         onOpenChange={(open) => {
           setFreezeModalOpen(open);
-          if (!open) setRefreshKey(k => k + 1);
+          if (!open) refresh();
         }} 
       />
       <BottomNav />

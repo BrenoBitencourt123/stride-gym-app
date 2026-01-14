@@ -3,35 +3,63 @@ import { Heart, MessageCircle, Share2, Clock, Dumbbell, TrendingUp } from "lucid
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
-import { ArenaPost, toggleKudos, getPostKudos, hasUserKudos } from "@/lib/arena/arenaStorage";
+import { Post } from "@/lib/arena/types";
 import { getEloFrameStyles, EloTier } from "@/lib/arena/eloUtils";
 import EloFrame from "./EloFrame";
 import { useState, useEffect } from "react";
+import { hasGivenKudos } from "@/lib/arena/arenaFirestore";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface PostCardProps {
-  post: ArenaPost;
-  onKudosChange?: () => void;
+  post: Post;
+  onKudosToggle?: (postId: string) => Promise<void>;
 }
 
-const PostCard = ({ post, onKudosChange }: PostCardProps) => {
+const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [kudosCount, setKudosCount] = useState(post.kudosCount || 0);
   const [hasKudos, setHasKudos] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
   
   const eloTier = (post.author.elo?.tier || "iron") as EloTier;
   const eloStyles = getEloFrameStyles(eloTier);
 
   useEffect(() => {
-    setKudosCount(getPostKudos(post.id).length);
-    setHasKudos(hasUserKudos(post.id));
-  }, [post.id]);
+    const checkKudos = async () => {
+      if (user) {
+        const given = await hasGivenKudos(post.id, user.uid);
+        setHasKudos(given);
+      }
+    };
+    checkKudos();
+  }, [post.id, user]);
 
-  const handleKudos = (e: React.MouseEvent) => {
+  // Sync kudosCount with post prop changes
+  useEffect(() => {
+    setKudosCount(post.kudosCount || 0);
+  }, [post.kudosCount]);
+
+  const handleKudos = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleKudos(post.id);
-    setKudosCount(getPostKudos(post.id).length);
-    setHasKudos(hasUserKudos(post.id));
-    onKudosChange?.();
+    if (isToggling || !onKudosToggle) return;
+    
+    setIsToggling(true);
+    
+    // Optimistic update
+    const newHasKudos = !hasKudos;
+    setHasKudos(newHasKudos);
+    setKudosCount(prev => prev + (newHasKudos ? 1 : -1));
+    
+    try {
+      await onKudosToggle(post.id);
+    } catch (error) {
+      // Revert on error
+      setHasKudos(!newHasKudos);
+      setKudosCount(prev => prev + (newHasKudos ? -1 : 1));
+    } finally {
+      setIsToggling(false);
+    }
   };
 
   const handleShare = (e: React.MouseEvent) => {
@@ -129,6 +157,7 @@ const PostCard = ({ post, onKudosChange }: PostCardProps) => {
             size="sm"
             className={`gap-1.5 ${hasKudos ? "text-red-500" : "text-muted-foreground"}`}
             onClick={handleKudos}
+            disabled={isToggling}
           >
             <Heart className={`w-4 h-4 ${hasKudos ? "fill-current" : ""}`} />
             <span>{kudosCount}</span>

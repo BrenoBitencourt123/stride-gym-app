@@ -4,46 +4,69 @@ import { ArrowLeft, Link, Users, Check, Crown, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { joinClanByCode, getMyClan, getArenaProfile, initializeArenaProfile } from "@/lib/arena/arenaStorage";
+import { useArenaClan } from "@/hooks/useArenaFirestore";
+import { getClanByInviteCode } from "@/lib/arena/arenaFirestore";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface ClanPreview {
+  name: string;
+  tag: string;
+  members: number;
+}
 
 const JoinClan = () => {
   const navigate = useNavigate();
   const { code } = useParams<{ code?: string }>();
+  const { clan: existingClan, joinClan, loading: clanLoading } = useArenaClan();
+  
   const [inviteCode, setInviteCode] = useState(code || "");
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState(false);
-  const [previewClan, setPreviewClan] = useState<{ name: string; tag: string; members: number } | null>(null);
-
-  // Check if already in a clan
-  const existingClan = getMyClan();
+  const [previewClan, setPreviewClan] = useState<ClanPreview | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     if (code) {
       setInviteCode(code.toUpperCase());
-      // Simulate clan preview
-      if (code.length >= 4) {
-        setPreviewClan({
-          name: "Clã Demo",
-          tag: "DEMO",
-          members: 5
-        });
-      }
+      loadClanPreview(code.toUpperCase());
     }
   }, [code]);
+
+  const loadClanPreview = async (codeToCheck: string) => {
+    if (codeToCheck.length < 4) {
+      setPreviewClan(null);
+      return;
+    }
+    
+    setLoadingPreview(true);
+    try {
+      const clan = await getClanByInviteCode(codeToCheck);
+      if (clan) {
+        setPreviewClan({
+          name: clan.name,
+          tag: clan.tag,
+          members: clan.membersCount,
+        });
+      } else {
+        setPreviewClan(null);
+      }
+    } catch (error) {
+      console.error("Error loading clan preview:", error);
+      setPreviewClan(null);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   const handleCodeChange = (value: string) => {
     const upper = value.toUpperCase();
     setInviteCode(upper);
     
-    // Simulate preview when code is long enough
+    // Debounce the preview loading
     if (upper.length >= 4) {
-      setPreviewClan({
-        name: "Clã " + upper,
-        tag: upper.substring(0, 4),
-        members: Math.floor(Math.random() * 15) + 2
-      });
+      loadClanPreview(upper);
     } else {
       setPreviewClan(null);
     }
@@ -55,31 +78,43 @@ const JoinClan = () => {
       return;
     }
 
-    // Ensure profile exists
-    let profile = getArenaProfile();
-    if (!profile) {
-      profile = initializeArenaProfile(
-        `user_${Date.now()}`,
-        "Atleta"
-      );
-    }
-
     setJoining(true);
-    
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
 
-    const success = joinClanByCode(inviteCode.trim());
-    
-    if (success) {
-      setJoined(true);
-      toast.success("Você entrou no clã!");
-    } else {
-      toast.error("Código inválido ou clã cheio");
+    try {
+      const joinedClan = await joinClan(inviteCode.trim());
+      
+      if (joinedClan) {
+        setJoined(true);
+        toast.success("Você entrou no clã!");
+      } else {
+        toast.error("Código inválido ou clã cheio");
+      }
+    } catch (error) {
+      console.error("Error joining clan:", error);
+      toast.error("Erro ao entrar no clã");
+    } finally {
+      setJoining(false);
     }
-    
-    setJoining(false);
   };
+
+  if (clanLoading) {
+    return (
+      <div className="min-h-screen bg-background pb-28">
+        <div className="max-w-md mx-auto px-4 pt-4">
+          <div className="flex items-center gap-3 mb-6">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <Skeleton className="h-6 w-32" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
 
   if (existingClan && !joined) {
     return (
@@ -174,7 +209,19 @@ const JoinClan = () => {
           </div>
 
           {/* Clan Preview */}
-          {previewClan && (
+          {loadingPreview && (
+            <div className="card-glass p-4">
+              <div className="flex items-center gap-4">
+                <Skeleton className="w-14 h-14 rounded-full" />
+                <div className="flex-1">
+                  <Skeleton className="h-5 w-32 mb-2" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {!loadingPreview && previewClan && (
             <div className="card-glass p-4">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">

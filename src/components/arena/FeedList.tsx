@@ -1,37 +1,18 @@
-import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getGlobalFeed, getClanFeed, ArenaPost, getUserClan } from "@/lib/arena/arenaStorage";
+import { useArenaFeed, useArenaClan } from "@/hooks/useArenaFirestore";
 import PostCard from "./PostCard";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface FeedListProps {
   type: "global" | "clan";
 }
 
 const FeedList = ({ type }: FeedListProps) => {
-  const [posts, setPosts] = useState<ArenaPost[]>([]);
-  const [loading, setLoading] = useState(false);
-  const userClan = getUserClan();
+  const { posts, loading, refresh, toggleKudos } = useArenaFeed(type);
+  const { clan, loading: clanLoading } = useArenaClan();
 
-  const loadPosts = () => {
-    setLoading(true);
-    setTimeout(() => {
-      if (type === "global") {
-        setPosts(getGlobalFeed());
-      } else if (userClan) {
-        setPosts(getClanFeed(userClan.id));
-      } else {
-        setPosts([]);
-      }
-      setLoading(false);
-    }, 300);
-  };
-
-  useEffect(() => {
-    loadPosts();
-  }, [type, userClan?.id]);
-
-  if (type === "clan" && !userClan) {
+  if (type === "clan" && !clanLoading && !clan) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground mb-4">
@@ -44,6 +25,25 @@ const FeedList = ({ type }: FeedListProps) => {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="card-glass p-4 rounded-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <Skeleton className="w-10 h-10 rounded-full" />
+              <div className="flex-1">
+                <Skeleton className="h-4 w-24 mb-1" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </div>
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Refresh Button */}
@@ -51,7 +51,7 @@ const FeedList = ({ type }: FeedListProps) => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={loadPosts}
+          onClick={refresh}
           disabled={loading}
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -65,7 +65,7 @@ const FeedList = ({ type }: FeedListProps) => {
           <PostCard 
             key={post.id} 
             post={post}
-            onKudosChange={loadPosts}
+            onKudosToggle={toggleKudos}
           />
         ))
       ) : (

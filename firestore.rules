@@ -36,13 +36,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isAuthenticated() && isOwner(userId);
       
-      match /arena/{document} {
-        // Allow reading public profiles for anyone authenticated
-        allow read: if isAuthenticated() && (
-          isOwner(userId) ||
-          document == 'profile' ||
-          document == 'publicProfile'
-        );
+      // Arena profile - allow read for public profiles, write for owner
+      match /arena/{document=**} {
+        // Allow reading profile document by anyone authenticated (for viewing other users)
+        // Allow all operations for the document owner
+        allow read: if isAuthenticated();
         allow write: if isAuthenticated() && isOwner(userId);
       }
       

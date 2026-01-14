@@ -16,6 +16,7 @@ import BottomNav from "@/components/BottomNav";
 import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 import WorkoutCompleteShareModal from "@/components/arena/WorkoutCompleteShareModal";
 import { WorkoutSnapshot } from "@/lib/arena/types";
+import { useProgression } from "@/hooks/useProgression";
 
 const XP_PER_WORKOUT = 150;
 
@@ -23,15 +24,43 @@ const WorkoutSummary = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
   const triggerSync = useSyncTrigger();
+  const { completeWorkout } = useProgression();
   const defaultWorkoutId = getWorkoutOfDay() || 'upper-a';
   const workoutId = treinoId || defaultWorkoutId;
   const workout = getUserWorkout(workoutId);
+  const rewardsAppliedRef = useRef(false);
   const snapshotSavedRef = useRef(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [workoutSnapshotData, setWorkoutSnapshotData] = useState<WorkoutSnapshot | null>(null);
+  const [rewardsResult, setRewardsResult] = useState<{ xpGained: number; eloGained: number } | null>(null);
   
   const { totalSets, totalVolume, exercisesDone } = getWorkoutSummaryStats(workoutId);
   const completedSets = totalSets;
+
+  // Apply Firestore-based rewards (idempotent)
+  useEffect(() => {
+    if (rewardsAppliedRef.current) return;
+    rewardsAppliedRef.current = true;
+    
+    const applyRewards = async () => {
+      try {
+        const result = await completeWorkout();
+        if (result) {
+          setRewardsResult({
+            xpGained: result.xpGained,
+            eloGained: result.eloGained,
+          });
+          console.log('[WorkoutSummary] Rewards applied:', result);
+        }
+      } catch (error) {
+        console.error('[WorkoutSummary] Error applying rewards:', error);
+        // Fallback to showing default XP
+        setRewardsResult({ xpGained: XP_PER_WORKOUT, eloGained: 0 });
+      }
+    };
+    
+    applyRewards();
+  }, [completeWorkout]);
 
   // Salvar snapshots de todos os exercícios ao entrar no resumo
   useEffect(() => {
@@ -86,10 +115,10 @@ const WorkoutSummary = () => {
     };
     setWorkoutSnapshotData(snapshot);
     
-    // Save workout completed record
+    // Save workout completed record (legacy - for local tracking)
     saveWorkoutCompleted(workout.id, totalVolume);
     
-    // Mark workout as completed this week
+    // Mark workout as completed this week (legacy - for UI display)
     markWorkoutCompletedThisWeek(workout.id, XP_PER_WORKOUT, completedSets, totalVolume);
     
     // Show share modal automatically
@@ -101,6 +130,10 @@ const WorkoutSummary = () => {
     triggerSync(); // Sync after completing workout
     navigate("/");
   };
+
+  // Determine XP to show (from Firestore result or default)
+  const displayXp = rewardsResult?.xpGained ?? XP_PER_WORKOUT;
+  const displayElo = rewardsResult?.eloGained ?? 0;
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -131,9 +164,22 @@ const WorkoutSummary = () => {
             </div>
             <div className="flex-1">
               <p className="text-muted-foreground text-sm">XP Ganho</p>
-              <p className="text-2xl font-bold text-primary">+{XP_PER_WORKOUT} XP</p>
+              <p className="text-2xl font-bold text-primary">+{displayXp} XP</p>
             </div>
           </div>
+
+          {/* Elo Card (only show if gained) */}
+          {displayElo > 0 && (
+            <div className="card-glass p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-amber-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-muted-foreground text-sm">Elo Arena</p>
+                <p className="text-2xl font-bold text-amber-500">+{displayElo} pts</p>
+              </div>
+            </div>
+          )}
 
           {/* Sets Card */}
           <div className="card-glass p-5 flex items-center gap-4">
@@ -190,7 +236,7 @@ const WorkoutSummary = () => {
             duration: 45,
             totalSets: completedSets,
             totalVolume,
-            xpGained: XP_PER_WORKOUT,
+            xpGained: displayXp,
           }}
           onPostToArena={() => setShowShareModal(false)}
         />

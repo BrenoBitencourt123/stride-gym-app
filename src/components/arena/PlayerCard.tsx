@@ -1,20 +1,41 @@
 import { useNavigate } from "react-router-dom";
 import { Shield, Trophy, Users, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getProfile } from "@/lib/storage";
-import { getArenaProfile, getUserClan } from "@/lib/arena/arenaStorage";
-import { getEloDisplayName, getEloFrameStyles, EloTier } from "@/lib/arena/eloUtils";
+import { useProgression } from "@/hooks/useProgression";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PlayerCard = () => {
   const navigate = useNavigate();
-  const profile = getProfile();
-  const arenaProfile = getArenaProfile();
-  const userClan = getUserClan();
-  
-  const eloTier = arenaProfile?.elo?.tier || "iron";
-  const eloDivision = arenaProfile?.elo?.division || 4;
-  const weeklyPoints = arenaProfile?.weeklyPoints || 0;
-  const eloStyles = getEloFrameStyles(eloTier as EloTier);
+  const {
+    level,
+    xp,
+    xpGoal,
+    xpProgress,
+    eloDisplayName,
+    eloStyles,
+    weekPoints,
+    clanId,
+    loading,
+  } = useProgression();
+
+  if (loading) {
+    return (
+      <div className="card-glass p-4 rounded-xl">
+        <div className="flex items-center gap-3 mb-4">
+          <Skeleton className="w-12 h-12 rounded-full" />
+          <div className="flex-1">
+            <Skeleton className="h-5 w-24 mb-1" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+        <Skeleton className="h-2 w-full rounded-full mb-4" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 flex-1" />
+          <Skeleton className="h-9 flex-1" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -35,17 +56,17 @@ const PlayerCard = () => {
           </div>
           <div>
             <h3 className="font-bold text-foreground">
-              {getEloDisplayName(eloTier as EloTier, eloDivision)}
+              {eloDisplayName}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {weeklyPoints} pts esta semana
+              {weekPoints} pts esta semana
             </p>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground px-2 py-1 bg-secondary rounded-full">
-            Nv. {profile.level}
+            Nv. {level}
           </span>
         </div>
       </div>
@@ -56,11 +77,11 @@ const PlayerCard = () => {
           <div className="flex-1 xp-bar">
             <div 
               className="xp-bar-fill" 
-              style={{ width: `${(profile.xpAtual / profile.xpMeta) * 100}%` }}
+              style={{ width: `${xpProgress}%` }}
             />
           </div>
           <p className="text-center text-sm text-muted-foreground mt-2 font-medium">
-            {profile.xpAtual.toLocaleString('pt-BR')} / {profile.xpMeta.toLocaleString('pt-BR')} XP
+            {xp.toLocaleString('pt-BR')} / {xpGoal.toLocaleString('pt-BR')} XP
           </p>
         </div>
       </div>
@@ -74,7 +95,7 @@ const PlayerCard = () => {
           onClick={() => navigate("/arena/clan")}
         >
           <Users className="w-4 h-4 mr-2" />
-          {userClan ? "Meu Clã" : "Entrar em Clã"}
+          {clanId ? "Meu Clã" : "Entrar em Clã"}
         </Button>
         
         <Button
@@ -92,7 +113,9 @@ const PlayerCard = () => {
           size="icon"
           className="shrink-0"
           onClick={() => {
-            navigator.clipboard.writeText(window.location.origin + "/arena/profile/" + arenaProfile?.userId);
+            // Copy profile link - TODO: use actual user ID from auth
+            const url = window.location.origin + "/arena/profile";
+            navigator.clipboard.writeText(url);
           }}
         >
           <Share2 className="w-4 h-4" />

@@ -1,12 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import BottomNav from "@/components/BottomNav";
 import PlayerCard from "@/components/arena/PlayerCard";
 import FeedList from "@/components/arena/FeedList";
 import RankingList from "@/components/arena/RankingList";
+import { useProgression } from "@/hooks/useProgression";
 
 const ArenaPage = () => {
   const [activeTab, setActiveTab] = useState("global");
+  const { refresh } = useProgression();
+
+  // Apply pending penalties when Arena is opened
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   return (
     <div className="min-h-screen bg-background pb-28">

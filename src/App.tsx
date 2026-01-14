@@ -68,7 +68,7 @@ const App = () => (
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/settings/objetivo" element={<ProtectedRoute><ObjectiveOnboarding /></ProtectedRoute>} />
             <Route path="/conquistas" element={<ProtectedRoute><Conquistas /></ProtectedRoute>} />
-            <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
+            <Route path="/perfil" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/progresso" element={<ProtectedRoute><Progresso /></ProtectedRoute>} />
             <Route path="/descanso" element={<ProtectedRoute><RestDay /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

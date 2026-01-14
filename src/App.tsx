@@ -45,7 +45,13 @@ const App = () => (
             <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/onboarding" element={<Onboarding />} />
+            
+            {/* Onboarding - requires auth but skips onboarding check */}
+            <Route path="/onboarding" element={
+              <ProtectedRoute skipOnboarding>
+                <Onboarding />
+              </ProtectedRoute>
+            } />
             
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />

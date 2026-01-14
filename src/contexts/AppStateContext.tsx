@@ -1,7 +1,6 @@
 // src/contexts/AppStateContext.tsx
-// Global AppState context with Firebase-first persistence
-// Replaces localStorage-based state management
-// v2: Fixed context initialization
+// Global AppState context with Firebase as single source of truth
+// No localStorage fallbacks - all data comes from Firebase
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
@@ -13,11 +12,7 @@ import {
   hasBeenMigrated
 } from '@/lib/firebase/firestoreRepo';
 import { getLocalState, createNewUserState, type AppState, type OnboardingData } from '@/lib/appState';
-import { isDevModeBypass, save, load } from '@/lib/localStore';
 import type { NutritionToday, NutritionDiet, Quests, TreinoHoje, TreinoProgresso, UserWorkoutPlan } from '@/lib/appState';
-
-// ============= CONSTANTS =============
-const DEV_STATE_KEY = 'levelup.devState.v1';
 
 // ============= TYPES =============
 
@@ -75,46 +70,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const migrationDoneRef = useRef(false);
-  const devModeBypass = isDevModeBypass();
   
   // Initialize and subscribe to state
   useEffect(() => {
-    console.log('[AppStateContext] Init effect - devModeBypass:', devModeBypass, 'user:', !!user);
+    console.log('[AppStateContext] Init effect - user:', !!user);
     
-    // Dev mode bypass - use localStorage instead of Firebase
-    if (devModeBypass && !user) {
-      const devState = load<AppState | null>(DEV_STATE_KEY, null);
-      console.log('[AppStateContext] Dev mode - loaded state:', {
-        hasState: !!devState,
-        hasOnboarding: !!devState?.onboarding,
-        completedAt: devState?.onboarding?.completedAt
-      });
-      
-      if (devState && devState.onboarding?.completedAt) {
-        // Estado existente com onboarding completo - SEMPRE usar
-        console.log('[AppStateContext] Using existing dev state with completed onboarding');
-        setState(devState);
-      } else if (devState) {
-        // Estado existe mas sem onboarding completo - usar mesmo assim
-        console.log('[AppStateContext] Using existing dev state (onboarding incomplete)');
-        setState(devState);
-      } else {
-        // Nenhum estado - criar novo
-        console.log('[AppStateContext] Creating new dev state');
-        const newState = createNewUserState();
-        setState(newState);
-        save(DEV_STATE_KEY, newState);
-      }
-      setLoading(false);
-      setSyncState('synced');
-      return;
-    }
-    
-    // No user and no dev bypass - create temporary local state for onboarding
+    // No user → No state (ProtectedRoute will redirect to login)
     if (!user) {
-      console.log('[AppStateContext] No user - creating temporary state for onboarding');
-      const tempState = createNewUserState();
-      setState(tempState);
+      console.log('[AppStateContext] No user - setting state to null');
+      setState(null);
       setLoading(false);
       setSyncState('idle');
       return;
@@ -226,7 +190,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // ============= CORE ACTIONS =============
   
   const updateState = useCallback(async (updates: Partial<AppState>): Promise<boolean> => {
-    if (!state) return false;
+    if (!state || !user) {
+      console.error('[AppStateContext] Cannot update state without user');
+      return false;
+    }
     
     const newState: AppState = {
       ...state,
@@ -238,19 +205,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(newState);
     setSyncState('syncing');
     
-    // Dev mode - save to localStorage instead of Firebase
-    if (devModeBypass && !user) {
-      save(DEV_STATE_KEY, newState);
-      setSyncState('synced');
-      return true;
-    }
-    
     // Persist to Firestore
-    if (!user) {
-      setSyncState('error');
-      return false;
-    }
-    
     const success = await setUserState(user.uid, newState);
     
     if (success) {
@@ -262,7 +217,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
     
     return success;
-  }, [user, state, devModeBypass]);
+  }, [user, state]);
   
   const refreshState = useCallback(async () => {
     if (!user) return;
@@ -301,14 +256,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state]);
   
   const isOnboardingComplete = useCallback(() => {
-    // Check state first
-    if (state?.onboarding?.completedAt != null) return true;
-    
-    // Fallback: check localStorage for temporary saved onboarding
-    const savedState = load<AppState | null>(DEV_STATE_KEY, null);
-    if (savedState?.onboarding?.completedAt != null) return true;
-    
-    return false;
+    // Only check state - Firebase is the source of truth
+    return state?.onboarding?.completedAt != null;
   }, [state]);
   
   // ============= SPECIFIC UPDATERS =============
@@ -412,6 +361,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state, updateState]);
   
   const updateOnboarding = useCallback(async (data: OnboardingData | null) => {
+    // Requires user - can only save onboarding after login
+    if (!user) {
+      console.error('[AppStateContext] Cannot save onboarding without user');
+      return false;
+    }
+    
     // Handle case where state is not yet initialized (new users during onboarding)
     const currentState = state || createNewUserState();
     
@@ -438,39 +393,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updatedAt: Date.now()
     };
     
-    // Optimistic update - always update local state first
+    // Optimistic update
     setState(newState);
     setSyncState('syncing');
     
-    console.log('[AppStateContext] updateOnboarding - saving:', {
+    console.log('[AppStateContext] updateOnboarding - saving to Firebase:', {
       completedAt: newState.onboarding?.completedAt,
-      devModeBypass,
-      hasUser: !!user
+      userId: user.uid
     });
-    
-    // Dev mode - save to localStorage instead of Firebase
-    if (devModeBypass && !user) {
-      save(DEV_STATE_KEY, newState);
-      
-      // Verificar se realmente salvou
-      const verification = load<AppState | null>(DEV_STATE_KEY, null);
-      console.log('[AppStateContext] Dev mode verification:', {
-        saved: !!verification,
-        completedAt: verification?.onboarding?.completedAt
-      });
-      
-      setSyncState('synced');
-      return true;
-    }
-    
-    // No user but not in dev mode - save to localStorage as temporary storage
-    // This allows onboarding to complete even before login
-    if (!user) {
-      console.log('[AppStateContext] No user - saving onboarding to localStorage as fallback');
-      save(DEV_STATE_KEY, newState);
-      setSyncState('synced');
-      return true;
-    }
     
     // Persist to Firestore
     try {
@@ -478,21 +408,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       
       if (success) {
         setSyncState('synced');
+        console.log('[AppStateContext] Onboarding saved successfully');
       } else {
-        // Keep local state updated, mark as needing sync
-        save(DEV_STATE_KEY, newState);
+        console.error('[AppStateContext] Failed to save onboarding');
         setSyncState('error');
       }
       
       return success;
     } catch (err) {
       console.error('[AppStateContext] Failed to save to Firebase:', err);
-      // Save to localStorage as fallback
-      save(DEV_STATE_KEY, newState);
       setSyncState('error');
-      return true; // Return true so UI continues, data will sync later
+      return false;
     }
-  }, [user, state, devModeBypass]);
+  }, [user, state]);
   
   // ============= CONTEXT VALUE =============
   

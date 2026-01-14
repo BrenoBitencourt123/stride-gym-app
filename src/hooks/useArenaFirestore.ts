@@ -499,8 +499,17 @@ export function useCreatePost() {
     
     setLoading(true);
     try {
-      const profile = await arenaFirestore.getArenaProfile(user.uid);
-      if (!profile) throw new Error('Profile not found');
+      let profile = await arenaFirestore.getArenaProfile(user.uid);
+      
+      // Initialize profile if it doesn't exist
+      if (!profile) {
+        console.log('[useCreatePost] Profile not found, initializing...');
+        profile = await arenaFirestore.initializeArenaProfile(
+          user.uid,
+          user.displayName || 'Atleta',
+          user.photoURL || undefined
+        );
+      }
       
       const post = await arenaFirestore.createPost(
         user.uid,

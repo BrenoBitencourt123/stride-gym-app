@@ -1,29 +1,61 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, CheckCircle2, RotateCcw, Check } from "lucide-react";
+import { Plus, CheckCircle2, RotateCcw, Check, Loader2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import HelpIcon from "@/components/HelpIcon";
-import { 
-  getNutritionGoals, 
-  getNutritionToday, 
-  hasDietSaved, 
-  removeFoodFromToday,
-  updateFoodInToday,
-  toggleFoodConsumed,
-  toggleAllMealConsumed,
-  resetNutritionToday,
-  isNutritionCompletedToday
-} from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import EditFoodModal from "@/components/nutrition/EditFoodModal";
 import GoalsExplainModal from "@/components/nutrition/GoalsExplainModal";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useSyncTrigger } from "@/hooks/useSyncTrigger";
+import { useNutrition, useAppStateContext } from "@/contexts/AppStateContext";
+import type { NutritionToday, TodayEntry, TodayMeal } from "@/lib/appState";
+
+// Default empty meals template
+const DEFAULT_MEALS: TodayMeal[] = [
+  { id: "cafe", nome: "Café da Manhã", entries: [] },
+  { id: "almoco", nome: "Almoço", entries: [] },
+  { id: "lanche", nome: "Lanche", entries: [] },
+  { id: "jantar", nome: "Jantar", entries: [] },
+];
+
+function createEmptyToday(dateKey: string): NutritionToday {
+  return {
+    dateKey,
+    meals: DEFAULT_MEALS.map(m => ({ id: m.id, nome: m.nome, entries: [] })),
+  };
+}
+
+function applyDietToTodayData(dietPlan: { meals: { id: string; nome: string; items: { foodId: string; quantidade: number; unidade: "g" | "un" | "ml" | "scoop" }[] }[] }, dateKey: string): NutritionToday {
+  const today = createEmptyToday(dateKey);
+  
+  for (const dietMeal of dietPlan.meals) {
+    const todayMeal = today.meals.find(m => m.id === dietMeal.id);
+    if (!todayMeal) continue;
+    
+    for (const item of dietMeal.items) {
+      const entry: TodayEntry = {
+        id: `${item.foodId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        foodId: item.foodId,
+        quantidade: item.quantidade,
+        unidade: item.unidade,
+        source: "diet",
+        createdAt: Date.now(),
+        planned: true,
+        consumed: false,
+      };
+      todayMeal.entries.push(entry);
+    }
+  }
+  
+  return today;
+}
 
 const Nutricao = () => {
   const navigate = useNavigate();
-  const triggerSync = useSyncTrigger();
+  const { loading, state } = useAppStateContext();
+  const { targets, dietPlan, today: todayFromContext, updateToday } = useNutrition();
+  
   const [refreshKey, setRefreshKey] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [editingItem, setEditingItem] = useState<{
@@ -33,11 +65,58 @@ const Nutricao = () => {
     quantidade: number;
     unidade: "g" | "un" | "ml" | "scoop";
   } | null>(null);
+  const [initializing, setInitializing] = useState(true);
   
-  const goals = getNutritionGoals();
-  const today = getNutritionToday();
-  const dietExists = hasDietSaved();
-  const nutritionCompleted = isNutritionCompletedToday();
+  // Get today's date key
+  const todayDateKey = new Date().toISOString().split("T")[0];
+  
+  // Initialize today's meals from diet if new day
+  useEffect(() => {
+    if (loading || !state) return;
+    
+    const initializeToday = async () => {
+      // Check if today's log exists
+      const existingToday = todayFromContext;
+      
+      // If no log for today but we have a diet plan, apply it
+      if (!existingToday && dietPlan && dietPlan.meals.some(m => m.items.length > 0)) {
+        console.log('[Nutricao] New day detected, applying diet plan...');
+        const newToday = applyDietToTodayData(dietPlan, todayDateKey);
+        await updateToday(newToday);
+      }
+      
+      setInitializing(false);
+    };
+    
+    initializeToday();
+  }, [loading, state, todayFromContext, dietPlan, todayDateKey, updateToday]);
+  
+  // Current today data (from context or empty)
+  const today: NutritionToday = useMemo(() => {
+    if (todayFromContext && todayFromContext.dateKey === todayDateKey) {
+      return todayFromContext;
+    }
+    return createEmptyToday(todayDateKey);
+  }, [todayFromContext, todayDateKey, refreshKey]);
+  
+  // Goals from targets or defaults
+  const goals = useMemo(() => ({
+    kcalTarget: targets?.kcal || 2050,
+    pTarget: targets?.protein || 160,
+    cTarget: targets?.carbs || 200,
+    gTarget: targets?.fats || 65,
+  }), [targets]);
+  
+  // Check if diet exists
+  const dietExists = useMemo(() => {
+    if (!dietPlan || !dietPlan.meals) return false;
+    return dietPlan.meals.some(m => m.items.length > 0);
+  }, [dietPlan]);
+  
+  // Check if nutrition completed today
+  const nutritionCompleted = useMemo(() => {
+    return state?.nutritionCompleted?.[todayDateKey] === true;
+  }, [state, todayDateKey]);
 
   // Calcula totais CONSUMIDOS do dia
   const consumedTotals = useMemo(() => {
@@ -45,7 +124,7 @@ const Nutricao = () => {
     
     for (const meal of today.meals) {
       for (const entry of meal.entries) {
-        if (!entry.consumed) continue; // Só conta os consumidos
+        if (!entry.consumed) continue;
         const food = getFoodById(entry.foodId);
         if (food) {
           const fator = entry.quantidade / food.porcaoBase;
@@ -71,7 +150,7 @@ const Nutricao = () => {
     
     for (const meal of today.meals) {
       for (const entry of meal.entries) {
-        if (!entry.planned) continue; // Só conta os planejados
+        if (!entry.planned) continue;
         const food = getFoodById(entry.foodId);
         if (food) {
           const fator = entry.quantidade / food.porcaoBase;
@@ -92,7 +171,7 @@ const Nutricao = () => {
   }, [today, refreshKey]);
 
   // Calcula kcal por refeição
-  const getMealKcal = (mealId: string, onlyConsumed: boolean = false) => {
+  const getMealKcal = useCallback((mealId: string, onlyConsumed: boolean = false) => {
     const meal = today.meals.find(m => m.id === mealId);
     if (!meal) return 0;
     
@@ -106,10 +185,10 @@ const Nutricao = () => {
       }
     }
     return Math.round(total);
-  };
+  }, [today]);
 
   // Refeição completa quando todos os itens PLANEJADOS foram consumidos
-  const isMealComplete = (mealId: string) => {
+  const isMealComplete = useCallback((mealId: string) => {
     const meal = today.meals.find(m => m.id === mealId);
     if (!meal) return false;
     
@@ -117,56 +196,101 @@ const Nutricao = () => {
     if (plannedItems.length === 0) return false;
     
     return plannedItems.every(e => e.consumed === true);
+  }, [today]);
+
+  const handleToggleConsumed = async (mealId: string, entryId: string) => {
+    const newToday = { ...today, meals: today.meals.map(meal => {
+      if (meal.id !== mealId) return meal;
+      return {
+        ...meal,
+        entries: meal.entries.map(entry => {
+          if (entry.id !== entryId) return entry;
+          return { ...entry, consumed: !entry.consumed };
+        })
+      };
+    })};
+    
+    await updateToday(newToday);
+    setRefreshKey(k => k + 1);
   };
 
-  const handleToggleConsumed = (mealId: string, entryId: string) => {
-    toggleFoodConsumed(mealId, entryId);
+  const handleToggleAllMeal = async (mealId: string) => {
+    const meal = today.meals.find(m => m.id === mealId);
+    if (!meal || meal.entries.length === 0) return;
+    
+    const allConsumed = meal.entries.every(e => e.consumed);
+    
+    const newToday = { ...today, meals: today.meals.map(m => {
+      if (m.id !== mealId) return m;
+      return {
+        ...m,
+        entries: m.entries.map(entry => ({ ...entry, consumed: !allConsumed }))
+      };
+    })};
+    
+    await updateToday(newToday);
     setRefreshKey(k => k + 1);
-    triggerSync();
-  };
-
-  const handleToggleAllMeal = (mealId: string) => {
-    toggleAllMealConsumed(mealId);
-    setRefreshKey(k => k + 1);
-    triggerSync();
   };
 
   const handleEditItem = (mealId: string, entryId: string, foodId: string, quantidade: number, unidade: "g" | "un" | "ml" | "scoop") => {
     setEditingItem({ mealId, entryId, foodId, quantidade, unidade });
   };
 
-  const handleSaveEdit = (newQuantity: number, newUnidade?: "g" | "un" | "ml" | "scoop") => {
-    if (editingItem) {
-      updateFoodInToday(editingItem.mealId, editingItem.entryId, newQuantity, newUnidade || editingItem.unidade);
-      setRefreshKey(k => k + 1);
-      toast.success("Quantidade atualizada");
-    }
+  const handleSaveEdit = async (newQuantity: number, newUnidade?: "g" | "un" | "ml" | "scoop") => {
+    if (!editingItem) return;
+    
+    const newToday = { ...today, meals: today.meals.map(meal => {
+      if (meal.id !== editingItem.mealId) return meal;
+      return {
+        ...meal,
+        entries: meal.entries.map(entry => {
+          if (entry.id !== editingItem.entryId) return entry;
+          return { ...entry, quantidade: newQuantity, unidade: newUnidade || editingItem.unidade };
+        })
+      };
+    })};
+    
+    await updateToday(newToday);
+    setRefreshKey(k => k + 1);
+    toast.success("Quantidade atualizada");
   };
 
-  const handleRemoveFromEdit = () => {
-    if (editingItem) {
-      removeFoodFromToday(editingItem.mealId, editingItem.entryId);
-      setRefreshKey(k => k + 1);
-      toast.success("Alimento removido");
-    }
+  const handleRemoveFromEdit = async () => {
+    if (!editingItem) return;
+    
+    const newToday = { ...today, meals: today.meals.map(meal => {
+      if (meal.id !== editingItem.mealId) return meal;
+      return {
+        ...meal,
+        entries: meal.entries.filter(entry => entry.id !== editingItem.entryId)
+      };
+    })};
+    
+    await updateToday(newToday);
+    setRefreshKey(k => k + 1);
+    toast.success("Alimento removido");
   };
 
   // Verifica se tem algum item no dia
   const hasAnyItems = today.meals.some(m => m.entries.length > 0);
 
-  // Resetar checklist do dia
-  const handleResetDay = () => {
-    resetNutritionToday();
+  // Resetar checklist do dia - reapply diet
+  const handleResetDay = async () => {
+    if (dietPlan && dietPlan.meals.some(m => m.items.length > 0)) {
+      const newToday = applyDietToTodayData(dietPlan, todayDateKey);
+      await updateToday(newToday);
+    } else {
+      await updateToday(createEmptyToday(todayDateKey));
+    }
     setRefreshKey(k => k + 1);
     toast.success("Checklist do dia resetado");
   };
 
-  // Critério para permitir concluir a nutrição:
-  // Jantar (última refeição) deve estar com "Check!" (todos planejados consumidos)
+  // Critério para permitir concluir a nutrição
   const jantarComplete = isMealComplete("jantar");
   const canComplete = jantarComplete && hasAnyItems && !nutritionCompleted;
 
-  // Progress percentages - agora baseados no PLANO DO DIA como referência
+  // Progress percentages
   const planHasValues = plannedTotals.kcal > 0;
   const kcalPct = planHasValues 
     ? Math.min((consumedTotals.kcal / plannedTotals.kcal) * 100, 100) 
@@ -185,6 +309,15 @@ const Nutricao = () => {
   const metaPlanDiff = goals.kcalTarget - plannedTotals.kcal;
   const showDivergenceWarning = planHasValues && Math.abs(metaPlanDiff) > 100;
 
+  // Show loading state
+  if (loading || initializing) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-28">
       {/* Background effect */}
@@ -197,7 +330,7 @@ const Nutricao = () => {
         {/* Header */}
         <h1 className="text-2xl font-bold text-foreground mb-6">Nutrição</h1>
 
-        {/* Card 1: Resumo simplificado - Consumido / Plano */}
+        {/* Card 1: Resumo simplificado */}
         <div className="card-glass p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-foreground">Resumo do dia</h2>
@@ -225,7 +358,7 @@ const Nutricao = () => {
             />
           </div>
 
-          {/* Macro breakdown com progress bars - referência é o PLANO */}
+          {/* Macro breakdown */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
@@ -443,7 +576,7 @@ const Nutricao = () => {
           </button>
         ) : null}
 
-        {/* Bottom CTA - In content flow */}
+        {/* Bottom CTA */}
         <Link
           to="/nutricao/criar-dieta"
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors mb-6"

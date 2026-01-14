@@ -1,19 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Trophy, Users, TrendingUp } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getClanRanking, ClanRanking, getUserClan } from "@/lib/arena/arenaStorage";
+import { useArenaRankings, useArenaClan } from "@/hooks/useArenaFirestore";
 import { getEloFrameStyles, getEloTierName, EloTier } from "@/lib/arena/eloUtils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Period = "weekly" | "monthly";
 
 const RankingList = () => {
   const [period, setPeriod] = useState<Period>("weekly");
-  const [rankings, setRankings] = useState<ClanRanking[]>([]);
-  const userClan = getUserClan();
+  const { weeklyRankings, monthlyRankings, loading } = useArenaRankings();
+  const { clan: userClan } = useArenaClan();
 
-  useEffect(() => {
-    setRankings(getClanRanking(period));
-  }, [period]);
+  const rankings = period === "weekly" ? weeklyRankings : monthlyRankings;
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-center mb-4">
+          <Skeleton className="h-10 w-48" />
+        </div>
+        {[1, 2, 3, 4, 5].map(i => (
+          <Skeleton key={i} className="h-20 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -83,7 +95,9 @@ const RankingList = () => {
 
                 {/* Points */}
                 <div className="text-right">
-                  <p className="text-lg font-bold text-primary">{clan.weeklyPoints}</p>
+                  <p className="text-lg font-bold text-primary">
+                    {period === "weekly" ? clan.weeklyPoints : clan.monthlyPoints}
+                  </p>
                   <p className="text-xs text-muted-foreground">pontos</p>
                 </div>
               </div>

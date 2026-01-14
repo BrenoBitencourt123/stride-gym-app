@@ -5,19 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createClan, getArenaProfile, initializeArenaProfile } from "@/lib/arena/arenaStorage";
+import { useArenaClan } from "@/hooks/useArenaFirestore";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 
 const CreateClan = () => {
   const navigate = useNavigate();
+  const { createClan, loading: clanLoading } = useArenaClan();
+  
   const [name, setName] = useState("");
   const [tag, setTag] = useState("");
   const [description, setDescription] = useState("");
   const [created, setCreated] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name.trim() || !tag.trim()) {
       toast.error("Preencha nome e tag do clã");
       return;
@@ -28,22 +31,18 @@ const CreateClan = () => {
       return;
     }
 
-    // Ensure profile exists
-    let profile = getArenaProfile();
-    if (!profile) {
-      profile = initializeArenaProfile(
-        `user_${Date.now()}`,
-        "Atleta"
-      );
-    }
+    setIsCreating(true);
 
     try {
-      const clan = createClan(name.trim(), tag.trim().toUpperCase(), description.trim() || undefined);
+      const clan = await createClan(name.trim(), tag.trim().toUpperCase(), description.trim() || undefined);
       setInviteCode(clan.inviteCode);
       setCreated(true);
       toast.success("Clã criado com sucesso!");
     } catch (error) {
+      console.error("Error creating clan:", error);
       toast.error("Erro ao criar clã");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -168,10 +167,16 @@ const CreateClan = () => {
           <Button 
             className="w-full" 
             onClick={handleCreate}
-            disabled={!name.trim() || !tag.trim()}
+            disabled={!name.trim() || !tag.trim() || isCreating || clanLoading}
           >
-            <Crown className="w-4 h-4 mr-2" />
-            Criar Clã
+            {isCreating ? (
+              "Criando..."
+            ) : (
+              <>
+                <Crown className="w-4 h-4 mr-2" />
+                Criar Clã
+              </>
+            )}
           </Button>
         </div>
       </div>

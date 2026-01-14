@@ -1,24 +1,36 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Heart, Share2, Clock, Dumbbell, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getPostById, toggleKudos, hasGivenKudos } from "@/lib/arena/arenaStorage";
+import { useArenaPost } from "@/hooks/useArenaFirestore";
 import { getEloStyles, getEloDisplayName } from "@/lib/arena/eloUtils";
 import EloFrame from "@/components/arena/EloFrame";
 import BottomNav from "@/components/BottomNav";
-import { useState, useEffect } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PostDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [post, setPost] = useState(id ? getPostById(id) : undefined);
-  const [hasKudos, setHasKudos] = useState(id ? hasGivenKudos(id) : false);
+  const { post, hasKudos, loading, toggleKudos } = useArenaPost(id || "");
 
-  useEffect(() => {
-    if (id) {
-      setPost(getPostById(id));
-      setHasKudos(hasGivenKudos(id));
-    }
-  }, [id]);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background pb-28">
+        <div className="max-w-md mx-auto px-4 pt-4">
+          <div className="flex items-center gap-3 mb-6">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <Skeleton className="h-6 w-32" />
+          </div>
+          <Skeleton className="h-32 w-full rounded-xl mb-6" />
+          <Skeleton className="h-48 w-full rounded-xl mb-6" />
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-20 rounded-lg" />
+            <Skeleton className="h-20 rounded-lg" />
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
 
   if (!post || !post.workoutSnapshot) {
     return (
@@ -36,12 +48,8 @@ const PostDetail = () => {
   const { workoutSnapshot, author } = post;
   const eloStyles = getEloStyles(author.elo.tier);
 
-  const handleKudos = () => {
-    if (id) {
-      toggleKudos(id);
-      setHasKudos(!hasKudos);
-      setPost(getPostById(id));
-    }
+  const handleKudos = async () => {
+    await toggleKudos();
   };
 
   const handleShare = async () => {
@@ -106,7 +114,7 @@ const PostDetail = () => {
                       color: '#fff'
                     }}
                   >
-                    {getEloDisplayName(author.elo)}
+                    {getEloDisplayName(author.elo.tier, author.elo.division)}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{formatDate(post.createdAt)}</p>

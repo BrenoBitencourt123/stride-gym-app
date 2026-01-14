@@ -97,66 +97,81 @@ const WorkoutSummary = () => {
   }, [completeWorkout]);
 
   // Salvar snapshots de todos os exercícios ao entrar no resumo
+  // Only run when we have actual data (completedSets > 0 or after a small delay)
   useEffect(() => {
     if (snapshotSavedRef.current || !workout) return;
-    snapshotSavedRef.current = true;
     
     const workoutProgress = treinoProgresso?.[workoutId] || {};
     
+    // Check if we actually have progress data
+    const hasProgress = Object.keys(workoutProgress).length > 0;
+    
+    // If no progress yet, wait for Firebase sync
+    if (!hasProgress && !treinoProgresso) {
+      console.log('[WorkoutSummary] Waiting for progress data...');
+      return;
+    }
+    
+    snapshotSavedRef.current = true;
+    
     const exerciseSnapshots: WorkoutSnapshot['exercises'] = [];
+    let snapshotTotalSets = 0;
+    let snapshotTotalVolume = 0;
     let totalReps = 0;
     
-    if (workoutProgress) {
-      for (const exercise of workout.exercicios) {
-        const exerciseProgress = workoutProgress[exercise.id];
-        if (exerciseProgress && exerciseProgress.workSets.length > 0) {
-          // Apenas séries válidas (done = true)
-          const completedSetsData: ExerciseSetSnapshot[] = exerciseProgress.workSets
-            .filter(s => s.done)
-            .map(s => ({ kg: s.kg, reps: s.reps }));
+    for (const exercise of workout.exercicios) {
+      const exerciseProgress = workoutProgress[exercise.id];
+      if (exerciseProgress && exerciseProgress.workSets.length > 0) {
+        // Apenas séries válidas (done = true)
+        const completedSetsData: ExerciseSetSnapshot[] = exerciseProgress.workSets
+          .filter(s => s.done)
+          .map(s => ({ kg: s.kg, reps: s.reps }));
+        
+        if (completedSetsData.length > 0) {
+          saveExerciseSnapshot(
+            exercise.id,
+            workout.id,
+            exercise.repsRange,
+            completedSetsData
+          );
           
-          if (completedSetsData.length > 0) {
-            saveExerciseSnapshot(
-              exercise.id,
-              workout.id,
-              exercise.repsRange,
-              completedSetsData
-            );
-            
-            exerciseSnapshots.push({
-              exerciseId: exercise.id,
-              exerciseName: exercise.nome,
-              sets: completedSetsData.map(s => ({ kg: s.kg, reps: s.reps })),
-            });
-            
-            totalReps += completedSetsData.reduce((sum, s) => sum + s.reps, 0);
-          }
+          exerciseSnapshots.push({
+            exerciseId: exercise.id,
+            exerciseName: exercise.nome,
+            sets: completedSetsData.map(s => ({ kg: s.kg, reps: s.reps })),
+          });
+          
+          snapshotTotalSets += completedSetsData.length;
+          snapshotTotalVolume += completedSetsData.reduce((sum, s) => sum + (s.kg * s.reps), 0);
+          totalReps += completedSetsData.reduce((sum, s) => sum + s.reps, 0);
         }
       }
     }
+    
+    console.log('[WorkoutSummary] Creating snapshot with', snapshotTotalSets, 'sets,', snapshotTotalVolume, 'kg');
     
     // Create workout snapshot for sharing
     const snapshot: WorkoutSnapshot = {
       workoutId: workout.id,
       workoutTitle: workout.titulo,
       duration: 45 * 60, // Default 45 min in seconds
-      totalSets: completedSets,
+      totalSets: snapshotTotalSets,
       totalReps,
-      totalVolume,
+      totalVolume: snapshotTotalVolume,
       prsCount: 0,
       exercises: exerciseSnapshots,
     };
     setWorkoutSnapshotData(snapshot);
     
     // Save workout completed record (legacy - for local tracking)
-    saveWorkoutCompleted(workout.id, totalVolume);
+    saveWorkoutCompleted(workout.id, snapshotTotalVolume);
     
     // Mark workout as completed this week (legacy - for UI display)
-    markWorkoutCompletedThisWeek(workout.id, XP_PER_WORKOUT, completedSets, totalVolume);
+    markWorkoutCompletedThisWeek(workout.id, XP_PER_WORKOUT, snapshotTotalSets, snapshotTotalVolume);
     
     // Show share modal automatically
     setTimeout(() => setShowShareModal(true), 500);
-  }, [workout, workoutId, totalVolume, completedSets]);
+  }, [workout, workoutId, treinoProgresso]);
 
   const handleConcluir = () => {
     completeTreinoDoDia(XP_PER_WORKOUT);
@@ -267,8 +282,8 @@ const WorkoutSummary = () => {
           workoutSnapshot={workoutSnapshotData}
           summary={{
             duration: 45,
-            totalSets: completedSets,
-            totalVolume,
+            totalSets: workoutSnapshotData.totalSets,
+            totalVolume: workoutSnapshotData.totalVolume,
             xpGained: displayXp,
           }}
           onPostToArena={() => setShowShareModal(false)}

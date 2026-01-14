@@ -1,11 +1,9 @@
 import { Trophy, ArrowRight, CheckCircle, Dumbbell, Share2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { 
   getUserWorkout,
   completeTreinoDoDia, 
-  getWorkoutSummaryStats, 
-  getTreinoProgresso,
   saveExerciseSnapshot,
   saveWorkoutCompleted,
   ExerciseSetSnapshot,
@@ -17,6 +15,7 @@ import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 import WorkoutCompleteShareModal from "@/components/arena/WorkoutCompleteShareModal";
 import { WorkoutSnapshot } from "@/lib/arena/types";
 import { useProgression } from "@/hooks/useProgression";
+import { useWorkoutPlan } from "@/contexts/AppStateContext";
 
 const XP_PER_WORKOUT = 150;
 
@@ -25,17 +24,52 @@ const WorkoutSummary = () => {
   const navigate = useNavigate();
   const triggerSync = useSyncTrigger();
   const { completeWorkout } = useProgression();
+  const { plan, treinoProgresso } = useWorkoutPlan();
+  
   const defaultWorkoutId = getWorkoutOfDay() || 'upper-a';
   const workoutId = treinoId || defaultWorkoutId;
-  const workout = getUserWorkout(workoutId);
+  
+  // Get workout from Firebase plan
+  const workout = useMemo(() => {
+    if (!plan?.workouts) return getUserWorkout(workoutId);
+    return plan.workouts.find(w => w.id === workoutId) || getUserWorkout(workoutId);
+  }, [plan, workoutId]);
+  
   const rewardsAppliedRef = useRef(false);
   const snapshotSavedRef = useRef(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [workoutSnapshotData, setWorkoutSnapshotData] = useState<WorkoutSnapshot | null>(null);
   const [rewardsResult, setRewardsResult] = useState<{ xpGained: number; eloGained: number } | null>(null);
   
-  const { totalSets, totalVolume, exercisesDone } = getWorkoutSummaryStats(workoutId);
-  const completedSets = totalSets;
+  // Calculate stats from Firebase treinoProgresso
+  const { totalSets, totalVolume, exercisesDone, completedSets } = useMemo(() => {
+    if (!workout || !treinoProgresso) {
+      return { totalSets: 0, totalVolume: 0, exercisesDone: 0, completedSets: 0 };
+    }
+    
+    const workoutProgress = treinoProgresso[workoutId] || {};
+    let sets = 0;
+    let volume = 0;
+    let exDone = 0;
+    
+    for (const ex of workout.exercicios) {
+      const exProgress = workoutProgress[ex.id];
+      if (!exProgress) continue;
+      
+      const doneSets = exProgress.workSets.filter(s => s.done);
+      sets += doneSets.length;
+      
+      for (const set of doneSets) {
+        volume += set.kg * set.reps;
+      }
+      
+      if (doneSets.length > 0 && doneSets.length === exProgress.workSets.length) {
+        exDone++;
+      }
+    }
+    
+    return { totalSets: sets, totalVolume: volume, exercisesDone: exDone, completedSets: sets };
+  }, [workout, treinoProgresso, workoutId]);
 
   // Apply Firestore-based rewards (idempotent)
   useEffect(() => {
@@ -67,8 +101,7 @@ const WorkoutSummary = () => {
     if (snapshotSavedRef.current || !workout) return;
     snapshotSavedRef.current = true;
     
-    const progresso = getTreinoProgresso();
-    const workoutProgress = progresso[workoutId];
+    const workoutProgress = treinoProgresso?.[workoutId] || {};
     
     const exerciseSnapshots: WorkoutSnapshot['exercises'] = [];
     let totalReps = 0;

@@ -77,7 +77,10 @@ export function emitAppStateChanged(): void {
   window.dispatchEvent(new CustomEvent(APPSTATE_CHANGED_EVENT));
 }
 
-// ============= DEV MODE BYPASS =============
+// ============= DEV MODE BYPASS (DEPRECATED) =============
+// These functions are kept for backwards compatibility but are no longer used
+// Firebase is now the single source of truth
+
 const DEV_MODE_KEY = "levelup.devModeBypass";
 
 export function setDevModeBypass(enabled: boolean): void {

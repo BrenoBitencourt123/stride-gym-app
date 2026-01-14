@@ -47,7 +47,7 @@ const FeedList = ({ type }: FeedListProps) => {
     );
   }
 
-  // For global feed with no posts, show suggestions first then empty CTA
+  // For global feed with no posts, show welcome card, suggestions, then empty CTA
   if (type === "global" && posts.length === 0) {
     return (
       <div>
@@ -64,10 +64,15 @@ const FeedList = ({ type }: FeedListProps) => {
           </Button>
         </div>
 
-        {/* Suggested Athletes first */}
+        {/* Welcome card always shows first */}
+        <div className="mb-4">
+          <WelcomePostCard />
+        </div>
+
+        {/* Suggested Athletes */}
         <SuggestedAthletesRow className="mb-6" />
 
-        {/* Then empty state */}
+        {/* Then empty state CTA */}
         <EmptyFeedCard type={type} />
       </div>
     );

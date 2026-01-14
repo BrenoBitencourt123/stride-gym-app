@@ -115,8 +115,14 @@ export function updateObjective(newObjective: OnboardingObjective): OnboardingDa
 // ========== AGE CALCULATION ==========
 
 export function calculateAge(birthDate: string): number {
+  if (!birthDate) return 0;
+  
   const today = new Date();
   const birth = new Date(birthDate);
+  
+  // Check for invalid date
+  if (isNaN(birth.getTime())) return 0;
+  
   let age = today.getFullYear() - birth.getFullYear();
   const monthDiff = today.getMonth() - birth.getMonth();
   
@@ -124,7 +130,8 @@ export function calculateAge(birthDate: string): number {
     age--;
   }
   
-  return age;
+  // Ensure age is reasonable (0-120)
+  return Math.max(0, Math.min(120, age));
 }
 
 export function isAdult(birthDate: string): boolean {
@@ -195,16 +202,26 @@ export function calculateBMR(
   age: number,
   sex: Sex
 ): number {
+  // Validate inputs - ensure they're positive numbers
+  const weight = Math.max(0, weightKg || 0);
+  const height = Math.max(0, heightCm || 0);
+  const validAge = Math.max(0, Math.min(120, age || 0));
+  
+  // If any required value is 0 or invalid, return 0
+  if (weight <= 0 || height <= 0 || validAge <= 0) {
+    return 0;
+  }
+  
   // Mifflin-St Jeor Equation
   // Men: BMR = 10 × weight(kg) + 6.25 × height(cm) − 5 × age(y) + 5
   // Women: BMR = 10 × weight(kg) + 6.25 × height(cm) − 5 × age(y) − 161
   
-  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+  const base = 10 * weight + 6.25 * height - 5 * validAge;
   
   if (sex === 'male') {
-    return Math.round(base + 5);
+    return Math.round(Math.max(0, base + 5));
   } else {
-    return Math.round(base - 161);
+    return Math.round(Math.max(0, base - 161));
   }
 }
 
@@ -245,6 +262,15 @@ export function calculateMacros(
   weightKg: number,
   objective: Objective
 ): MacroDistribution {
+  // Validate inputs
+  const kcal = Math.max(0, targetKcal || 0);
+  const weight = Math.max(0, weightKg || 0);
+  
+  // If no valid calories or weight, return zeros
+  if (kcal <= 0 || weight <= 0) {
+    return { proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 };
+  }
+  
   // Protein: ~1.6-2.2g/kg body weight
   // Higher for muscle gain and fat loss to preserve muscle
   let proteinPerKg: number;
@@ -260,22 +286,22 @@ export function calculateMacros(
       proteinPerKg = 1.6;
   }
   
-  const proteinG = Math.round(weightKg * proteinPerKg);
+  const proteinG = Math.round(weight * proteinPerKg);
   const proteinKcal = proteinG * 4;
   
   // Fat: minimum healthy range is 0.5-0.7g/kg, but typically 20-30% of calories
   // We'll use ~25% of calories, with a minimum of 0.6g/kg
-  const fatFromPercent = Math.round((targetKcal * 0.25) / 9);
-  const fatMinimum = Math.round(weightKg * 0.6);
+  const fatFromPercent = Math.round((kcal * 0.25) / 9);
+  const fatMinimum = Math.round(weight * 0.6);
   const fatG = Math.max(fatFromPercent, fatMinimum);
   const fatKcal = fatG * 9;
   
   // Carbs: fill the remaining calories
-  const remainingKcal = targetKcal - proteinKcal - fatKcal;
+  const remainingKcal = kcal - proteinKcal - fatKcal;
   const carbsG = Math.max(0, Math.round(remainingKcal / 4));
   
   // Fiber: ~14g per 1000 kcal
-  const fiberG = Math.round((targetKcal / 1000) * 14);
+  const fiberG = Math.max(0, Math.round((kcal / 1000) * 14));
   
   return {
     proteinG,

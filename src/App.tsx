@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AppStateProvider } from "@/contexts/AppStateContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Treino from "./pages/Treino";
@@ -38,9 +39,10 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
-          <Toaster />
-          <Sonner />
-          <Routes>
+          <AppStateProvider>
+            <Toaster />
+            <Sonner />
+            <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/onboarding" element={<Onboarding />} />
@@ -70,7 +72,8 @@ const App = () => (
             <Route path="/progresso" element={<ProtectedRoute><Progresso /></ProtectedRoute>} />
             <Route path="/descanso" element={<ProtectedRoute><RestDay /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
-          </Routes>
+            </Routes>
+          </AppStateProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -31,24 +31,54 @@ service cloud.firestore {
       return member != null && member.data.role == 'gm';
     }
     
-    // ============= USERS =============
+    // ============= USERS (MAIN APP STATE) =============
     
     match /users/{userId} {
-      // Users can only read/write their own user document
       allow read, write: if isAuthenticated() && isOwner(userId);
       
-      // Arena profile subcollection
       match /arena/{document=**} {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
       
-      // Workout logs subcollection
       match /workoutLogs/{logId} {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
       
-      // Arena ledger (for tracking points/penalties)
       match /arenaLedger/{entryId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // ============= WORKOUTS =============
+    
+    match /workouts/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      match /sessions/{sessionId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      match /plans/{planId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // ============= NUTRITION =============
+    
+    match /nutrition/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      match /days/{dateKey} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // ============= MEASUREMENTS =============
+    
+    match /measurements/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      match /weight/{dateKey} {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
     }

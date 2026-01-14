@@ -1,26 +1,33 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Target } from "lucide-react";
+import { ArrowLeft, Check, Target, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAppStateContext } from "@/contexts/AppStateContext";
 import {
   Objective,
   OnboardingObjective,
-  getOnboardingData,
-  updateObjective,
   getObjectiveLabel,
   getObjectiveDescription,
   calculatePlan,
+  recalculateWithNewObjective,
 } from "@/lib/onboarding";
 import { toast } from "sonner";
 
 const ObjectiveOnboarding = () => {
   const navigate = useNavigate();
+  const { 
+    loading, 
+    getOnboarding, 
+    updateOnboarding, 
+    updateNutritionTargets 
+  } = useAppStateContext();
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load current data
-  const existingData = getOnboardingData();
+  // Load current data from Firebase context
+  const existingData = getOnboarding();
 
   const [objective, setObjective] = useState<Objective>(
     existingData?.objective?.objective || 'maintain'
@@ -28,6 +35,14 @@ const ObjectiveOnboarding = () => {
   const [targetWeightKg, setTargetWeightKg] = useState(
     existingData?.objective?.targetWeightKg?.toString() || ''
   );
+
+  // Update form when data loads
+  useEffect(() => {
+    if (existingData) {
+      setObjective(existingData.objective?.objective || 'maintain');
+      setTargetWeightKg(existingData.objective?.targetWeightKg?.toString() || '');
+    }
+  }, [existingData]);
 
   // Preview of new plan
   const [previewKcal, setPreviewKcal] = useState<number | null>(null);
@@ -43,7 +58,7 @@ const ObjectiveOnboarding = () => {
     }
   }, [objective, targetWeightKg, existingData?.profile]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!existingData) {
       toast.error('Dados de onboarding não encontrados');
       navigate('/onboarding');
@@ -52,23 +67,60 @@ const ObjectiveOnboarding = () => {
 
     setIsSubmitting(true);
 
-    const newObjective: OnboardingObjective = {
-      objective,
-      targetWeightKg: parseFloat(targetWeightKg) || existingData.profile.weightKg,
-    };
+    try {
+      const newObjective: OnboardingObjective = {
+        objective,
+        targetWeightKg: parseFloat(targetWeightKg) || existingData.profile.weightKg,
+      };
 
-    updateObjective(newObjective);
-    toast.success('Objetivo atualizado com sucesso!');
+      // Recalculate the plan with new objective
+      const updatedData = recalculateWithNewObjective(existingData, newObjective);
+      
+      // Save to Firebase
+      await updateOnboarding(updatedData);
+      
+      // Also update nutrition targets directly
+      await updateNutritionTargets({
+        kcal: updatedData.plan.targetKcal,
+        protein: updatedData.plan.proteinG,
+        carbs: updatedData.plan.carbsG,
+        fats: updatedData.plan.fatG,
+      });
+      
+      console.log('[ObjectiveOnboarding] Saved to Firebase:', {
+        targetKcal: updatedData.plan.targetKcal,
+        proteinG: updatedData.plan.proteinG,
+      });
+      
+      toast.success('Objetivo atualizado com sucesso!');
 
-    setTimeout(() => {
-      navigate(-1);
-    }, 300);
+      setTimeout(() => {
+        navigate(-1);
+      }, 300);
+    } catch (error) {
+      console.error('[ObjectiveOnboarding] Error saving:', error);
+      toast.error('Erro ao salvar objetivo');
+      setIsSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!existingData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Carregando...</p>
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Onboarding não encontrado</p>
+          <Button onClick={() => navigate('/onboarding')}>
+            Fazer onboarding
+          </Button>
+        </div>
       </div>
     );
   }
@@ -176,7 +228,7 @@ const ObjectiveOnboarding = () => {
         >
           {isSubmitting ? (
             <>
-              <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mr-2" />
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
               Salvando...
             </>
           ) : (

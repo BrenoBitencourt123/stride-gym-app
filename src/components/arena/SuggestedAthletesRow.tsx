@@ -1,9 +1,10 @@
 // src/components/arena/SuggestedAthletesRow.tsx
 // Horizontal carousel of suggested athletes to follow
 
-import { ChevronRight, Users } from "lucide-react";
+import { Users, Share2 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { useSuggestedAthletes } from "@/hooks/useSuggestedAthletes";
 import AthleteCard from "./AthleteCard";
 
@@ -14,9 +15,47 @@ interface SuggestedAthletesRowProps {
 const SuggestedAthletesRow = ({ className = "" }: SuggestedAthletesRowProps) => {
   const { athletes, loading, followAthlete, hideAthlete, followingStates } = useSuggestedAthletes(15);
 
-  // Don't show if no suggestions
+  // Show invite fallback if no suggestions available
+  const handleShare = async () => {
+    const shareUrl = window.location.origin + '/arena';
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'LevelUp Gym - Arena',
+          text: 'Treine comigo na Arena do LevelUp Gym!',
+          url: shareUrl,
+        });
+      } catch {
+        // User cancelled
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+    }
+  };
+
   if (!loading && athletes.length === 0) {
-    return null;
+    return (
+      <div className={`card-glass rounded-xl p-4 ${className}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <Users className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">
+            Atletas Sugeridos
+          </h3>
+        </div>
+        <p className="text-sm text-muted-foreground mb-3">
+          Ainda não encontramos atletas para sugerir. Convide seus amigos para treinar juntos!
+        </p>
+        <Button 
+          variant="secondary" 
+          size="sm" 
+          className="w-full"
+          onClick={handleShare}
+        >
+          <Share2 className="w-4 h-4 mr-2" />
+          Convidar Amigos
+        </Button>
+      </div>
+    );
   }
 
   return (

@@ -232,9 +232,9 @@ export async function updateProfileVisibility(
 
 /**
  * Get suggested athletes to follow
- * MVP logic: fetch public profiles from recent posts authors,
- * filter out self and already following,
- * rank by elo proximity, schedule overlap, and activity
+ * Fetches public profiles from arena collection,
+ * filters out self and already following,
+ * ranks by elo proximity, schedule overlap, and activity
  */
 export async function getSuggestedAthletes(
   myUid: string,
@@ -251,86 +251,61 @@ export async function getSuggestedAthletes(
       // Ignore - new users won't have following list
     }
     
-    // Query posts to find active users (authors of recent public posts)
-    const postsCol = collection(db, 'posts');
-    const recentPostsQuery = query(
-      postsCol,
-      where('visibility', '==', 'public'),
-      orderBy('createdAt', 'desc'),
-      limit(100)
-    );
+    // Query arena profiles directly to find active users
+    const usersCol = collection(db, 'users');
+    const usersSnap = await getDocs(usersCol);
     
-    let postsSnap;
-    try {
-      postsSnap = await getDocs(recentPostsQuery);
-    } catch (error) {
-      console.error('Error fetching posts for suggestions:', error);
-      return [];
-    }
-    
-    // Collect unique author IDs with their denormalized data
-    const authorIds = new Set<string>();
-    const authorDataMap = new Map<string, {
+    // Collect users with arena profiles
+    const candidates: Array<{
+      userId: string;
       displayName: string;
       photoURL?: string;
       avatarId?: string;
       elo: EloInfo;
-    }>();
+      weeklyPoints: number;
+      totalWorkouts: number;
+      scheduleDays: number[];
+    }> = [];
     
-    postsSnap.docs.forEach(docSnap => {
-      const data = docSnap.data();
-      const authorId = data.authorId;
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
       
       // Skip self and already following
-      if (authorId === myUid || followingSet.has(authorId)) return;
+      if (userId === myUid || followingSet.has(userId)) continue;
       
-      if (!authorIds.has(authorId)) {
-        authorIds.add(authorId);
-        authorDataMap.set(authorId, {
-          displayName: data.authorName || 'Atleta',
-          photoURL: data.authorAvatar,
-          avatarId: data.authorAvatarId,
-          elo: data.authorElo || getEloFromPoints(0),
-        });
+      // Try to get arena profile
+      try {
+        const arenaDoc = await getDoc(doc(db, 'users', userId, 'arena', 'profile'));
+        if (arenaDoc.exists()) {
+          const arenaData = arenaDoc.data();
+          // Only include public profiles
+          if (arenaData.visibility === 'private') continue;
+          
+          candidates.push({
+            userId,
+            displayName: arenaData.displayName || userDoc.data()?.displayName || 'Atleta',
+            photoURL: arenaData.photoURL || userDoc.data()?.photoURL,
+            avatarId: arenaData.avatarId,
+            elo: arenaData.elo || getEloFromPoints(0),
+            weeklyPoints: arenaData.weeklyPoints || 0,
+            totalWorkouts: arenaData.totalWorkouts || 0,
+            scheduleDays: arenaData.schedule?.current?.trainingDays || [],
+          });
+        }
+      } catch {
+        // Skip users we can't read
       }
-    });
+    }
     
-    // If no posts found, return empty
-    if (authorIds.size === 0) {
+    // If no candidates found, return empty
+    if (candidates.length === 0) {
       return [];
     }
     
-    // Build suggestions from post author data (no extra profile fetch needed for MVP)
+    // Build suggestions from candidate data
     const suggestions: SuggestedAthlete[] = [];
     
-    for (const authorId of authorIds) {
-      const authorData = authorDataMap.get(authorId);
-      if (!authorData) continue;
-      
-      // Try to get full profile, but use post data as fallback
-      let profile: PublicProfile | null = null;
-      try {
-        profile = await getPublicProfile(authorId);
-      } catch {
-        // Use denormalized data from post
-      }
-      
-      const finalProfile: PublicProfile = profile || {
-        userId: authorId,
-        displayName: authorData.displayName,
-        photoURL: authorData.photoURL,
-        avatarId: authorData.avatarId,
-        elo: authorData.elo,
-        weeklyPoints: 0,
-        totalWorkouts: 0,
-        scheduleDays: [],
-        visibility: 'public',
-        createdAt: new Date().toISOString(),
-      };
-      
-      // Skip if profile is not public
-      if (profile && profile.visibility !== 'public') continue;
-      
+    for (const candidate of candidates) {
       // Calculate match score
       let matchScore = 0;
       let matchReason: 'same_elo' | 'schedule_overlap' | 'active' = 'active';
@@ -338,7 +313,7 @@ export async function getSuggestedAthletes(
       if (myProfile) {
         // Same elo tier or ±1
         const myTierIndex = getEloTierIndex(myProfile.elo.tier);
-        const theirTierIndex = getEloTierIndex(finalProfile.elo.tier);
+        const theirTierIndex = getEloTierIndex(candidate.elo.tier);
         const tierDiff = Math.abs(myTierIndex - theirTierIndex);
         
         if (tierDiff === 0) {
@@ -351,7 +326,7 @@ export async function getSuggestedAthletes(
         
         // Schedule overlap
         const myDays = new Set(myProfile.schedule.current.trainingDays);
-        const theirDays = finalProfile.scheduleDays;
+        const theirDays = candidate.scheduleDays;
         const overlap = theirDays.filter(d => myDays.has(d)).length;
         
         if (overlap >= 2) {
@@ -363,10 +338,19 @@ export async function getSuggestedAthletes(
       }
       
       // Activity bonus (weekly points)
-      matchScore += Math.min(finalProfile.weeklyPoints / 10, 20);
+      matchScore += Math.min(candidate.weeklyPoints / 10, 20);
       
       suggestions.push({
-        ...finalProfile,
+        userId: candidate.userId,
+        displayName: candidate.displayName,
+        photoURL: candidate.photoURL,
+        avatarId: candidate.avatarId,
+        elo: candidate.elo,
+        weeklyPoints: candidate.weeklyPoints,
+        totalWorkouts: candidate.totalWorkouts,
+        scheduleDays: candidate.scheduleDays,
+        visibility: 'public',
+        createdAt: new Date().toISOString(),
         matchScore,
         matchReason,
       });

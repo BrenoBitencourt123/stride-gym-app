@@ -12,10 +12,22 @@ import { getPointsPerWorkout, getMissedWorkoutPenalty } from './eloUtils';
 // Re-export DayStatus type
 export type DayStatus = DailyMemberStatus;
 
+// Helper to check if member trained today (checks localStorage directly to avoid circular deps)
+function hasMemberTrainedToday(userId: string): boolean {
+  try {
+    const key = `levelup.arena.trainedToday`;
+    const data = localStorage.getItem(key);
+    if (!data) return false;
+    const parsed = JSON.parse(data) as Record<string, string>;
+    const todayKey = formatDateKey(getSaoPauloDate());
+    return parsed[userId] === todayKey;
+  } catch {
+    return false;
+  }
+}
+
 // Alias for getMemberDailyStatus
 export const getMemberDayStatus = (member: ClanMember): DailyMemberStatus => {
-  // Get trained status from storage
-  const { hasMemberTrainedToday } = require('./arenaStorage');
   const trainedToday = hasMemberTrainedToday(member.userId);
   return getMemberDailyStatus(member, trainedToday);
 };

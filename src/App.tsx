@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppStateProvider } from "@/contexts/AppStateContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
@@ -34,52 +34,59 @@ import JoinClan from "./pages/JoinClan";
 
 const queryClient = new QueryClient();
 
+// Inner component that uses hooks - must be inside AuthProvider
+function AppRoutes() {
+  return (
+    <AppStateProvider>
+      <Toaster />
+      <Sonner />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<Login />} />
+        
+        {/* Onboarding - requires auth but skips onboarding check */}
+        <Route path="/onboarding" element={
+          <ProtectedRoute skipOnboarding>
+            <Onboarding />
+          </ProtectedRoute>
+        } />
+        
+        {/* Protected routes */}
+        <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+        <Route path="/treino" element={<ProtectedRoute><Treino /></ProtectedRoute>} />
+        <Route path="/treino/ajustar" element={<ProtectedRoute><AjustarPlano /></ProtectedRoute>} />
+        <Route path="/treino/:treinoId" element={<ProtectedRoute><WorkoutDetail /></ProtectedRoute>} />
+        <Route path="/treino/:treinoId/ativo" element={<ProtectedRoute><ActiveWorkout /></ProtectedRoute>} />
+        <Route path="/treino/:treinoId/:exercicioId" element={<ProtectedRoute><ExerciseLogging /></ProtectedRoute>} />
+        <Route path="/treino/:treinoId/resumo" element={<ProtectedRoute><WorkoutSummary /></ProtectedRoute>} />
+        <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
+        <Route path="/arena/post/:id" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
+        <Route path="/arena/clan" element={<ProtectedRoute><ClanHub /></ProtectedRoute>} />
+        <Route path="/arena/clan/create" element={<ProtectedRoute><CreateClan /></ProtectedRoute>} />
+        <Route path="/arena/clan/join" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />
+        <Route path="/arena/clan/invite/:code" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />
+        <Route path="/nutricao" element={<ProtectedRoute><Nutricao /></ProtectedRoute>} />
+        <Route path="/nutricao/criar-dieta" element={<ProtectedRoute><CriarDieta /></ProtectedRoute>} />
+        <Route path="/nutricao/adicionar-alimento" element={<ProtectedRoute><AdicionarAlimento /></ProtectedRoute>} />
+        <Route path="/nutricao/resumo" element={<ProtectedRoute><NutritionSummary /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+        <Route path="/settings/objetivo" element={<ProtectedRoute><ObjectiveOnboarding /></ProtectedRoute>} />
+        <Route path="/conquistas" element={<ProtectedRoute><Conquistas /></ProtectedRoute>} />
+        <Route path="/perfil" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+        <Route path="/progresso" element={<ProtectedRoute><Progresso /></ProtectedRoute>} />
+        <Route path="/descanso" element={<ProtectedRoute><RestDay /></ProtectedRoute>} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AppStateProvider>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
-          <AppStateProvider>
-            <Toaster />
-            <Sonner />
-            <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<Login />} />
-            
-            {/* Onboarding - requires auth but skips onboarding check */}
-            <Route path="/onboarding" element={
-              <ProtectedRoute skipOnboarding>
-                <Onboarding />
-              </ProtectedRoute>
-            } />
-            
-            {/* Protected routes */}
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/treino" element={<ProtectedRoute><Treino /></ProtectedRoute>} />
-            <Route path="/treino/ajustar" element={<ProtectedRoute><AjustarPlano /></ProtectedRoute>} />
-            <Route path="/treino/:treinoId" element={<ProtectedRoute><WorkoutDetail /></ProtectedRoute>} />
-            <Route path="/treino/:treinoId/ativo" element={<ProtectedRoute><ActiveWorkout /></ProtectedRoute>} />
-            <Route path="/treino/:treinoId/:exercicioId" element={<ProtectedRoute><ExerciseLogging /></ProtectedRoute>} />
-            <Route path="/treino/:treinoId/resumo" element={<ProtectedRoute><WorkoutSummary /></ProtectedRoute>} />
-            <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
-            <Route path="/arena/post/:id" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
-            <Route path="/arena/clan" element={<ProtectedRoute><ClanHub /></ProtectedRoute>} />
-            <Route path="/arena/clan/create" element={<ProtectedRoute><CreateClan /></ProtectedRoute>} />
-            <Route path="/arena/clan/join" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />
-            <Route path="/arena/clan/invite/:code" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />
-            <Route path="/nutricao" element={<ProtectedRoute><Nutricao /></ProtectedRoute>} />
-            <Route path="/nutricao/criar-dieta" element={<ProtectedRoute><CriarDieta /></ProtectedRoute>} />
-            <Route path="/nutricao/adicionar-alimento" element={<ProtectedRoute><AdicionarAlimento /></ProtectedRoute>} />
-            <Route path="/nutricao/resumo" element={<ProtectedRoute><NutritionSummary /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-            <Route path="/settings/objetivo" element={<ProtectedRoute><ObjectiveOnboarding /></ProtectedRoute>} />
-            <Route path="/conquistas" element={<ProtectedRoute><Conquistas /></ProtectedRoute>} />
-            <Route path="/perfil" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/progresso" element={<ProtectedRoute><Progresso /></ProtectedRoute>} />
-            <Route path="/descanso" element={<ProtectedRoute><RestDay /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppStateProvider>
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

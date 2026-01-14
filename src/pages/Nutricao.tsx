@@ -72,24 +72,29 @@ const Nutricao = () => {
   
   // Initialize today's meals from diet if new day
   useEffect(() => {
-    if (loading || !state) return;
+    if (loading) return;
     
     const initializeToday = async () => {
-      // Check if today's log exists
-      const existingToday = todayFromContext;
-      
-      // If no log for today but we have a diet plan, apply it
-      if (!existingToday && dietPlan && dietPlan.meals.some(m => m.items.length > 0)) {
-        console.log('[Nutricao] New day detected, applying diet plan...');
-        const newToday = applyDietToTodayData(dietPlan, todayDateKey);
-        await updateToday(newToday);
+      try {
+        // Check if today's log exists and matches today's date
+        const existingToday = todayFromContext;
+        const existingIsToday = existingToday?.dateKey === todayDateKey;
+        
+        // If no log for today but we have a diet plan, apply it
+        if (!existingIsToday && dietPlan && dietPlan.meals.some(m => m.items.length > 0)) {
+          console.log('[Nutricao] New day detected, applying diet plan...');
+          const newToday = applyDietToTodayData(dietPlan, todayDateKey);
+          await updateToday(newToday);
+        }
+      } catch (error) {
+        console.error('[Nutricao] Error initializing today:', error);
+      } finally {
+        setInitializing(false);
       }
-      
-      setInitializing(false);
     };
     
     initializeToday();
-  }, [loading, state, todayFromContext, dietPlan, todayDateKey, updateToday]);
+  }, [loading, todayFromContext, dietPlan, todayDateKey, updateToday]);
   
   // Current today data (from context or empty)
   const today: NutritionToday = useMemo(() => {

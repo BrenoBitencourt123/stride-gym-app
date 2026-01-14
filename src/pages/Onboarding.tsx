@@ -64,18 +64,33 @@ const Onboarding = () => {
   // Calculate plan preview when reaching summary step
   useEffect(() => {
     if (currentStep === 'summary' && birthDate && heightCm && weightKg) {
+      const parsedHeight = parseFloat(heightCm);
+      const parsedWeight = parseFloat(weightKg);
+      
+      console.log('Onboarding calculation inputs:', {
+        birthDate,
+        sex,
+        heightCm: parsedHeight,
+        weightKg: parsedWeight,
+        activityLevel,
+        objective,
+      });
+      
       const profile: OnboardingProfile = {
         birthDate,
         sex,
-        heightCm: parseFloat(heightCm),
-        weightKg: parseFloat(weightKg),
+        heightCm: parsedHeight,
+        weightKg: parsedWeight,
         activityLevel,
       };
       const obj: OnboardingObjective = {
         objective,
-        targetWeightKg: parseFloat(targetWeightKg) || parseFloat(weightKg),
+        targetWeightKg: parseFloat(targetWeightKg) || parsedWeight,
       };
       const plan = calculatePlan(profile, obj);
+      
+      console.log('Calculated plan:', plan);
+      
       setPlanPreview(plan);
     }
   }, [currentStep, birthDate, sex, heightCm, weightKg, activityLevel, objective, targetWeightKg]);

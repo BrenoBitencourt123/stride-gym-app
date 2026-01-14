@@ -120,8 +120,19 @@ export function calculateAge(birthDate: string): number {
   const today = new Date();
   const birth = new Date(birthDate);
   
+  console.log('calculateAge debug:', { 
+    birthDate, 
+    today: today.toISOString(), 
+    birth: birth.toISOString(),
+    todayYear: today.getFullYear(),
+    birthYear: birth.getFullYear()
+  });
+  
   // Check for invalid date
-  if (isNaN(birth.getTime())) return 0;
+  if (isNaN(birth.getTime())) {
+    console.log('Invalid birth date!');
+    return 0;
+  }
   
   let age = today.getFullYear() - birth.getFullYear();
   const monthDiff = today.getMonth() - birth.getMonth();
@@ -129,6 +140,8 @@ export function calculateAge(birthDate: string): number {
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
     age--;
   }
+  
+  console.log('Calculated age:', age);
   
   // Ensure age is reasonable (0-120)
   return Math.max(0, Math.min(120, age));
@@ -202,13 +215,18 @@ export function calculateBMR(
   age: number,
   sex: Sex
 ): number {
+  console.log('calculateBMR inputs:', { weightKg, heightCm, age, sex });
+  
   // Validate inputs - ensure they're positive numbers
   const weight = Math.max(0, weightKg || 0);
   const height = Math.max(0, heightCm || 0);
   const validAge = Math.max(0, Math.min(120, age || 0));
   
+  console.log('calculateBMR validated:', { weight, height, validAge });
+  
   // If any required value is 0 or invalid, return 0
   if (weight <= 0 || height <= 0 || validAge <= 0) {
+    console.log('calculateBMR: Invalid inputs, returning 0');
     return 0;
   }
   
@@ -217,12 +235,17 @@ export function calculateBMR(
   // Women: BMR = 10 × weight(kg) + 6.25 × height(cm) − 5 × age(y) − 161
   
   const base = 10 * weight + 6.25 * height - 5 * validAge;
+  console.log('calculateBMR base:', base);
   
+  let bmr: number;
   if (sex === 'male') {
-    return Math.round(Math.max(0, base + 5));
+    bmr = Math.round(Math.max(0, base + 5));
   } else {
-    return Math.round(Math.max(0, base - 161));
+    bmr = Math.round(Math.max(0, base - 161));
   }
+  
+  console.log('calculateBMR result:', bmr);
+  return bmr;
 }
 
 // ========== TDEE CALCULATION ==========

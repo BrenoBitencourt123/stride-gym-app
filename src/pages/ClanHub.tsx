@@ -13,6 +13,7 @@ import {
 } from "@/lib/arena/arenaStorage";
 import { calculateMedianElo, getEloDisplayName } from "@/lib/arena/eloUtils";
 import PresenceList from "@/components/arena/PresenceList";
+import FreezeRequestModal from "@/components/arena/FreezeRequestModal";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 import {
@@ -31,6 +32,7 @@ const ClanHub = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("presence");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [freezeModalOpen, setFreezeModalOpen] = useState(false);
   
   const clan = getMyClan();
   const members = getClanMembers();
@@ -181,6 +183,21 @@ const ClanHub = () => {
 
           <TabsContent value="presence">
             <PresenceList members={members} />
+            
+            {/* Request Freeze Button */}
+            <div className="mt-6">
+              <Button 
+                variant="secondary" 
+                className="w-full"
+                onClick={() => setFreezeModalOpen(true)}
+              >
+                <Snowflake className="w-4 h-4 mr-2" />
+                Pedir Freeze
+              </Button>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Solicite uma pausa para não receber penalidades
+              </p>
+            </div>
           </TabsContent>
 
           <TabsContent value="management">
@@ -313,6 +330,13 @@ const ClanHub = () => {
         </div>
       </div>
 
+      <FreezeRequestModal 
+        open={freezeModalOpen} 
+        onOpenChange={(open) => {
+          setFreezeModalOpen(open);
+          if (!open) setRefreshKey(k => k + 1);
+        }} 
+      />
       <BottomNav />
     </div>
   );

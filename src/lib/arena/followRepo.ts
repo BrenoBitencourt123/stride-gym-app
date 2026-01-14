@@ -115,7 +115,11 @@ export async function getFollowing(uid: string): Promise<string[]> {
     const followingCol = collection(db, 'users', uid, 'following');
     const snap = await getDocs(followingCol);
     return snap.docs.map(doc => doc.id);
-  } catch (error) {
+  } catch (error: any) {
+    // Permission denied is expected if subcollection doesn't exist yet
+    if (error?.code === 'permission-denied') {
+      return [];
+    }
     console.error('Error getting following list:', error);
     return [];
   }
@@ -228,7 +232,8 @@ export async function updateProfileVisibility(
 
 /**
  * Get suggested athletes to follow
- * MVP logic: fetch public profiles, filter out self and already following,
+ * MVP logic: fetch public profiles from recent posts authors,
+ * filter out self and already following,
  * rank by elo proximity, schedule overlap, and activity
  */
 export async function getSuggestedAthletes(
@@ -237,9 +242,14 @@ export async function getSuggestedAthletes(
   limitCount: number = 15
 ): Promise<SuggestedAthlete[]> {
   try {
-    // Get list of users I'm already following
-    const followingList = await getFollowing(myUid);
-    const followingSet = new Set(followingList);
+    // Get list of users I'm already following (silent fail if empty)
+    let followingSet = new Set<string>();
+    try {
+      const followingList = await getFollowing(myUid);
+      followingSet = new Set(followingList);
+    } catch {
+      // Ignore - new users won't have following list
+    }
     
     // Query posts to find active users (authors of recent public posts)
     const postsCol = collection(db, 'posts');
@@ -250,9 +260,15 @@ export async function getSuggestedAthletes(
       limit(100)
     );
     
-    const postsSnap = await getDocs(recentPostsQuery);
+    let postsSnap;
+    try {
+      postsSnap = await getDocs(recentPostsQuery);
+    } catch (error) {
+      console.error('Error fetching posts for suggestions:', error);
+      return [];
+    }
     
-    // Collect unique author IDs
+    // Collect unique author IDs with their denormalized data
     const authorIds = new Set<string>();
     const authorDataMap = new Map<string, {
       displayName: string;
@@ -261,8 +277,8 @@ export async function getSuggestedAthletes(
       elo: EloInfo;
     }>();
     
-    postsSnap.docs.forEach(doc => {
-      const data = doc.data();
+    postsSnap.docs.forEach(docSnap => {
+      const data = docSnap.data();
       const authorId = data.authorId;
       
       // Skip self and already following
@@ -271,20 +287,49 @@ export async function getSuggestedAthletes(
       if (!authorIds.has(authorId)) {
         authorIds.add(authorId);
         authorDataMap.set(authorId, {
-          displayName: data.authorName,
+          displayName: data.authorName || 'Atleta',
           photoURL: data.authorAvatar,
+          avatarId: data.authorAvatarId,
           elo: data.authorElo || getEloFromPoints(0),
         });
       }
     });
     
-    // Fetch full profiles for these users
+    // If no posts found, return empty
+    if (authorIds.size === 0) {
+      return [];
+    }
+    
+    // Build suggestions from post author data (no extra profile fetch needed for MVP)
     const suggestions: SuggestedAthlete[] = [];
     
     for (const authorId of authorIds) {
-      const profile = await getPublicProfile(authorId);
+      const authorData = authorDataMap.get(authorId);
+      if (!authorData) continue;
       
-      if (!profile || profile.visibility !== 'public') continue;
+      // Try to get full profile, but use post data as fallback
+      let profile: PublicProfile | null = null;
+      try {
+        profile = await getPublicProfile(authorId);
+      } catch {
+        // Use denormalized data from post
+      }
+      
+      const finalProfile: PublicProfile = profile || {
+        userId: authorId,
+        displayName: authorData.displayName,
+        photoURL: authorData.photoURL,
+        avatarId: authorData.avatarId,
+        elo: authorData.elo,
+        weeklyPoints: 0,
+        totalWorkouts: 0,
+        scheduleDays: [],
+        visibility: 'public',
+        createdAt: new Date().toISOString(),
+      };
+      
+      // Skip if profile is not public
+      if (profile && profile.visibility !== 'public') continue;
       
       // Calculate match score
       let matchScore = 0;
@@ -293,7 +338,7 @@ export async function getSuggestedAthletes(
       if (myProfile) {
         // Same elo tier or ±1
         const myTierIndex = getEloTierIndex(myProfile.elo.tier);
-        const theirTierIndex = getEloTierIndex(profile.elo.tier);
+        const theirTierIndex = getEloTierIndex(finalProfile.elo.tier);
         const tierDiff = Math.abs(myTierIndex - theirTierIndex);
         
         if (tierDiff === 0) {
@@ -306,7 +351,7 @@ export async function getSuggestedAthletes(
         
         // Schedule overlap
         const myDays = new Set(myProfile.schedule.current.trainingDays);
-        const theirDays = profile.scheduleDays;
+        const theirDays = finalProfile.scheduleDays;
         const overlap = theirDays.filter(d => myDays.has(d)).length;
         
         if (overlap >= 2) {
@@ -318,10 +363,10 @@ export async function getSuggestedAthletes(
       }
       
       // Activity bonus (weekly points)
-      matchScore += Math.min(profile.weeklyPoints / 10, 20);
+      matchScore += Math.min(finalProfile.weeklyPoints / 10, 20);
       
       suggestions.push({
-        ...profile,
+        ...finalProfile,
         matchScore,
         matchReason,
       });

@@ -155,17 +155,22 @@ const Onboarding = () => {
       const onboardingData = createOnboardingData(profile, obj);
       
       // Save to Firebase via context (single source of truth)
-      await updateOnboarding(onboardingData);
+      const success = await updateOnboarding(onboardingData);
+      
+      if (!success) {
+        console.error('[Onboarding] Failed to save to Firebase');
+        setIsSubmitting(false);
+        return;
+      }
       
       console.log('[Onboarding] Saved to Firebase:', {
         targetKcal: onboardingData.plan.targetKcal,
         proteinG: onboardingData.plan.proteinG,
+        completedAt: onboardingData.completedAt,
       });
 
-      // Navigate to the original route or home
-      setTimeout(() => {
-        navigate(from, { replace: true });
-      }, 500);
+      // Navigate immediately - state is already updated optimistically
+      navigate(from, { replace: true });
     } catch (error) {
       console.error('[Onboarding] Error saving:', error);
       setIsSubmitting(false);

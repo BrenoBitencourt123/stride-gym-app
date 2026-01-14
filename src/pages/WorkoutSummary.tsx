@@ -42,33 +42,35 @@ const WorkoutSummary = () => {
   const [rewardsResult, setRewardsResult] = useState<{ xpGained: number; eloGained: number } | null>(null);
   
   // Calculate stats from Firebase treinoProgresso
-  const { totalSets, totalVolume, exercisesDone, completedSets } = useMemo(() => {
+  const { totalPlannedSets, completedSets, totalVolume, exercisesDone } = useMemo(() => {
     if (!workout || !treinoProgresso) {
-      return { totalSets: 0, totalVolume: 0, exercisesDone: 0, completedSets: 0 };
+      return { totalPlannedSets: 0, completedSets: 0, totalVolume: 0, exercisesDone: 0 };
     }
     
     const workoutProgress = treinoProgresso[workoutId] || {};
-    let sets = 0;
+    let planned = 0;
+    let completed = 0;
     let volume = 0;
     let exDone = 0;
     
     for (const ex of workout.exercicios) {
+      // Séries planejadas = padrão do exercício (workSetsDefault.length) ou 3 como fallback
+      planned += ex.workSetsDefault?.length || 3;
+      
       const exProgress = workoutProgress[ex.id];
       if (!exProgress) continue;
       
       const doneSets = exProgress.workSets.filter(s => s.done);
-      sets += doneSets.length;
+      completed += doneSets.length;
       
       for (const set of doneSets) {
         volume += set.kg * set.reps;
       }
       
-      if (doneSets.length > 0 && doneSets.length === exProgress.workSets.length) {
-        exDone++;
-      }
+      if (doneSets.length > 0) exDone++;
     }
     
-    return { totalSets: sets, totalVolume: volume, exercisesDone: exDone, completedSets: sets };
+    return { totalPlannedSets: planned, completedSets: completed, totalVolume: volume, exercisesDone: exDone };
   }, [workout, treinoProgresso, workoutId]);
 
   // Apply Firestore-based rewards (idempotent)
@@ -237,7 +239,7 @@ const WorkoutSummary = () => {
             <div className="flex-1">
               <p className="text-muted-foreground text-sm">Séries Completadas</p>
               <p className="text-2xl font-bold text-foreground">
-                {completedSets} <span className="text-lg text-muted-foreground font-normal">/ {totalSets}</span>
+                {completedSets} <span className="text-lg text-muted-foreground font-normal">/ {totalPlannedSets}</span>
               </p>
             </div>
           </div>

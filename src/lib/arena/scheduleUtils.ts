@@ -1,5 +1,6 @@
 // src/lib/arena/scheduleUtils.ts
 // Weekly schedule and points calculation utilities
+// NOTE: This file no longer uses localStorage - trained status is passed from Firebase hooks
 
 import { 
   ArenaScheduleState, 
@@ -12,23 +13,12 @@ import { getPointsPerWorkout, getMissedWorkoutPenalty } from './eloUtils';
 // Re-export DayStatus type
 export type DayStatus = DailyMemberStatus;
 
-// Helper to check if member trained today (checks localStorage directly to avoid circular deps)
-function hasMemberTrainedToday(userId: string): boolean {
-  try {
-    const key = `levelup.arena.trainedToday`;
-    const data = localStorage.getItem(key);
-    if (!data) return false;
-    const parsed = JSON.parse(data) as Record<string, string>;
-    const todayKey = formatDateKey(getSaoPauloDate());
-    return parsed[userId] === todayKey;
-  } catch {
-    return false;
-  }
-}
+// NOTE: hasMemberTrainedToday is now handled by Firebase via useArenaFirestore hook
+// The trained status should be passed as a parameter from the component
 
-// Alias for getMemberDailyStatus
-export const getMemberDayStatus = (member: ClanMember): DailyMemberStatus => {
-  const trainedToday = hasMemberTrainedToday(member.userId);
+// Alias for getMemberDailyStatus - now requires trainedToday to be passed explicitly
+// Components should get this from Firebase arenaLedger, not localStorage
+export const getMemberDayStatus = (member: ClanMember, trainedToday: boolean = false): DailyMemberStatus => {
   return getMemberDailyStatus(member, trainedToday);
 };
 

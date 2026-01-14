@@ -606,35 +606,19 @@ export function getMonthlyRankings(): ClanRankingEntry[] {
 }
 
 // ============= HELPER: Get today's workout log for member =============
+// NOTE: These functions are DEPRECATED - training status is now tracked via Firebase arenaLedger
+// Components should use useArenaFirestore hook to check training status
+// Kept for backwards compatibility during migration
 
-const WORKOUT_LOGS_TODAY_KEY = 'levelup.arena.workoutLogsToday';
-
-interface TodayWorkoutLog {
-  dateKey: string;
-  userIds: string[];
+export function markMemberTrainedToday(_userId: string): void {
+  // DEPRECATED: Training status is now tracked via Firebase arenaLedger
+  // This function is a no-op - use Firebase directly
+  console.warn('[DEPRECATED] markMemberTrainedToday - use Firebase arenaLedger instead');
 }
 
-export function markMemberTrainedToday(userId: string): void {
-  const today = new Date().toISOString().split('T')[0];
-  let log = load<TodayWorkoutLog | null>(WORKOUT_LOGS_TODAY_KEY, null);
-  
-  if (!log || log.dateKey !== today) {
-    log = { dateKey: today, userIds: [] };
-  }
-  
-  if (!log.userIds.includes(userId)) {
-    log.userIds.push(userId);
-    save(WORKOUT_LOGS_TODAY_KEY, log);
-  }
-}
-
-export function hasMemberTrainedToday(userId: string): boolean {
-  const today = new Date().toISOString().split('T')[0];
-  const log = load<TodayWorkoutLog | null>(WORKOUT_LOGS_TODAY_KEY, null);
-  
-  if (!log || log.dateKey !== today) {
-    return false;
-  }
-  
-  return log.userIds.includes(userId);
+export function hasMemberTrainedToday(_userId: string): boolean {
+  // DEPRECATED: Training status is now tracked via Firebase arenaLedger
+  // This function always returns false - check Firebase for actual status
+  console.warn('[DEPRECATED] hasMemberTrainedToday - use Firebase arenaLedger instead');
+  return false;
 }

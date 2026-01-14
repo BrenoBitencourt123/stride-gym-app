@@ -14,10 +14,22 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
   const location = useLocation();
   const devBypass = isDevModeBypass();
 
+  // Debug log
+  console.log('[ProtectedRoute] Check:', {
+    path: location.pathname,
+    devBypass,
+    stateLoading,
+    hasState: !!state,
+    onboardingCompletedAt: state?.onboarding?.completedAt,
+    isComplete: isOnboardingComplete(),
+    skipOnboarding
+  });
+
   // Dev mode bypass - skip auth entirely but still check onboarding via state
   if (devBypass) {
     // In dev mode without state, show loading
     if (stateLoading) {
+      console.log('[ProtectedRoute] Dev mode - still loading state');
       return (
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
@@ -28,9 +40,14 @@ const ProtectedRoute = ({ children, skipOnboarding = false }: ProtectedRouteProp
       );
     }
     
-    if (!skipOnboarding && !isOnboardingComplete()) {
+    const onboardingComplete = isOnboardingComplete();
+    console.log('[ProtectedRoute] Dev mode - onboarding check:', { skipOnboarding, onboardingComplete });
+    
+    if (!skipOnboarding && !onboardingComplete) {
+      console.log('[ProtectedRoute] Dev mode - redirecting to onboarding');
       return <Navigate to="/onboarding" state={{ from: location }} replace />;
     }
+    console.log('[ProtectedRoute] Dev mode - allowing access');
     return <>{children}</>;
   }
 

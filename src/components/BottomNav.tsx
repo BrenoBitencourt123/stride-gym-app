@@ -1,11 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { Home, Dumbbell, Swords, Apple } from "lucide-react";
+import { Swords, Dumbbell, Apple, User } from "lucide-react";
 
 const tabs = [
-  { to: "/", label: "Início", icon: Home, end: true },
-  { to: "/treino", label: "Treino", icon: Dumbbell },
   { to: "/arena", label: "Arena", icon: Swords },
-  { to: "/nutricao", label: "Nutrição", icon: Apple },
+  { to: "/treino", label: "Treino", icon: Dumbbell },
+  { to: "/nutricao", label: "Dieta", icon: Apple },
+  { to: "/perfil", label: "Perfil", icon: User, end: true },
 ];
 
 const BottomNav = () => {

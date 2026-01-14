@@ -9,6 +9,17 @@ import {
 } from './types';
 import { getPointsPerWorkout, getMissedWorkoutPenalty } from './eloUtils';
 
+// Re-export DayStatus type
+export type DayStatus = DailyMemberStatus;
+
+// Alias for getMemberDailyStatus
+export const getMemberDayStatus = (member: ClanMember): DailyMemberStatus => {
+  // Get trained status from storage
+  const { hasMemberTrainedToday } = require('./arenaStorage');
+  const trainedToday = hasMemberTrainedToday(member.userId);
+  return getMemberDailyStatus(member, trainedToday);
+};
+
 // ============= TIMEZONE & DATE UTILITIES =============
 
 const SAO_PAULO_TZ = 'America/Sao_Paulo';

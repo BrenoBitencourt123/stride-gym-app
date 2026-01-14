@@ -1,0 +1,205 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============= HELPER FUNCTIONS =============
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is the document owner
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Check if user is a member of the clan
+    function isClanMember(clanId) {
+      return exists(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid));
+    }
+    
+    // Check if user is GM or Officer of the clan
+    function isClanLeader(clanId) {
+      let member = get(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid));
+      return member != null && (member.data.role == 'gm' || member.data.role == 'officer');
+    }
+    
+    // Check if user is GM of the clan
+    function isClanGM(clanId) {
+      let member = get(/databases/$(database)/documents/clans/$(clanId)/members/$(request.auth.uid));
+      return member != null && member.data.role == 'gm';
+    }
+    
+    // ============= USERS =============
+    
+    match /users/{userId} {
+      // Users can only read/write their own user document
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      // Arena profile subcollection
+      match /arena/{document=**} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // Workout logs subcollection
+      match /workoutLogs/{logId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // Arena ledger (for tracking points/penalties)
+      match /arenaLedger/{entryId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // ============= POSTS =============
+    
+    match /posts/{postId} {
+      // Public posts can be read by any authenticated user
+      // Clan posts can only be read by clan members
+      allow read: if isAuthenticated() && (
+        resource.data.visibility == 'public' ||
+        (resource.data.clanId != null && isClanMember(resource.data.clanId))
+      );
+      
+      // Only the author can create their own post
+      allow create: if isAuthenticated() && 
+        request.resource.data.authorId == request.auth.uid;
+      
+      // Only the author can update/delete their post
+      allow update, delete: if isAuthenticated() && 
+        resource.data.authorId == request.auth.uid;
+      
+      // Reactions subcollection
+      match /reactions/{reactionUserId} {
+        // Anyone authenticated can read reactions
+        allow read: if isAuthenticated();
+        
+        // Users can only create/delete their own reactions
+        allow create, delete: if isAuthenticated() && isOwner(reactionUserId);
+        
+        // No updates allowed (kudos is binary)
+        allow update: if false;
+      }
+      
+      // Comments subcollection
+      match /comments/{commentId} {
+        // Anyone who can read the post can read comments
+        allow read: if isAuthenticated();
+        
+        // Authenticated users can create comments
+        allow create: if isAuthenticated() && 
+          request.resource.data.authorId == request.auth.uid;
+        
+        // Only comment author can update/delete
+        allow update, delete: if isAuthenticated() && 
+          resource.data.authorId == request.auth.uid;
+      }
+    }
+    
+    // ============= CLANS =============
+    
+    match /clans/{clanId} {
+      // Clan data is readable by members
+      // Public clans are readable by anyone (for preview)
+      allow read: if isAuthenticated() && (
+        resource.data.isPublic == true ||
+        isClanMember(clanId)
+      );
+      
+      // Anyone authenticated can create a clan
+      allow create: if isAuthenticated() && 
+        request.resource.data.ownerId == request.auth.uid;
+      
+      // Only GM can update clan settings
+      allow update: if isAuthenticated() && isClanGM(clanId);
+      
+      // Only GM can delete clan
+      allow delete: if isAuthenticated() && isClanGM(clanId);
+      
+      // Members subcollection
+      match /members/{memberId} {
+        // Members can read all member data in their clan
+        allow read: if isAuthenticated() && isClanMember(clanId);
+        
+        // Users can create their own member doc (joining)
+        allow create: if isAuthenticated() && isOwner(memberId);
+        
+        // GM/Officers can update any member, members can update their own (limited fields)
+        allow update: if isAuthenticated() && (
+          isClanLeader(clanId) ||
+          (isOwner(memberId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+        );
+        
+        // GM can remove anyone, members can remove themselves
+        allow delete: if isAuthenticated() && (
+          isClanGM(clanId) ||
+          isOwner(memberId)
+        );
+      }
+      
+      // Freeze requests subcollection
+      match /freezeRequests/{requestId} {
+        // Leaders and the requesting user can read freeze requests
+        allow read: if isAuthenticated() && (
+          isClanLeader(clanId) ||
+          resource.data.userId == request.auth.uid
+        );
+        
+        // Members can create freeze requests for themselves
+        allow create: if isAuthenticated() && 
+          isClanMember(clanId) &&
+          request.resource.data.userId == request.auth.uid;
+        
+        // Only leaders can update (approve/deny)
+        allow update: if isAuthenticated() && isClanLeader(clanId);
+        
+        // Leaders can delete requests
+        allow delete: if isAuthenticated() && isClanLeader(clanId);
+      }
+    }
+    
+    // ============= INVITES =============
+    
+    match /invites/{inviteCode} {
+      // Anyone authenticated can read invites (to join clans)
+      allow read: if isAuthenticated();
+      
+      // Only clan GMs can create invites (handled via clan creation)
+      allow create: if isAuthenticated();
+      
+      // Only clan GM can update/delete invite
+      allow update, delete: if isAuthenticated() && 
+        isClanGM(resource.data.clanId);
+    }
+    
+    // ============= NOTIFICATIONS =============
+    
+    match /notifications/{userId}/items/{notificationId} {
+      // Only the recipient can read their notifications
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      // Any authenticated user can create notifications for others
+      // (for motivation messages, kudos notifications, etc.)
+      allow create: if isAuthenticated();
+      
+      // Only recipient can update (mark as read)
+      allow update: if isAuthenticated() && isOwner(userId);
+      
+      // Only recipient can delete
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // ============= RANKINGS (Optional - can be computed) =============
+    
+    match /rankings/{periodKey}/clans/{clanId} {
+      // Rankings are publicly readable by authenticated users
+      allow read: if isAuthenticated();
+      
+      // Only system/admin can write rankings
+      // In production, this would be via Cloud Functions
+      allow write: if false;
+    }
+  }
+}

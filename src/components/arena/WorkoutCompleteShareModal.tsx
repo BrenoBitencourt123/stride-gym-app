@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trophy, Share2, Copy, Image, ArrowRight, Check } from "lucide-react";
+import { Trophy, Share2, Copy, Image, ArrowRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { getEloFrameStyles, EloTier } from "@/lib/arena/eloUtils";
 import { getArenaProfile, WorkoutSnapshot } from "@/lib/arena/arenaStorage";
+import { useCreatePost } from "@/hooks/useArenaFirestore";
 import { toast } from "sonner";
 
 interface WorkoutCompleteShareModalProps {
@@ -22,7 +24,7 @@ interface WorkoutCompleteShareModalProps {
     totalVolume: number;
     xpGained: number;
   };
-  onPostToArena: () => void;
+  onPostToArena?: () => void;
 }
 
 const SHARE_TEMPLATES = [
@@ -43,8 +45,11 @@ const WorkoutCompleteShareModal = ({
   const navigate = useNavigate();
   const [selectedTemplate, setSelectedTemplate] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [description, setDescription] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const { createPost } = useCreatePost();
   const arenaProfile = getArenaProfile();
   const eloTier = (arenaProfile?.elo?.tier || "iron") as EloTier;
   const eloStyles = getEloFrameStyles(eloTier);
@@ -71,9 +76,25 @@ const WorkoutCompleteShareModal = ({
     toast.info("Funcionalidade de salvar imagem em breve!");
   };
 
-  const handlePostToArena = () => {
-    onPostToArena();
-    onOpenChange(false);
+  const handlePostToArena = async () => {
+    setIsPosting(true);
+    try {
+      await createPost(
+        workoutSnapshot,
+        description.trim() || undefined,
+        'public',
+        false,
+        undefined
+      );
+      toast.success("Treino postado na Arena! 🎉");
+      onPostToArena?.();
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Error posting to arena:", error);
+      toast.error("Erro ao postar na Arena");
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   const currentTemplate = SHARE_TEMPLATES[selectedTemplate];
@@ -147,14 +168,29 @@ const WorkoutCompleteShareModal = ({
           ))}
         </div>
 
+        {/* Description Field */}
+        <Textarea
+          placeholder="Como foi o treino? (opcional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={280}
+          className="resize-none"
+          rows={2}
+        />
+
         {/* Action Buttons */}
         <div className="space-y-3">
           <Button
             className="w-full gap-2"
             onClick={handlePostToArena}
+            disabled={isPosting}
           >
-            <Share2 className="w-4 h-4" />
-            Postar na Arena
+            {isPosting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Share2 className="w-4 h-4" />
+            )}
+            {isPosting ? "Postando..." : "Postar na Arena"}
           </Button>
 
           <div className="grid grid-cols-2 gap-3">

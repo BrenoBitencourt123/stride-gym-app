@@ -110,12 +110,12 @@ const FeedList = ({ type }: FeedListProps) => {
                 onKudosToggle={toggleKudos}
               />
               {/* Show suggested athletes after the 2nd post (index 1) for global feed */}
-              {type === "global" && index === 1 && (
+              {type === "global" && index === 1 && posts.length > 2 && (
                 <SuggestedAthletesRow className="my-6" />
               )}
             </div>
           ))}
-          {/* If fewer than 3 posts, show suggestions at the end */}
+          {/* If 2 or fewer posts, show suggestions at the end */}
           {type === "global" && posts.length > 0 && posts.length <= 2 && (
             <SuggestedAthletesRow className="mt-6" />
           )}

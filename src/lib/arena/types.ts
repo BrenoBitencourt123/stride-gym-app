@@ -77,7 +77,16 @@ export interface ArenaProfile {
 // ============= POSTS =============
 
 export type PostVisibility = 'public' | 'clan' | 'followers';
-export type PostType = 'workout' | 'nutrition'; // nutrition reserved for future
+export type PostType = 'workout' | 'photo' | 'mixed';
+
+// Media attachment for posts
+export interface PostMedia {
+  type: 'image';
+  storagePath: string;
+  url: string;
+  width?: number;
+  height?: number;
+}
 
 export interface WorkoutSetSnapshot {
   kg: number;
@@ -108,6 +117,7 @@ export interface WorkoutSnapshot {
 export interface PostAuthor {
   userId: string;
   displayName: string;
+  username?: string;
   photoURL?: string;
   avatarId?: string;
   elo: EloInfo;
@@ -120,12 +130,43 @@ export interface Post {
   visibility: PostVisibility;
   postToClan: boolean;
   clanId?: string;
-  photoURL?: string;
-  description?: string;
+  text?: string; // caption
+  description?: string; // legacy, same as text
+  media?: PostMedia[];
+  photoURL?: string; // legacy single photo
   workoutSnapshot?: WorkoutSnapshot;
   kudosCount: number;
   commentsCount: number;
   createdAt: string;
+}
+
+// ============= PUBLIC PROFILE (Social) =============
+
+export interface PublicProfile {
+  uid: string;
+  username: string;
+  usernameLower: string;
+  displayName: string;
+  bio?: string;
+  location?: string;
+  photoURL?: string;
+  avatarId?: string;
+  coverPhotos?: string[];
+  instagramHandle?: string;
+  elo: EloInfo;
+  level: number;
+  xp: number;
+  stats: {
+    postsCount: number;
+    followersCount: number;
+    followingCount: number;
+    workoutsCount: number;
+  };
+  visibility: 'public' | 'clanOnly' | 'private';
+  clanId?: string;
+  scheduleDays: number[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PostReaction {

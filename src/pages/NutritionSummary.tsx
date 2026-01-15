@@ -1,30 +1,27 @@
 import { Trophy, ArrowRight, CheckCircle, Apple, Flame, Utensils } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { 
-  getNutritionGoals, 
-  getNutritionToday, 
-  completeNutritionToday,
-  isNutritionCompletedToday,
-  getCompletedMealsCount 
-} from "@/lib/storage";
 import { getFoodById } from "@/data/foods";
 import { useMemo } from "react";
 import BottomNav from "@/components/BottomNav";
-import { useSyncTrigger } from "@/hooks/useSyncTrigger";
+import { useNutritionGoals, useNutritionToday, useQuests, useProfile } from "@/hooks/useFirestoreState";
 
 const XP_BASE = 80;
 const XP_BONUS = 20; // Extra se bater proteína e calorias
 
 const NutritionSummary = () => {
   const navigate = useNavigate();
-  const triggerSync = useSyncTrigger();
-  const goals = getNutritionGoals();
-  const today = getNutritionToday();
-  const alreadyCompleted = isNutritionCompletedToday();
+  const { targets } = useNutritionGoals();
+  const { today } = useNutritionToday();
+  const { quests, completeQuest } = useQuests();
+  const { profile, addXP } = useProfile();
+  
+  const alreadyCompleted = quests.registrarAlimentacaoDone;
   
   // Calcula totais consumidos
   const consumedTotals = useMemo(() => {
     let kcal = 0, p = 0, c = 0, g = 0;
+    
+    if (!today?.meals) return { kcal: 0, p: 0, c: 0, g: 0 };
     
     for (const meal of today.meals) {
       for (const entry of meal.entries) {
@@ -48,22 +45,42 @@ const NutritionSummary = () => {
     };
   }, [today]);
 
+  // Normalize goals to handle both property formats
+  const goals = useMemo(() => {
+    if (!targets) return { kcal: 2000, protein: 150, carbs: 200, fats: 60 };
+    if ('kcal' in targets) return targets;
+    // Handle legacy format
+    const legacy = targets as { kcalTarget: number; pTarget: number; cTarget: number; gTarget: number };
+    return { 
+      kcal: legacy.kcalTarget, 
+      protein: legacy.pTarget, 
+      carbs: legacy.cTarget, 
+      fats: legacy.gTarget 
+    };
+  }, [targets]);
+  
   // Verifica se bateu proteína e calorias
-  const hitProtein = consumedTotals.p >= goals.pTarget;
-  const hitKcal = consumedTotals.kcal >= goals.kcalTarget * 0.9 && 
-                  consumedTotals.kcal <= goals.kcalTarget * 1.1;
+  const hitProtein = consumedTotals.p >= goals.protein;
+  const hitKcal = consumedTotals.kcal >= goals.kcal * 0.9 && 
+                  consumedTotals.kcal <= goals.kcal * 1.1;
   const hitBoth = hitProtein && hitKcal;
   
   const xpGained = hitBoth ? XP_BASE + XP_BONUS : XP_BASE;
   
-  const completedMeals = getCompletedMealsCount();
+  // Count completed meals
+  const completedMeals = useMemo(() => {
+    if (!today?.meals) return 0;
+    return today.meals.filter(meal => 
+      meal.entries.length > 0 && meal.entries.every(e => e.consumed)
+    ).length;
+  }, [today]);
   const totalMeals = 4;
 
-  const handleConcluir = () => {
+  const handleConcluir = async () => {
     if (!alreadyCompleted) {
-      completeNutritionToday(xpGained);
+      await addXP(xpGained);
+      await completeQuest('registrarAlimentacaoDone');
     }
-    triggerSync(); // Sync after completing nutrition
     navigate("/");
   };
 
@@ -111,7 +128,7 @@ const NutritionSummary = () => {
             <div className="flex-1">
               <p className="text-muted-foreground text-sm">Calorias</p>
               <p className="text-2xl font-bold text-foreground">
-                {consumedTotals.kcal} <span className="text-lg text-muted-foreground font-normal">/ {goals.kcalTarget} kcal</span>
+                {consumedTotals.kcal} <span className="text-lg text-muted-foreground font-normal">/ {goals.kcal} kcal</span>
               </p>
             </div>
           </div>
@@ -124,7 +141,7 @@ const NutritionSummary = () => {
             <div className="flex-1">
               <p className="text-muted-foreground text-sm">Proteína</p>
               <p className="text-2xl font-bold text-foreground">
-                {consumedTotals.p}g <span className="text-lg text-muted-foreground font-normal">/ {goals.pTarget}g</span>
+                {consumedTotals.p}g <span className="text-lg text-muted-foreground font-normal">/ {goals.protein}g</span>
               </p>
             </div>
           </div>

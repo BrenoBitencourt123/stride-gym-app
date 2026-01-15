@@ -2,18 +2,23 @@ import { useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import BottomNav from "@/components/BottomNav";
 import PlayerCard from "@/components/arena/PlayerCard";
+import ClanCard from "@/components/arena/ClanCard";
 import FeedList from "@/components/arena/FeedList";
 import RankingList from "@/components/arena/RankingList";
 import { useProgression } from "@/hooks/useProgression";
+import { useArenaClan } from "@/hooks/useArenaFirestore";
 
 const ArenaPage = () => {
   const [activeTab, setActiveTab] = useState("global");
   const { refresh } = useProgression();
+  const { clan, members } = useArenaClan();
 
   // Apply pending penalties when Arena is opened
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  const showClanCard = activeTab === "clan" && clan;
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -21,9 +26,13 @@ const ArenaPage = () => {
         {/* Header */}
         <h1 className="text-2xl font-bold text-foreground mb-4">Arena</h1>
 
-        {/* Player Card */}
+        {/* Player Card or Clan Card based on active tab */}
         <div className="mb-6">
-          <PlayerCard />
+          {showClanCard ? (
+            <ClanCard clan={clan} members={members} />
+          ) : (
+            <PlayerCard />
+          )}
         </div>
 
         {/* Tabs */}

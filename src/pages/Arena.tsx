@@ -6,8 +6,7 @@ import { Search, Plus } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import PlayerCard from "@/components/arena/PlayerCard";
 import ClanCard from "@/components/arena/ClanCard";
-import FeedList from "@/components/arena/FeedList";
-import FollowingFeedList from "@/components/arena/FollowingFeedList";
+import UnifiedFeed from "@/components/arena/UnifiedFeed";
 import RankingList from "@/components/arena/RankingList";
 import UsernameSetupModal from "@/components/arena/UsernameSetupModal";
 import CreatePostModal from "@/components/arena/CreatePostModal";
@@ -17,7 +16,7 @@ import { useUsernameSetup } from "@/hooks/useUsernameSetup";
 
 const ArenaPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("following");
+  const [activeTab, setActiveTab] = useState("feed");
   const [showCreatePost, setShowCreatePost] = useState(false);
   const { refresh } = useProgression();
   const { clan, members } = useArenaClan();
@@ -53,7 +52,7 @@ const ArenaPage = () => {
           </div>
         </div>
 
-        {/* Player Card or Clan Card based on active tab */}
+        {/* Player Card */}
         <div className="mb-6">
           {showClanCard ? (
             <ClanCard clan={clan} members={members} />
@@ -62,25 +61,15 @@ const ArenaPage = () => {
           )}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs - Simplified to Feed and Ranking */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 mb-4">
-            <TabsTrigger value="following">Seguindo</TabsTrigger>
-            <TabsTrigger value="global">Global</TabsTrigger>
-            <TabsTrigger value="clan">Clã</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="feed">Feed</TabsTrigger>
             <TabsTrigger value="ranking">Ranking</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="following">
-            <FollowingFeedList />
-          </TabsContent>
-
-          <TabsContent value="global">
-            <FeedList type="global" />
-          </TabsContent>
-
-          <TabsContent value="clan">
-            <FeedList type="clan" />
+          <TabsContent value="feed">
+            <UnifiedFeed />
           </TabsContent>
 
           <TabsContent value="ranking">

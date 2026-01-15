@@ -6,6 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import WelcomePostCard from "./WelcomePostCard";
 import EmptyFeedCard from "./EmptyFeedCard";
 import SuggestedAthletesRow from "./SuggestedAthletesRow";
+import PresenceList from "./PresenceList";
+import { Link } from "react-router-dom";
 
 interface FeedListProps {
   type: "global" | "clan";
@@ -13,7 +15,7 @@ interface FeedListProps {
 
 const FeedList = ({ type }: FeedListProps) => {
   const { posts, loading, refresh, toggleKudos } = useArenaFeed(type);
-  const { clan, loading: clanLoading } = useArenaClan();
+  const { clan, members, loading: clanLoading } = useArenaClan();
 
   if (type === "clan" && !clanLoading && !clan) {
     return (
@@ -21,9 +23,11 @@ const FeedList = ({ type }: FeedListProps) => {
         <p className="text-muted-foreground mb-4">
           Você ainda não faz parte de um clã
         </p>
-        <Button variant="secondary" onClick={() => window.location.href = "/arena/clan"}>
-          Criar ou entrar em um clã
-        </Button>
+        <Link to="/arena/clan">
+          <Button variant="secondary">
+            Criar ou entrar em um clã
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -71,6 +75,34 @@ const FeedList = ({ type }: FeedListProps) => {
 
         {/* Suggested Athletes */}
         <SuggestedAthletesRow className="mb-6" />
+
+        {/* Then empty state CTA */}
+        <EmptyFeedCard type={type} />
+      </div>
+    );
+  }
+
+  // For clan feed with no posts, show members list
+  if (type === "clan" && posts.length === 0 && clan) {
+    return (
+      <div>
+        {/* Refresh Button */}
+        <div className="flex justify-end mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={refresh}
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+        </div>
+
+        {/* Clan members presence list */}
+        <div className="mb-6">
+          <PresenceList members={members} />
+        </div>
 
         {/* Then empty state CTA */}
         <EmptyFeedCard type={type} />

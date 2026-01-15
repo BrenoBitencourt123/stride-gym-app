@@ -1,7 +1,7 @@
 // src/components/arena/UsernameSetupModal.tsx
 // Modal for setting up username on first Arena visit
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, Loader2, X, AtSign } from "lucide-react";
 import {
   Dialog,
@@ -17,10 +17,11 @@ import { useUsernameSetup } from "@/hooks/useUsernameSetup";
 
 interface UsernameSetupModalProps {
   open: boolean;
-  onComplete: () => void;
+  onOpenChange?: (open: boolean) => void;
 }
 
-const UsernameSetupModal = ({ open, onComplete }: UsernameSetupModalProps) => {
+const UsernameSetupModal = ({ open, onOpenChange }: UsernameSetupModalProps) => {
+  const [completed, setCompleted] = useState(false);
   const {
     username,
     setUsername,
@@ -36,9 +37,13 @@ const UsernameSetupModal = ({ open, onComplete }: UsernameSetupModalProps) => {
     e.preventDefault();
     const success = await submitUsername();
     if (success) {
-      onComplete();
+      setCompleted(true);
+      onOpenChange?.(false);
     }
   };
+
+  // Don't render if completed
+  if (completed) return null;
 
   const getStatusIcon = () => {
     if (!username) return null;

@@ -127,13 +127,24 @@ const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
           </div>
         </div>
 
-        {/* Description */}
-        {post.description && (
-          <p className="text-foreground mb-3">{post.description}</p>
+        {/* Description/Caption */}
+        {(post.description || post.text) && (
+          <p className="text-foreground mb-3">{post.description || post.text}</p>
         )}
 
-        {/* Workout Summary Card */}
-        {post.type === "workout" && post.workoutSnapshot && (
+        {/* Photo - show for photo or mixed type posts */}
+        {(post.photoURL || (post.media && post.media.length > 0)) && (
+          <div className="relative rounded-lg overflow-hidden mb-3 bg-secondary aspect-[4/3]">
+            <img 
+              src={post.media?.[0]?.url || post.photoURL} 
+              alt="Post" 
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
+        {/* Workout Summary Card - show for workout or mixed type */}
+        {post.workoutSnapshot && (
           <div className="bg-secondary/50 rounded-lg p-3 mb-3">
             <h4 className="font-semibold text-foreground mb-2">
               {workoutTitle}
@@ -152,17 +163,6 @@ const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
                 <span>{totalVolume.toLocaleString()}kg</span>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Photo placeholder */}
-        {post.photoURL && (
-          <div className="relative rounded-lg overflow-hidden mb-3 bg-secondary aspect-video">
-            <img 
-              src={post.photoURL} 
-              alt="Workout" 
-              className="w-full h-full object-cover"
-            />
           </div>
         )}
 

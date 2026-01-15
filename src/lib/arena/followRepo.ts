@@ -30,9 +30,27 @@ export interface PublicProfile {
   elo: EloInfo;
   weeklyPoints: number;
   totalWorkouts: number;
+  level: number;
+  xp: number;
+  xpGoal?: number;
+  streak?: number;
+  prsCount?: number;
   scheduleDays: number[];
   visibility: ProfileVisibility;
   clanId?: string;
+  workoutHistory?: Array<{
+    id: string;
+    title: string;
+    completedAt: string;
+    duration: number;
+    setsCount: number;
+    volume: number;
+  }>;
+  weeklyActivity?: Array<{
+    weekStart: string;
+    workoutsCount: number;
+    totalMinutes: number;
+  }>;
   createdAt: string;
 }
 
@@ -158,13 +176,22 @@ export async function getFollowersCount(uid: string): Promise<number> {
 // ============= PUBLIC PROFILE =============
 
 /**
- * Get a user's public profile
+ * Get a user's public profile with progression data
  */
 export async function getPublicProfile(uid: string): Promise<PublicProfile | null> {
   try {
     // First check for explicit public profile
     const publicRef = doc(db, 'users', uid, 'arena', 'publicProfile');
     const publicSnap = await getDoc(publicRef);
+    
+    // Also fetch progression data
+    const progressionRef = doc(db, 'users', uid, 'arena', 'progression');
+    const progressionSnap = await getDoc(progressionRef);
+    const progression = progressionSnap.exists() ? progressionSnap.data() : {};
+    
+    // Fetch workout history for the profile
+    const workoutHistory = await fetchUserWorkoutHistory(uid);
+    const weeklyActivity = await fetchUserWeeklyActivity(uid);
     
     if (publicSnap.exists()) {
       const data = publicSnap.data();
@@ -176,9 +203,16 @@ export async function getPublicProfile(uid: string): Promise<PublicProfile | nul
         elo: data.elo || getEloFromPoints(0),
         weeklyPoints: data.weeklyPoints || 0,
         totalWorkouts: data.totalWorkouts || 0,
+        level: progression.level || data.level || 1,
+        xp: progression.xp || data.xp || 0,
+        xpGoal: progression.xpGoal || 500,
+        streak: progression.streak || 0,
+        prsCount: progression.prsCount || 0,
         scheduleDays: data.scheduleDays || [],
         visibility: data.visibility || 'public',
         clanId: data.clanId,
+        workoutHistory,
+        weeklyActivity,
         createdAt: data.createdAt || new Date().toISOString(),
       };
     }
@@ -197,9 +231,16 @@ export async function getPublicProfile(uid: string): Promise<PublicProfile | nul
         elo: data.elo || getEloFromPoints(0),
         weeklyPoints: data.weeklyPoints || 0,
         totalWorkouts: data.totalWorkouts || 0,
+        level: progression.level || data.level || 1,
+        xp: progression.xp || data.xp || 0,
+        xpGoal: progression.xpGoal || 500,
+        streak: progression.streak || 0,
+        prsCount: progression.prsCount || 0,
         scheduleDays: data.scheduleCurrent?.trainingDays || [],
         visibility: data.visibility || 'public',
         clanId: data.clanId,
+        workoutHistory,
+        weeklyActivity,
         createdAt: data.createdAt || new Date().toISOString(),
       };
     }
@@ -209,6 +250,139 @@ export async function getPublicProfile(uid: string): Promise<PublicProfile | nul
     console.error('Error getting public profile:', error);
     return null;
   }
+}
+
+/**
+ * Fetch user's recent workout history (last 10)
+ */
+async function fetchUserWorkoutHistory(uid: string): Promise<Array<{
+  id: string;
+  title: string;
+  completedAt: string;
+  duration: number;
+  setsCount: number;
+  volume: number;
+}>> {
+  try {
+    const postsCol = collection(db, 'posts');
+    const q = query(
+      postsCol,
+      where('authorId', '==', uid),
+      where('type', 'in', ['workout', 'mixed']),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
+    
+    const snap = await getDocs(q);
+    const history: Array<{
+      id: string;
+      title: string;
+      completedAt: string;
+      duration: number;
+      setsCount: number;
+      volume: number;
+    }> = [];
+    
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data.workoutSnapshot) {
+        history.push({
+          id: docSnap.id,
+          title: data.workoutSnapshot.workoutTitle || 'Treino',
+          completedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          duration: data.workoutSnapshot.duration || 0,
+          setsCount: data.workoutSnapshot.totalSets || 0,
+          volume: data.workoutSnapshot.totalVolume || 0,
+        });
+      }
+    });
+    
+    return history;
+  } catch (error) {
+    console.error('Error fetching workout history:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch user's weekly activity for the last 12 weeks
+ */
+async function fetchUserWeeklyActivity(uid: string): Promise<Array<{
+  weekStart: string;
+  workoutsCount: number;
+  totalMinutes: number;
+}>> {
+  try {
+    // Get posts from the last 12 weeks
+    const twelveWeeksAgo = new Date();
+    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
+    
+    const postsCol = collection(db, 'posts');
+    const q = query(
+      postsCol,
+      where('authorId', '==', uid),
+      where('type', 'in', ['workout', 'mixed']),
+      orderBy('createdAt', 'desc'),
+      limit(100)
+    );
+    
+    const snap = await getDocs(q);
+    
+    // Group by week
+    const weekMap = new Map<string, { count: number; minutes: number }>();
+    
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const createdAt = data.createdAt?.toDate?.() || new Date();
+      
+      // Get week start (Monday)
+      const weekStart = getWeekStart(createdAt);
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      const existing = weekMap.get(weekKey) || { count: 0, minutes: 0 };
+      existing.count += 1;
+      existing.minutes += Math.floor((data.workoutSnapshot?.duration || 0) / 60);
+      weekMap.set(weekKey, existing);
+    });
+    
+    // Build array for last 12 weeks
+    const result: Array<{
+      weekStart: string;
+      workoutsCount: number;
+      totalMinutes: number;
+    }> = [];
+    
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - (i * 7));
+      const weekStart = getWeekStart(date);
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      const weekData = weekMap.get(weekKey);
+      result.push({
+        weekStart: weekKey,
+        workoutsCount: weekData?.count || 0,
+        totalMinutes: weekData?.minutes || 0,
+      });
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error fetching weekly activity:', error);
+    return [];
+  }
+}
+
+/**
+ * Get the Monday of the week for a given date
+ */
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 /**
@@ -348,6 +522,8 @@ export async function getSuggestedAthletes(
         elo: candidate.elo,
         weeklyPoints: candidate.weeklyPoints,
         totalWorkouts: candidate.totalWorkouts,
+        level: 1,
+        xp: 0,
         scheduleDays: candidate.scheduleDays,
         visibility: 'public',
         createdAt: new Date().toISOString(),

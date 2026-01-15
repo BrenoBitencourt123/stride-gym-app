@@ -142,6 +142,21 @@ export interface Post {
 
 // ============= PUBLIC PROFILE (Social) =============
 
+export interface WorkoutHistoryItem {
+  id: string;
+  title: string;
+  completedAt: string;
+  duration: number; // seconds
+  setsCount: number;
+  volume: number; // kg
+}
+
+export interface WeeklyActivityData {
+  weekStart: string; // ISO date
+  workoutsCount: number;
+  totalMinutes: number;
+}
+
 export interface PublicProfile {
   uid: string;
   username: string;
@@ -156,6 +171,9 @@ export interface PublicProfile {
   elo: EloInfo;
   level: number;
   xp: number;
+  xpGoal?: number;
+  streak?: number;
+  prsCount?: number;
   stats: {
     postsCount: number;
     followersCount: number;
@@ -165,6 +183,8 @@ export interface PublicProfile {
   visibility: 'public' | 'clanOnly' | 'private';
   clanId?: string;
   scheduleDays: number[];
+  workoutHistory?: WorkoutHistoryItem[];
+  weeklyActivity?: WeeklyActivityData[];
   createdAt: string;
   updatedAt: string;
 }

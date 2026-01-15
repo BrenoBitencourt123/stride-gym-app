@@ -46,6 +46,7 @@ export interface Quests {
   treinoDoDiaDone: boolean;
   registrarAlimentacaoDone: boolean;
   registrarPesoDone: boolean;
+  questsDate?: string; // YYYY-MM-DD to track which day the quests belong to
 }
 
 export interface NutritionGoals {
@@ -719,6 +720,7 @@ export function createNewUserState(): AppState {
       treinoDoDiaDone: false,
       registrarAlimentacaoDone: false,
       registrarPesoDone: false,
+      questsDate: new Date().toISOString().split('T')[0],
     },
     progressionSuggestions: {},
     weeklyCompletions: {},

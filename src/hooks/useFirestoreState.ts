@@ -450,20 +450,32 @@ export function useWeight() {
 export function useQuests() {
   const { state, updateState } = useAppState();
   
-  const quests = state?.quests || {
+  const todayKey = new Date().toISOString().split('T')[0];
+  
+  // Check if quests need reset for new day
+  const questsDate = state?.quests?.questsDate;
+  const needsReset = questsDate && questsDate !== todayKey;
+  
+  const quests = needsReset ? {
     treinoDoDiaDone: false,
     registrarAlimentacaoDone: false,
-    registrarPesoDone: false
-  };
+    registrarPesoDone: false,
+    questsDate: todayKey,
+  } : (state?.quests || {
+    treinoDoDiaDone: false,
+    registrarAlimentacaoDone: false,
+    registrarPesoDone: false,
+    questsDate: todayKey,
+  });
   
   const updateQuests = useCallback(async (updates: Partial<Quests>) => {
     if (!state) return false;
     return updateState({
-      quests: { ...state.quests, ...updates }
+      quests: { ...state.quests, ...updates, questsDate: todayKey }
     });
-  }, [state, updateState]);
+  }, [state, updateState, todayKey]);
   
-  const completeQuest = useCallback(async (quest: keyof Quests) => {
+  const completeQuest = useCallback(async (quest: keyof Omit<Quests, 'questsDate'>) => {
     return updateQuests({ [quest]: true });
   }, [updateQuests]);
   

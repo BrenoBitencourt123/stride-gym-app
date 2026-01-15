@@ -134,6 +134,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             await setUserState(user.uid, firestoreState);
             console.log('[AppStateContext] Added default workout plan to existing user');
           }
+          
+          // Reset quests if it's a new day
+          const todayKey = new Date().toISOString().split('T')[0];
+          const questsDate = firestoreState.quests?.questsDate;
+          
+          if (questsDate !== todayKey) {
+            console.log('[AppStateContext] New day detected, resetting quests...');
+            firestoreState = {
+              ...firestoreState,
+              quests: {
+                treinoDoDiaDone: false,
+                registrarAlimentacaoDone: false,
+                registrarPesoDone: false,
+                questsDate: todayKey,
+              },
+            };
+            await setUserState(user.uid, firestoreState);
+          }
         }
         
         if (isMounted) {

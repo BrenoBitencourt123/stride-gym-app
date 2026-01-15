@@ -1,13 +1,67 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, User, Mail, Lock, Ruler, Globe, Palette, Bell, FileText, Shield, AlertTriangle, Info, LogOut } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import BottomNav from "@/components/BottomNav";
+import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/contexts/AppStateContext";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/services/firebase";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Settings = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { profile } = useProfile();
+  
   const [workoutReminder, setWorkoutReminder] = useState(true);
   const [mealReminder, setMealReminder] = useState(true);
   const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
+
+  const displayName = profile?.displayName || user?.displayName || 'Atleta';
+  const email = user?.email || 'Email não disponível';
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      toast.error("Erro ao sair da conta");
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (user?.email) {
+      try {
+        await sendPasswordResetEmail(auth, user.email);
+        toast.success("Email de redefinição enviado!");
+      } catch (error) {
+        toast.error("Erro ao enviar email de redefinição");
+      }
+    } else {
+      toast.error("Email não encontrado");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -39,7 +93,7 @@ const Settings = () => {
                 <User size={18} className="text-muted-foreground" />
                 <span className="text-foreground">Nome</span>
               </div>
-              <span className="text-muted-foreground">Breno</span>
+              <span className="text-muted-foreground">{displayName}</span>
             </div>
             
             <div className="h-px bg-border/50" />
@@ -49,12 +103,12 @@ const Settings = () => {
                 <Mail size={18} className="text-muted-foreground" />
                 <span className="text-foreground">E-mail</span>
               </div>
-              <span className="text-muted-foreground text-sm">breno@email.com</span>
+              <span className="text-muted-foreground text-sm truncate max-w-[180px]">{email}</span>
             </div>
             
             <div className="h-px bg-border/50" />
             
-            <button className="flex items-center justify-between py-3 w-full">
+            <button onClick={handleResetPassword} className="flex items-center justify-between py-3 w-full">
               <div className="flex items-center gap-3">
                 <Lock size={18} className="text-muted-foreground" />
                 <span className="text-foreground">Alterar senha</span>
@@ -147,7 +201,7 @@ const Settings = () => {
           <h2 className="text-sm font-medium text-muted-foreground mb-3">App</h2>
           
           <div className="space-y-1">
-            <button className="flex items-center justify-between py-3 w-full">
+            <button onClick={() => setShowTermsModal(true)} className="flex items-center justify-between py-3 w-full">
               <div className="flex items-center gap-3">
                 <FileText size={18} className="text-muted-foreground" />
                 <span className="text-foreground">Termos de uso</span>
@@ -157,7 +211,7 @@ const Settings = () => {
             
             <div className="h-px bg-border/50" />
             
-            <button className="flex items-center justify-between py-3 w-full">
+            <button onClick={() => setShowPrivacyModal(true)} className="flex items-center justify-between py-3 w-full">
               <div className="flex items-center gap-3">
                 <Shield size={18} className="text-muted-foreground" />
                 <span className="text-foreground">Privacidade</span>
@@ -167,7 +221,7 @@ const Settings = () => {
             
             <div className="h-px bg-border/50" />
             
-            <button className="flex items-center justify-between py-3 w-full">
+            <button onClick={() => setShowDisclaimerModal(true)} className="flex items-center justify-between py-3 w-full">
               <div className="flex items-center gap-3">
                 <AlertTriangle size={18} className="text-muted-foreground" />
                 <span className="text-foreground">Disclaimer</span>
@@ -182,17 +236,85 @@ const Settings = () => {
                 <Info size={18} className="text-muted-foreground" />
                 <span className="text-foreground">Versão do app</span>
               </div>
-              <span className="text-muted-foreground">0.1</span>
+              <span className="text-muted-foreground">1.0.0</span>
             </div>
           </div>
         </div>
 
         {/* Sair */}
-        <button className="w-full card-glass flex items-center justify-center gap-2 py-4 rounded-2xl border border-border/50 hover:border-muted-foreground/30 transition-colors mb-6">
-          <LogOut size={18} className="text-muted-foreground" />
-          <span className="text-muted-foreground font-medium">Sair</span>
+        <button 
+          onClick={() => setShowLogoutConfirm(true)}
+          className="w-full card-glass flex items-center justify-center gap-2 py-4 rounded-2xl border border-destructive/30 hover:border-destructive/50 transition-colors mb-6"
+        >
+          <LogOut size={18} className="text-destructive" />
+          <span className="text-destructive font-medium">Sair</span>
         </button>
       </div>
+
+      {/* Logout Confirmation */}
+      <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da conta</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja sair? Seus dados estão sincronizados na nuvem.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-muted/30">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout} className="bg-destructive hover:bg-destructive/90">
+              Sair
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Terms Modal */}
+      <Dialog open={showTermsModal} onOpenChange={setShowTermsModal}>
+        <DialogContent className="bg-card border-border max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Termos de Uso</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground space-y-3">
+            <p>Ao usar o LevelUp Gym, você concorda com os seguintes termos:</p>
+            <p><strong>1. Uso do Aplicativo</strong><br/>O aplicativo é fornecido "como está" para fins de acompanhamento de treinos e nutrição.</p>
+            <p><strong>2. Dados do Usuário</strong><br/>Seus dados são armazenados de forma segura e não são compartilhados com terceiros.</p>
+            <p><strong>3. Responsabilidade</strong><br/>Consulte um profissional de saúde antes de iniciar qualquer programa de exercícios.</p>
+            <p><strong>4. Modificações</strong><br/>Reservamo-nos o direito de modificar estes termos a qualquer momento.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Privacy Modal */}
+      <Dialog open={showPrivacyModal} onOpenChange={setShowPrivacyModal}>
+        <DialogContent className="bg-card border-border max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Política de Privacidade</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground space-y-3">
+            <p><strong>Coleta de Dados</strong><br/>Coletamos apenas dados necessários para o funcionamento do app: email, dados de treino e nutrição.</p>
+            <p><strong>Armazenamento</strong><br/>Seus dados são armazenados de forma segura no Firebase/Firestore com criptografia.</p>
+            <p><strong>Compartilhamento</strong><br/>Não vendemos ou compartilhamos seus dados pessoais com terceiros.</p>
+            <p><strong>Exclusão</strong><br/>Você pode solicitar a exclusão de seus dados a qualquer momento.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disclaimer Modal */}
+      <Dialog open={showDisclaimerModal} onOpenChange={setShowDisclaimerModal}>
+        <DialogContent className="bg-card border-border max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Disclaimer</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground space-y-3">
+            <p><strong>⚠️ Aviso Importante</strong></p>
+            <p>O LevelUp Gym é uma ferramenta de acompanhamento e não substitui orientação profissional.</p>
+            <p>Antes de iniciar qualquer programa de exercícios ou dieta, consulte um médico, nutricionista ou educador físico.</p>
+            <p>Os cálculos de calorias e macros são estimativas baseadas em fórmulas científicas, mas podem variar de pessoa para pessoa.</p>
+            <p>O uso do aplicativo é de sua inteira responsabilidade.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Bottom Navigation */}
       <BottomNav />

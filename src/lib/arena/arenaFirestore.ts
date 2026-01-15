@@ -352,6 +352,36 @@ export async function getPostById(postId: string): Promise<Post | null> {
   return firestorePostToPost(docSnap.id, docSnap.data() as FirestorePost);
 }
 
+// ============= DELETE POST =============
+
+export async function deletePost(postId: string, uid: string): Promise<boolean> {
+  try {
+    const postRef = doc(db, 'posts', postId);
+    const postSnap = await getDoc(postRef);
+    
+    if (!postSnap.exists()) {
+      console.error('Post not found');
+      return false;
+    }
+    
+    const postData = postSnap.data() as FirestorePost;
+    
+    // Verify ownership
+    if (postData.authorId !== uid) {
+      console.error('User is not the author of this post');
+      return false;
+    }
+    
+    // Delete the post
+    await deleteDoc(postRef);
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    return false;
+  }
+}
+
 // ============= KUDOS =============
 
 export async function toggleKudos(postId: string, uid: string): Promise<boolean> {

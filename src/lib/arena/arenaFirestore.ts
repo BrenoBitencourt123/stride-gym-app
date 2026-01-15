@@ -203,14 +203,24 @@ export async function updateScheduleNext(uid: string, trainingDays: number[]): P
 export interface FirestorePost {
   authorId: string;
   authorName: string;
+  authorUsername?: string;
   authorAvatar?: string;
+  authorAvatarId?: string;
   authorElo: EloInfo;
-  type: 'workout';
+  type: 'workout' | 'photo' | 'mixed';
   visibility: PostVisibility;
   postToClan: boolean;
   clanId?: string | null;
-  photoURL?: string;
+  text?: string;
   description?: string;
+  photoURL?: string;
+  media?: Array<{
+    type: 'image';
+    storagePath: string;
+    url: string;
+    width?: number;
+    height?: number;
+  }>;
   workoutSnapshot?: WorkoutSnapshot;
   kudosCount: number;
   commentsCount: number;
@@ -223,15 +233,19 @@ function firestorePostToPost(id: string, data: FirestorePost): Post {
     author: {
       userId: data.authorId,
       displayName: data.authorName,
+      username: data.authorUsername,
       photoURL: data.authorAvatar,
+      avatarId: data.authorAvatarId,
       elo: data.authorElo,
     },
     type: data.type,
     visibility: data.visibility,
     postToClan: data.postToClan,
     clanId: data.clanId || undefined,
-    photoURL: data.photoURL,
+    text: data.text || data.description,
     description: data.description,
+    media: data.media,
+    photoURL: data.photoURL,
     workoutSnapshot: data.workoutSnapshot,
     kudosCount: data.kudosCount,
     commentsCount: data.commentsCount,

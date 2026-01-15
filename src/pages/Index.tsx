@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Settings, Dumbbell, Apple, Scale, Check, Award, Mountain, Hourglass, Gift, ChevronRight, TrendingDown, TrendingUp, Minus, Loader2 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import HelpIcon from "@/components/HelpIcon";
 import BottomNav from "@/components/BottomNav";
 import { useAppStateContext, useWorkoutPlan } from "@/contexts/AppStateContext";
@@ -8,14 +8,6 @@ import { getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
 import { isWorkoutCompletedThisWeek } from "@/lib/appState";
 import { Progress } from "@/components/ui/progress";
 import { getObjectiveLabel } from "@/lib/onboarding";
-import { 
-  getWeightStats, 
-  isCheckinAvailable, 
-  getNextCheckinDueDate,
-  initializePlanHistoryFromOnboarding,
-  getLatestWeight,
-  getWeighingFrequency
-} from "@/lib/progress";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -29,10 +21,6 @@ const Index = () => {
   const quests = getQuestsFromContext();
   const onboardingData = getOnboarding();
 
-  useEffect(() => {
-    // Initialize plan history from onboarding if needed
-    initializePlanHistoryFromOnboarding();
-  }, []);
 
   // Calculate achievements from state
   const achievements = useMemo(() => {
@@ -47,12 +35,65 @@ const Index = () => {
   // Onboarding data
   const hasOnboarding = !!onboardingData?.plan;
 
-  // Weight progress data
-  const weightStats = getWeightStats();
-  const latestWeight = getLatestWeight();
-  const checkinAvailable = isCheckinAvailable();
-  const nextCheckinDate = getNextCheckinDueDate();
-  const weighingFrequency = getWeighingFrequency();
+  // Weight progress data - calculated from Firebase state
+  const bodyweightEntries = state?.bodyweight?.entries || [];
+  const sortedEntries = useMemo(() => 
+    [...bodyweightEntries].sort((a, b) => a.date.localeCompare(b.date)),
+    [bodyweightEntries]
+  );
+
+  const latestWeight = useMemo(() => {
+    if (sortedEntries.length === 0) return null;
+    return { weightKg: sortedEntries[sortedEntries.length - 1].weight };
+  }, [sortedEntries]);
+
+  const weightStats = useMemo(() => {
+    if (sortedEntries.length < 2) {
+      return { trendKg: null };
+    }
+    const recentEntries = sortedEntries.slice(-14);
+    const midpoint = Math.floor(recentEntries.length / 2);
+    const firstHalf = recentEntries.slice(0, midpoint);
+    const secondHalf = recentEntries.slice(midpoint);
+    
+    if (firstHalf.length === 0 || secondHalf.length === 0) {
+      return { trendKg: null };
+    }
+    
+    const firstAvg = firstHalf.reduce((sum, e) => sum + e.weight, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((sum, e) => sum + e.weight, 0) / secondHalf.length;
+    const trendKg = Math.round((secondAvg - firstAvg) * 10) / 10;
+    
+    return { trendKg };
+  }, [sortedEntries]);
+
+  // Check-in availability (7 days since last check-in or onboarding)
+  const lastCheckinDate = useMemo(() => {
+    if (sortedEntries.length > 0) {
+      return new Date(sortedEntries[sortedEntries.length - 1].date);
+    }
+    if (onboardingData?.completedAt) {
+      return new Date(onboardingData.completedAt);
+    }
+    return null;
+  }, [sortedEntries, onboardingData?.completedAt]);
+
+  const checkinAvailable = useMemo(() => {
+    if (!lastCheckinDate) return false;
+    const nextDue = new Date(lastCheckinDate);
+    nextDue.setDate(nextDue.getDate() + 7);
+    return new Date() >= nextDue;
+  }, [lastCheckinDate]);
+
+  const nextCheckinDate = useMemo(() => {
+    if (!lastCheckinDate) return null;
+    const nextDue = new Date(lastCheckinDate);
+    nextDue.setDate(nextDue.getDate() + 7);
+    return nextDue;
+  }, [lastCheckinDate]);
+
+  // Weighing frequency (hardcoded for now, can be moved to state later)
+  const weighingFrequency = 'weekly';
 
   // Get workout from plan
   const getUserWorkout = (id: string) => {

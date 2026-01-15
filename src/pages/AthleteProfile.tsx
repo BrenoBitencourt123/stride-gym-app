@@ -152,24 +152,24 @@ const AthleteProfile = () => {
         {/* Profile Header - Compact */}
         <div className="flex items-start gap-4 mb-6">
           {/* Avatar with Elo Frame */}
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <div 
-              className="w-20 h-20 rounded-full p-[3px]"
+              className="w-16 h-16 rounded-full p-[2px]"
               style={{ background: eloStyles.gradient }}
             >
-              <div className="w-full h-full rounded-full bg-background p-[2px]">
+              <div className="w-full h-full rounded-full overflow-hidden bg-background">
                 <UserAvatar
                   photoURL={profile.photoURL}
                   avatarId={profile.avatarId}
                   displayName={profile.displayName}
                   eloTier={eloTier}
-                  size="lg"
+                  size="md"
                 />
               </div>
             </div>
             {/* Elo Badge */}
             <div 
-              className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap"
+              className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-bold text-white whitespace-nowrap shadow-md"
               style={{ background: eloStyles.gradient }}
             >
               {tierName} {profile.elo.division}
@@ -177,24 +177,24 @@ const AthleteProfile = () => {
           </div>
 
           {/* Name and Stats */}
-          <div className="flex-1">
-            <h1 className="text-lg font-bold text-foreground mb-2">
+          <div className="flex-1 min-w-0 pt-1">
+            <h1 className="text-base font-bold text-foreground truncate mb-2">
               {profile.displayName}
             </h1>
             
             {/* Stats Row */}
-            <div className="flex gap-5">
+            <div className="flex items-center gap-4">
               <div className="text-center">
-                <p className="text-lg font-bold text-foreground">{profile.totalWorkouts}</p>
-                <p className="text-[11px] text-muted-foreground">Treinos</p>
+                <p className="text-sm font-bold text-foreground">{profile.totalWorkouts}</p>
+                <p className="text-[10px] text-muted-foreground">Treinos</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-foreground">{followersCount}</p>
-                <p className="text-[11px] text-muted-foreground">Seguidores</p>
+                <p className="text-sm font-bold text-foreground">{followersCount}</p>
+                <p className="text-[10px] text-muted-foreground">Seguidores</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-foreground">{followingCount}</p>
-                <p className="text-[11px] text-muted-foreground">Seguindo</p>
+                <p className="text-sm font-bold text-foreground">{followingCount}</p>
+                <p className="text-[10px] text-muted-foreground">Seguindo</p>
               </div>
             </div>
           </div>

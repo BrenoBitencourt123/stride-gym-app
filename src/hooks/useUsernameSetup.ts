@@ -115,7 +115,7 @@ export function useUsernameSetup(): UseUsernameSetupResult {
     }, 300);
     
     return () => clearTimeout(timer);
-  }, [username]);
+  }, [username, user?.uid]);
 
   const isValid = validateUsername(username).valid && isAvailable === true;
 

@@ -111,7 +111,7 @@ const PlayerCard = () => {
           variant="secondary"
           size="sm"
           className="flex-1"
-          onClick={() => navigate("/arena?tab=ranking")}
+          onClick={() => navigate("/arena/ranking")}
         >
           <Trophy className="w-4 h-4 mr-2" />
           Ranking

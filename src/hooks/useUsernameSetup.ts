@@ -100,7 +100,8 @@ export function useUsernameSetup(): UseUsernameSetupResult {
     
     const timer = setTimeout(async () => {
       try {
-        const available = await socialRepo.isUsernameAvailable(username.toLowerCase());
+        // Pass user.uid to allow reusing own username
+        const available = await socialRepo.isUsernameAvailable(username.toLowerCase(), user?.uid);
         setIsAvailable(available);
         if (!available) {
           setError('Este username já está em uso');

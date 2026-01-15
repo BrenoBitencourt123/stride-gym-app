@@ -26,8 +26,9 @@ export type PublicProfileData = PublicProfile;
 
 /**
  * Check if a username is available
+ * @param currentUid - If provided, returns true if the username belongs to this user
  */
-export async function isUsernameAvailable(username: string): Promise<boolean> {
+export async function isUsernameAvailable(username: string, currentUid?: string): Promise<boolean> {
   try {
     const usernameLower = username.toLowerCase().trim();
     
@@ -38,7 +39,15 @@ export async function isUsernameAvailable(username: string): Promise<boolean> {
     
     const usernameRef = doc(db, 'usernames', usernameLower);
     const snap = await getDoc(usernameRef);
-    return !snap.exists();
+    
+    if (!snap.exists()) return true;
+    
+    // If the username belongs to the current user, it's "available" for them
+    if (currentUid && snap.data().uid === currentUid) {
+      return true;
+    }
+    
+    return false;
   } catch (error) {
     console.error('Error checking username availability:', error);
     return false;

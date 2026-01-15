@@ -19,7 +19,7 @@ import NutritionSummary from "./pages/NutritionSummary";
 import SettingsPage from "./pages/Settings";
 import AjustarPlano from "./pages/AjustarPlano";
 import Conquistas from "./pages/Conquistas";
-import Perfil from "./pages/Perfil";
+
 import Progresso from "./pages/Progresso";
 import Login from "./pages/Login";
 import RestDay from "./pages/RestDay";

@@ -1,16 +1,65 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Heart, Share2, Clock, Dumbbell, Target, Trophy } from "lucide-react";
+import { ArrowLeft, Heart, Share2, Clock, Dumbbell, Target, Trophy, MessageCircle, Send, UserPlus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useArenaPost } from "@/hooks/useArenaFirestore";
-import { getEloStyles, getEloDisplayName } from "@/lib/arena/eloUtils";
+import { useFollow } from "@/hooks/useFollow";
+import { useAuth } from "@/contexts/AuthContext";
+import { getEloStyles, getEloDisplayName, EloTier } from "@/lib/arena/eloUtils";
 import EloFrame from "@/components/arena/EloFrame";
+import UserAvatar from "@/components/arena/UserAvatar";
 import BottomNav from "@/components/BottomNav";
 import { Skeleton } from "@/components/ui/skeleton";
+import { addComment, getPostComments, PostComment } from "@/lib/arena/arenaFirestore";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const PostDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { post, hasKudos, loading, toggleKudos } = useArenaPost(id || "");
+  
+  const [comments, setComments] = useState<PostComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [newComment, setNewComment] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  
+  const authorId = post?.author?.userId || "";
+  const { isFollowing, loading: followLoading, toggleFollow } = useFollow(authorId || null);
+  const isOwnPost = user?.uid === authorId;
+
+  // Load comments
+  useState(() => {
+    const loadComments = async () => {
+      if (!id) return;
+      try {
+        const data = await getPostComments(id);
+        setComments(data);
+      } catch (error) {
+        console.error("Error loading comments:", error);
+      } finally {
+        setCommentsLoading(false);
+      }
+    };
+    loadComments();
+  });
+
+  const handleSubmitComment = async () => {
+    if (!newComment.trim() || !id || !user) return;
+    
+    setSubmittingComment(true);
+    try {
+      const comment = await addComment(id, user.uid, user.displayName || "Atleta", undefined, newComment.trim());
+      setComments(prev => [...prev, comment]);
+      setNewComment("");
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   if (loading) {
     return (

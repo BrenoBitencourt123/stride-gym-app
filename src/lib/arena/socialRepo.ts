@@ -19,6 +19,9 @@ import { db } from '@/services/firebase';
 import { PublicProfile, EloInfo, Post } from './types';
 import { getEloFromPoints } from './eloUtils';
 
+// Re-export for convenience
+export type PublicProfileData = PublicProfile;
+
 // ============= USERNAME OPERATIONS =============
 
 /**
@@ -305,11 +308,47 @@ export async function hasUsername(uid: string): Promise<boolean> {
   }
 }
 
-// ============= SEARCH OPERATIONS =============
-
 /**
- * Search users by username or displayName prefix
+ * Get or create a public profile
  */
+export async function getOrCreatePublicProfile(
+  uid: string,
+  displayName: string,
+  photoURL?: string,
+  avatarId?: string
+): Promise<PublicProfile> {
+  const existing = await getPublicProfileByUid(uid);
+  if (existing) return existing;
+  
+  const now = new Date().toISOString();
+  const profile: PublicProfile = {
+    uid,
+    username: '',
+    usernameLower: '',
+    displayName,
+    photoURL,
+    avatarId,
+    coverPhotos: [],
+    elo: getEloFromPoints(0),
+    level: 1,
+    xp: 0,
+    stats: {
+      postsCount: 0,
+      followersCount: 0,
+      followingCount: 0,
+      workoutsCount: 0,
+    },
+    visibility: 'public',
+    scheduleDays: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  
+  const publicRef = doc(db, 'users', uid, 'arena', 'publicProfile');
+  await setDoc(publicRef, profile);
+  
+  return profile;
+}
 export async function searchUsers(
   term: string,
   limitCount: number = 20

@@ -32,6 +32,8 @@ import ClanHub from "./pages/ClanHub";
 import CreateClan from "./pages/CreateClan";
 import JoinClan from "./pages/JoinClan";
 import AthleteProfile from "./pages/AthleteProfile";
+import SearchUsers from "./pages/SearchUsers";
+import EditProfile from "./pages/EditProfile";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +65,8 @@ function AppRoutes() {
         <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
         <Route path="/arena/post/:id" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
         <Route path="/arena/profile/:userId" element={<ProtectedRoute><AthleteProfile /></ProtectedRoute>} />
+        <Route path="/arena/search" element={<ProtectedRoute><SearchUsers /></ProtectedRoute>} />
+        <Route path="/arena/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
         <Route path="/arena/clan" element={<ProtectedRoute><ClanHub /></ProtectedRoute>} />
         <Route path="/arena/clan/create" element={<ProtectedRoute><CreateClan /></ProtectedRoute>} />
         <Route path="/arena/clan/join" element={<ProtectedRoute><JoinClan /></ProtectedRoute>} />

@@ -7,6 +7,7 @@ import BottomNav from "@/components/BottomNav";
 import PlayerCard from "@/components/arena/PlayerCard";
 import ClanCard from "@/components/arena/ClanCard";
 import FeedList from "@/components/arena/FeedList";
+import FollowingFeedList from "@/components/arena/FollowingFeedList";
 import RankingList from "@/components/arena/RankingList";
 import UsernameSetupModal from "@/components/arena/UsernameSetupModal";
 import CreatePostModal from "@/components/arena/CreatePostModal";
@@ -16,7 +17,7 @@ import { useUsernameSetup } from "@/hooks/useUsernameSetup";
 
 const ArenaPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("global");
+  const [activeTab, setActiveTab] = useState("following");
   const [showCreatePost, setShowCreatePost] = useState(false);
   const { refresh } = useProgression();
   const { clan, members } = useArenaClan();
@@ -63,11 +64,16 @@ const ArenaPage = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 mb-4">
-            <TabsTrigger value="global">Feed Global</TabsTrigger>
-            <TabsTrigger value="clan">Meu Clã</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 mb-4">
+            <TabsTrigger value="following">Seguindo</TabsTrigger>
+            <TabsTrigger value="global">Global</TabsTrigger>
+            <TabsTrigger value="clan">Clã</TabsTrigger>
             <TabsTrigger value="ranking">Ranking</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="following">
+            <FollowingFeedList />
+          </TabsContent>
 
           <TabsContent value="global">
             <FeedList type="global" />

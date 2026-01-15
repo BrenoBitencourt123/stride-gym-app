@@ -1,28 +1,50 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, MessageCircle, Share2, Clock, Dumbbell, TrendingUp } from "lucide-react";
+import { Heart, MessageCircle, Share2, Clock, Dumbbell, TrendingUp, MoreVertical, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Post } from "@/lib/arena/types";
 import { getEloFrameStyles, EloTier } from "@/lib/arena/eloUtils";
 import EloFrame from "./EloFrame";
 import UserAvatar from "./UserAvatar";
-import { useState, useEffect } from "react";
-import { hasGivenKudos } from "@/lib/arena/arenaFirestore";
+import { hasGivenKudos, deletePost } from "@/lib/arena/arenaFirestore";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface PostCardProps {
   post: Post;
   onKudosToggle?: (postId: string) => Promise<void>;
+  onPostDeleted?: (postId: string) => void;
 }
 
-const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
+const PostCard = ({ post, onKudosToggle, onPostDeleted }: PostCardProps) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [kudosCount, setKudosCount] = useState(post.kudosCount || 0);
   const [hasKudos, setHasKudos] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
   
+  const isAuthor = user?.uid === post.author.userId;
   const eloTier = (post.author.elo?.tier || "iron") as EloTier;
   const eloStyles = getEloFrameStyles(eloTier);
 
@@ -66,12 +88,45 @@ const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(window.location.origin + "/arena/post/" + post.id);
+    toast.success("Link copiado!");
   };
 
   const handleComment = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigate(`/arena/post/${post.id}?comment=true`);
   };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!user || isDeleting) return;
+    
+    setIsDeleting(true);
+    try {
+      const success = await deletePost(post.id, user.uid);
+      if (success) {
+        setIsDeleted(true);
+        toast.success("Publicação excluída");
+        onPostDeleted?.(post.id);
+      } else {
+        toast.error("Erro ao excluir publicação");
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast.error("Erro ao excluir publicação");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
+  // Don't render if deleted
+  if (isDeleted) {
+    return null;
+  }
 
   const timeAgo = formatDistanceToNow(new Date(post.createdAt), {
     addSuffix: true,
@@ -125,6 +180,31 @@ const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
           >
             {eloTier.charAt(0).toUpperCase() + eloTier.slice(1)}
           </div>
+
+          {/* More Options - only for author */}
+          {isAuthor && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-background border-border">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                  onClick={handleDeleteClick}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir publicação
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Description/Caption */}
@@ -199,6 +279,28 @@ const PostCard = ({ post, onKudosToggle }: PostCardProps) => {
           </Button>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir publicação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A publicação será removida permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </EloFrame>
   );
 };

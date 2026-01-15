@@ -1,25 +1,22 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, RefreshCw, Filter, Users as UsersIcon } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import PlayerCard from "@/components/arena/PlayerCard";
-import ClanCard from "@/components/arena/ClanCard";
-import UnifiedFeed from "@/components/arena/UnifiedFeed";
-import RankingList from "@/components/arena/RankingList";
+import CleanFeed from "@/components/arena/CleanFeed";
 import UsernameSetupModal from "@/components/arena/UsernameSetupModal";
 import CreatePostModal from "@/components/arena/CreatePostModal";
 import { useProgression } from "@/hooks/useProgression";
-import { useArenaClan } from "@/hooks/useArenaFirestore";
 import { useUsernameSetup } from "@/hooks/useUsernameSetup";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 const ArenaPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("feed");
   const [showCreatePost, setShowCreatePost] = useState(false);
+  const [feedMode, setFeedMode] = useState<'global' | 'following'>('global');
+  const [refreshKey, setRefreshKey] = useState(0);
   const { refresh } = useProgression();
-  const { clan, members } = useArenaClan();
   const { needsUsername, loading: usernameLoading } = useUsernameSetup();
 
   // Apply pending penalties when Arena is opened
@@ -27,7 +24,13 @@ const ArenaPage = () => {
     refresh();
   }, [refresh]);
 
-  const showClanCard = activeTab === "clan" && clan;
+  const toggleFeedMode = () => {
+    setFeedMode(prev => prev === 'global' ? 'following' : 'global');
+  };
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -54,28 +57,58 @@ const ArenaPage = () => {
 
         {/* Player Card */}
         <div className="mb-6">
-          {showClanCard ? (
-            <ClanCard clan={clan} members={members} />
-          ) : (
-            <PlayerCard />
-          )}
+          <PlayerCard />
         </div>
 
-        {/* Tabs - Simplified to Feed and Ranking */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="feed">Feed</TabsTrigger>
-            <TabsTrigger value="ranking">Ranking</TabsTrigger>
-          </TabsList>
+        {/* Feed Controls - Minimal */}
+        <div className="flex items-center justify-between mb-4">
+          {/* Find Athletes Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/arena/search")}
+            className="text-muted-foreground"
+          >
+            <UsersIcon className="w-4 h-4 mr-2" />
+            Encontrar atletas
+          </Button>
 
-          <TabsContent value="feed">
-            <UnifiedFeed />
-          </TabsContent>
+          {/* Refresh + Filter */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Atualizar
+            </Button>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={feedMode === 'following' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleFeedMode}
+                    className="relative"
+                  >
+                    <Filter className="w-4 h-4" />
+                    {feedMode === 'following' && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{feedMode === 'global' ? 'Ver apenas quem eu sigo' : 'Ver feed global'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
 
-          <TabsContent value="ranking">
-            <RankingList />
-          </TabsContent>
-        </Tabs>
+        {/* Single Clean Feed */}
+        <CleanFeed mode={feedMode} refreshKey={refreshKey} />
       </div>
 
       <BottomNav />

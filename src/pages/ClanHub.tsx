@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Copy, Link, Users, Shield, Crown, Settings, UserMinus, ChevronUp, ChevronDown, Snowflake, Check, X } from "lucide-react";
+import { ArrowLeft, Copy, Link, Users, Shield, Crown, Settings, UserMinus, ChevronUp, ChevronDown, Snowflake, Check, X, MessageSquare, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useArenaClan, useArenaProfile } from "@/hooks/useArenaFirestore";
+import { useArenaClan, useArenaProfile, useArenaFeed } from "@/hooks/useArenaFirestore";
 import { calculateMedianElo, getEloDisplayName } from "@/lib/arena/eloUtils";
 import PresenceList from "@/components/arena/PresenceList";
 import FreezeRequestModal from "@/components/arena/FreezeRequestModal";
+import PostCard from "@/components/arena/PostCard";
+import EmptyFeedCard from "@/components/arena/EmptyFeedCard";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,9 +24,59 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// Clan Feed Content Component
+const ClanFeedContent = () => {
+  const { posts, loading, refresh, toggleKudos } = useArenaFeed('clan');
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="card-glass p-4 rounded-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <Skeleton className="w-10 h-10 rounded-full" />
+              <div className="flex-1">
+                <Skeleton className="h-4 w-24 mb-1" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </div>
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div>
+        <EmptyFeedCard type="clan" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end mb-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={refresh}
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Atualizar
+        </Button>
+      </div>
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} onKudosToggle={toggleKudos} />
+      ))}
+    </div>
+  );
+};
+
 const ClanHub = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("presence");
+  const [activeTab, setActiveTab] = useState("feed"); // Default to 'feed'
   const [freezeModalOpen, setFreezeModalOpen] = useState(false);
   
   const { 
@@ -227,15 +279,26 @@ const ClanHub = () => {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs - Feed first */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="presence">Presença</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="feed">
+              <MessageSquare className="w-4 h-4 mr-1" />
+              Feed
+            </TabsTrigger>
+            <TabsTrigger value="presence">
+              <Users className="w-4 h-4 mr-1" />
+              Membros
+            </TabsTrigger>
             <TabsTrigger value="management" disabled={!isLeader}>
               <Settings className="w-4 h-4 mr-1" />
               Gestão
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="feed">
+            <ClanFeedContent />
+          </TabsContent>
 
           <TabsContent value="presence">
             <PresenceList members={members} />

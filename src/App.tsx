@@ -27,6 +27,7 @@ import Onboarding from "./pages/Onboarding";
 import ObjectiveOnboarding from "./pages/ObjectiveOnboarding";
 import NotFound from "./pages/NotFound";
 import Arena from "./pages/Arena";
+import ArenaRanking from "./pages/ArenaRanking";
 import PostDetail from "./pages/PostDetail";
 import ClanHub from "./pages/ClanHub";
 import CreateClan from "./pages/CreateClan";
@@ -65,6 +66,7 @@ function AppRoutes() {
         <Route path="/treino/:treinoId/:exercicioId" element={<ProtectedRoute><ExerciseLogging /></ProtectedRoute>} />
         <Route path="/treino/:treinoId/resumo" element={<ProtectedRoute><WorkoutSummary /></ProtectedRoute>} />
         <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
+        <Route path="/arena/ranking" element={<ProtectedRoute><ArenaRanking /></ProtectedRoute>} />
         <Route path="/arena/post/:id" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
         <Route path="/arena/profile/:userId" element={<ProtectedRoute><AthleteProfile /></ProtectedRoute>} />
         <Route path="/arena/profile/:userId/followers" element={<ProtectedRoute><FollowersList /></ProtectedRoute>} />

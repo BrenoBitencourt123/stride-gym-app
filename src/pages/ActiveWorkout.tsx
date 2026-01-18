@@ -113,12 +113,23 @@ const ActiveWorkout = () => {
       const savedProgress = getExerciseProgress(ex.id);
       const lastPerformance = getLastPerformance(ex.id);
       
-      // Get previous workout's weights for this exercise
-      const getPreviousWeight = (index: number) => {
+      // Get previous workout's work set weights
+      const getPreviousWorkWeight = (index: number) => {
         if (lastPerformance && lastPerformance.workSets[index]) {
           return {
             kg: lastPerformance.workSets[index].kg,
             reps: lastPerformance.workSets[index].reps,
+          };
+        }
+        return undefined;
+      };
+      
+      // Get previous workout's warmup set weights
+      const getPreviousWarmupWeight = (index: number) => {
+        if (lastPerformance?.warmupSets && lastPerformance.warmupSets[index]) {
+          return {
+            kg: lastPerformance.warmupSets[index].kg,
+            reps: lastPerformance.warmupSets[index].reps,
           };
         }
         return undefined;
@@ -130,12 +141,12 @@ const ActiveWorkout = () => {
           ...savedProgress.feederSets.map((s, i) => ({
             ...s,
             type: "warmup" as SetType,
-            previous: getPreviousWeight(0), // Show first work set weight as reference for warmup
+            previous: getPreviousWarmupWeight(i), // Use warmup-specific previous
           })),
           ...savedProgress.workSets.map((s, i) => ({
             ...s,
             type: "normal" as SetType,
-            previous: getPreviousWeight(i),
+            previous: getPreviousWorkWeight(i),
           })),
         ];
         
@@ -146,32 +157,35 @@ const ActiveWorkout = () => {
           restSeconds: ex.descansoSeg,
           repsRange: ex.repsRange,
           sets: sets.length > 0 ? sets : ex.workSetsDefault.map((s, i) => ({
-            kg: getPreviousWeight(i)?.kg ?? s.kg,
-            reps: getPreviousWeight(i)?.reps ?? s.reps,
+            kg: getPreviousWorkWeight(i)?.kg ?? s.kg,
+            reps: getPreviousWorkWeight(i)?.reps ?? s.reps,
             done: false,
             type: "normal" as SetType,
-            previous: getPreviousWeight(i),
+            previous: getPreviousWorkWeight(i),
           })),
         };
       }
 
       // Fresh workout - use history if available, otherwise defaults
       const warmupSets: ActiveSet[] = ex.warmupEnabled && ex.feederSetsDefault.length > 0
-        ? ex.feederSetsDefault.map((s) => ({
-            kg: lastPerformance ? Math.round((getPreviousWeight(0)?.kg ?? s.kg) * 0.5) : s.kg,
-            reps: s.reps,
-            done: false,
-            type: "warmup" as SetType,
-            previous: getPreviousWeight(0), // Reference the work set weight
-          }))
+        ? ex.feederSetsDefault.map((s, i) => {
+            const prevWarmup = getPreviousWarmupWeight(i);
+            return {
+              kg: prevWarmup?.kg ?? s.kg,
+              reps: prevWarmup?.reps ?? s.reps,
+              done: false,
+              type: "warmup" as SetType,
+              previous: prevWarmup,
+            };
+          })
         : [];
 
       const workSets: ActiveSet[] = ex.workSetsDefault.map((s, i) => ({
-        kg: getPreviousWeight(i)?.kg ?? s.kg,
-        reps: getPreviousWeight(i)?.reps ?? s.reps,
+        kg: getPreviousWorkWeight(i)?.kg ?? s.kg,
+        reps: getPreviousWorkWeight(i)?.reps ?? s.reps,
         done: false,
         type: "normal" as SetType,
-        previous: getPreviousWeight(i),
+        previous: getPreviousWorkWeight(i),
       }));
 
       return {

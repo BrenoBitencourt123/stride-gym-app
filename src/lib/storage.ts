@@ -122,6 +122,8 @@ export interface ExerciseSnapshot {
   exerciseId: string;
   workoutId: string;
   repsRange: string;
+  warmupSets?: ExerciseSetSnapshot[];
+  feederSets?: ExerciseSetSnapshot[];
   workSets: ExerciseSetSnapshot[];
   timestamp: string;
 }
@@ -1188,7 +1190,9 @@ export function saveExerciseSnapshot(
   snapshotOrExerciseId: ExerciseSnapshot | string,
   workoutId?: string,
   repsRange?: string,
-  workSets?: ExerciseSetSnapshot[]
+  workSets?: ExerciseSetSnapshot[],
+  warmupSets?: ExerciseSetSnapshot[],
+  feederSets?: ExerciseSetSnapshot[]
 ): void {
   if (typeof snapshotOrExerciseId === "string") {
     const snapshot: ExerciseSnapshot = {
@@ -1196,6 +1200,8 @@ export function saveExerciseSnapshot(
       workoutId: workoutId!,
       repsRange: repsRange!,
       workSets: workSets!,
+      warmupSets: warmupSets,
+      feederSets: feederSets,
       timestamp: new Date().toISOString(),
     };
     originalSaveExerciseSnapshot(snapshot);

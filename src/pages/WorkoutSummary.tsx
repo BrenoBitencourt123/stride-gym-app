@@ -123,29 +123,38 @@ const WorkoutSummary = () => {
     
     for (const exercise of workout.exercicios) {
       const exerciseProgress = workoutProgress[exercise.id];
-      if (exerciseProgress && exerciseProgress.workSets.length > 0) {
-        // Apenas séries válidas (done = true)
+      if (exerciseProgress) {
+        // Salvar séries de aquecimento/preparação (feederSets) - mesmo que não estejam "done"
+        const warmupSetsData: ExerciseSetSnapshot[] = exerciseProgress.feederSets
+          .map(s => ({ kg: s.kg, reps: s.reps }));
+        
+        // Salvar séries de trabalho válidas (done = true)
         const completedSetsData: ExerciseSetSnapshot[] = exerciseProgress.workSets
           .filter(s => s.done)
           .map(s => ({ kg: s.kg, reps: s.reps }));
         
-        if (completedSetsData.length > 0) {
+        // Salvar snapshot com todos os tipos de séries
+        if (completedSetsData.length > 0 || warmupSetsData.length > 0) {
           saveExerciseSnapshot(
             exercise.id,
             workout.id,
             exercise.repsRange,
-            completedSetsData
+            completedSetsData.length > 0 ? completedSetsData : exerciseProgress.workSets.map(s => ({ kg: s.kg, reps: s.reps })),
+            warmupSetsData.length > 0 ? warmupSetsData : undefined,
+            undefined // feederSets separados se necessário no futuro
           );
           
-          exerciseSnapshots.push({
-            exerciseId: exercise.id,
-            exerciseName: exercise.nome,
-            sets: completedSetsData.map(s => ({ kg: s.kg, reps: s.reps })),
-          });
-          
-          snapshotTotalSets += completedSetsData.length;
-          snapshotTotalVolume += completedSetsData.reduce((sum, s) => sum + (s.kg * s.reps), 0);
-          totalReps += completedSetsData.reduce((sum, s) => sum + s.reps, 0);
+          if (completedSetsData.length > 0) {
+            exerciseSnapshots.push({
+              exerciseId: exercise.id,
+              exerciseName: exercise.nome,
+              sets: completedSetsData.map(s => ({ kg: s.kg, reps: s.reps })),
+            });
+            
+            snapshotTotalSets += completedSetsData.length;
+            snapshotTotalVolume += completedSetsData.reduce((sum, s) => sum + (s.kg * s.reps), 0);
+            totalReps += completedSetsData.reduce((sum, s) => sum + s.reps, 0);
+          }
         }
       }
     }

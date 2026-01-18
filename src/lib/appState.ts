@@ -111,6 +111,8 @@ export interface ExerciseSnapshot {
   exerciseId: string;
   workoutId: string;
   repsRange: string;
+  warmupSets?: ExerciseSetSnapshot[];
+  feederSets?: ExerciseSetSnapshot[];
   workSets: ExerciseSetSnapshot[];
   timestamp: string;
 }

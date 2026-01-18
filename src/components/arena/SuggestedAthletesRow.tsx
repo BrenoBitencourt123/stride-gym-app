@@ -1,10 +1,11 @@
 // src/components/arena/SuggestedAthletesRow.tsx
 // Horizontal carousel of suggested athletes to follow - Hevy style
 
-import { Plus, Share2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSuggestedAthletes } from "@/hooks/useSuggestedAthletes";
+import { toast } from "sonner";
 import AthleteCard from "./AthleteCard";
 
 interface SuggestedAthletesRowProps {
@@ -14,21 +15,28 @@ interface SuggestedAthletesRowProps {
 const SuggestedAthletesRow = ({ className = "" }: SuggestedAthletesRowProps) => {
   const { athletes, loading, followAthlete, hideAthlete, followingStates } = useSuggestedAthletes(15);
 
-  // Show invite fallback if no suggestions available
   const handleShare = async () => {
-    const shareUrl = window.location.origin + '/arena';
+    const shareUrl = window.location.origin;
+    const shareText = 'Treine comigo na Arena do LevelUp Gym! 💪';
+    
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'LevelUp Gym - Arena',
-          text: 'Treine comigo na Arena do LevelUp Gym!',
+          title: 'LevelUp Gym',
+          text: shareText,
           url: shareUrl,
         });
-      } catch {
-        // User cancelled
+      } catch (err: any) {
+        // User cancelled or error - only show toast if not a cancel
+        if (err?.name !== 'AbortError') {
+          await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+          toast.success('Link copiado!');
+        }
       }
     } else {
-      navigator.clipboard.writeText(shareUrl);
+      // Fallback: copy to clipboard with feedback
+      await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+      toast.success('Link copiado para a área de transferência!');
     }
   };
 

@@ -1,10 +1,9 @@
 // src/components/arena/SuggestedAthletesRow.tsx
-// Horizontal carousel of suggested athletes to follow
+// Horizontal carousel of suggested athletes to follow - Hevy style
 
-import { Users, Share2 } from "lucide-react";
+import { Plus, Share2 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { useSuggestedAthletes } from "@/hooks/useSuggestedAthletes";
 import AthleteCard from "./AthleteCard";
 
@@ -35,61 +34,59 @@ const SuggestedAthletesRow = ({ className = "" }: SuggestedAthletesRowProps) => 
 
   if (!loading && athletes.length === 0) {
     return (
-      <div className={`card-glass rounded-xl p-4 ${className}`}>
-        <div className="flex items-center gap-2 mb-3">
-          <Users className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">
+      <div className={`bg-card border border-border rounded-xl p-4 ${className}`}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-foreground">
             Atletas Sugeridos
           </h3>
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 text-primary text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Convidar amigos
+          </button>
         </div>
-        <p className="text-sm text-muted-foreground mb-3">
+        <p className="text-sm text-muted-foreground">
           Ainda não encontramos atletas para sugerir. Convide seus amigos para treinar juntos!
         </p>
-        <Button 
-          variant="secondary" 
-          size="sm" 
-          className="w-full"
-          onClick={handleShare}
-        >
-          <Share2 className="w-4 h-4 mr-2" />
-          Convidar Amigos
-        </Button>
       </div>
     );
   }
 
   return (
-    <div className={`${className}`}>
+    <div className={`bg-card border border-border rounded-xl py-4 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">
-            Atletas Sugeridos
-          </h3>
-        </div>
-        <span className="text-xs text-muted-foreground">
-          Deslize para ver mais
-        </span>
+      <div className="flex items-center justify-between px-4 mb-4">
+        <h3 className="text-base font-semibold text-foreground">
+          Atletas Sugeridos
+        </h3>
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1.5 text-primary text-sm font-medium"
+        >
+          <Plus className="w-4 h-4" />
+          Convidar amigos
+        </button>
       </div>
 
       {/* Loading State */}
       {loading ? (
-        <div className="flex gap-3 overflow-hidden">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex-shrink-0 w-[140px] card-glass rounded-xl p-3">
-              <div className="flex justify-center mb-2">
-                <Skeleton className="w-12 h-12 rounded-full" />
+        <div className="flex gap-3 px-4 overflow-hidden">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex-shrink-0 w-[150px] bg-secondary/30 rounded-2xl p-4">
+              <div className="flex justify-center mb-3">
+                <Skeleton className="w-16 h-16 rounded-full" />
               </div>
               <Skeleton className="h-4 w-20 mx-auto mb-2" />
-              <Skeleton className="h-3 w-16 mx-auto mb-2" />
-              <Skeleton className="h-7 w-full" />
+              <Skeleton className="h-3 w-16 mx-auto mb-3" />
+              <Skeleton className="h-8 w-full rounded-lg" />
             </div>
           ))}
         </div>
       ) : (
         <ScrollArea className="w-full whitespace-nowrap">
-          <div className="flex gap-3 pb-3">
+          <div className="flex gap-3 px-4 pb-2">
             {athletes.map((athlete) => (
               <AthleteCard
                 key={athlete.userId}

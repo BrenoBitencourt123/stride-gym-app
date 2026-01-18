@@ -24,6 +24,7 @@ export type ProfileVisibility = 'public' | 'clanOnly' | 'private';
 
 export interface PublicProfile {
   userId: string;
+  username?: string;
   displayName: string;
   photoURL?: string;
   avatarId?: string;
@@ -432,6 +433,7 @@ export async function getSuggestedAthletes(
     // Collect users with arena profiles
     const candidates: Array<{
       userId: string;
+      username?: string;
       displayName: string;
       photoURL?: string;
       avatarId?: string;
@@ -455,8 +457,18 @@ export async function getSuggestedAthletes(
           // Only include public profiles
           if (arenaData.visibility === 'private') continue;
           
+          // Also check publicProfile for username
+          let username = arenaData.username || arenaData.usernameLower;
+          if (!username) {
+            const publicDoc = await getDoc(doc(db, 'users', userId, 'arena', 'publicProfile'));
+            if (publicDoc.exists()) {
+              username = publicDoc.data().username || publicDoc.data().usernameLower;
+            }
+          }
+          
           candidates.push({
             userId,
+            username: username || undefined,
             displayName: arenaData.displayName || userDoc.data()?.displayName || 'Atleta',
             photoURL: arenaData.photoURL || userDoc.data()?.photoURL,
             avatarId: arenaData.avatarId,
@@ -516,6 +528,7 @@ export async function getSuggestedAthletes(
       
       suggestions.push({
         userId: candidate.userId,
+        username: candidate.username,
         displayName: candidate.displayName,
         photoURL: candidate.photoURL,
         avatarId: candidate.avatarId,

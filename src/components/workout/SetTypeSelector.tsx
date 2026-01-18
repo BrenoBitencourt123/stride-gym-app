@@ -20,7 +20,7 @@ const setTypes: { type: SetType | "remove"; label: string; description: string; 
     type: "warmup",
     label: "Série de Aquecimento",
     description: "Aquecimento muscular com 30% a 40% do melhor peso",
-    badge: "W",
+    badge: "A",
     badgeClass: "bg-yellow-500/20 text-yellow-500",
   },
   {

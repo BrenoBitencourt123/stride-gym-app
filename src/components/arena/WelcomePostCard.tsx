@@ -1,9 +1,55 @@
-import { Sparkles, Dumbbell, Users, Trophy } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Dumbbell, Users, Trophy, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { useArenaFeed } from "@/hooks/useArenaFirestore";
 
-const WelcomePostCard = () => {
+const DISMISSED_KEY = "levelup.welcomePostDismissed";
+
+interface WelcomePostCardProps {
+  onDismiss?: () => void;
+}
+
+const WelcomePostCard = ({ onDismiss }: WelcomePostCardProps) => {
+  const { user } = useAuth();
+  const { posts } = useArenaFeed('global');
+  const [dismissed, setDismissed] = useState(false);
+
+  // Check if user has posted or dismissed the welcome card
+  useEffect(() => {
+    const wasDismissed = localStorage.getItem(DISMISSED_KEY) === "true";
+    if (wasDismissed) {
+      setDismissed(true);
+    }
+  }, []);
+
+  // Auto-dismiss if user has posts
+  useEffect(() => {
+    if (user && posts.some(p => p.author.userId === user.uid)) {
+      setDismissed(true);
+      localStorage.setItem(DISMISSED_KEY, "true");
+    }
+  }, [user, posts]);
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem(DISMISSED_KEY, "true");
+    onDismiss?.();
+  };
+
+  if (dismissed) return null;
+
   return (
     <Card className="bg-gradient-to-br from-primary/20 via-card to-primary/10 border-primary/30 overflow-hidden relative">
+      {/* Close button */}
+      <button
+        onClick={handleDismiss}
+        className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-background/50 hover:bg-background/80 transition-colors"
+        aria-label="Fechar"
+      >
+        <X className="w-4 h-4 text-muted-foreground" />
+      </button>
+
       {/* Decorative elements */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl" />

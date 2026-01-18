@@ -66,8 +66,8 @@ export async function reserveUsername(uid: string, username: string): Promise<bo
       throw new Error('Username inválido. Use 3-20 caracteres: letras, números e _');
     }
     
-    // Check availability
-    const available = await isUsernameAvailable(usernameLower);
+    // Check availability (pass uid to allow reusing own username)
+    const available = await isUsernameAvailable(usernameLower, uid);
     if (!available) {
       throw new Error('Este username já está em uso');
     }

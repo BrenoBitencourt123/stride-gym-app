@@ -38,6 +38,7 @@ const Settings = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
 
+  // Priority: profile from Firebase state > user displayName from Auth > fallback
   const displayName = profile?.displayName || user?.displayName || 'Atleta';
   const email = user?.email || 'Email não disponível';
 

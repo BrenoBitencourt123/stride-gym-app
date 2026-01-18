@@ -91,34 +91,48 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setSyncState('syncing');
       
       try {
-        // One-time migration from localStorage
-        if (!migrationDoneRef.current) {
+        // FIRST: Get current state from Firestore (PRIORITY!)
+        let firestoreState = await getUserState(user.uid);
+        
+        // Only migrate from localStorage if Firestore has NO data
+        if (!firestoreState && !migrationDoneRef.current) {
           const alreadyMigrated = await hasBeenMigrated(user.uid);
           
           if (!alreadyMigrated) {
-            console.log('[AppStateContext] Starting localStorage migration...');
+            console.log('[AppStateContext] No Firestore data found, checking localStorage...');
             const localState = getLocalState();
-            const result = await migrateLocalStorageToFirestore(user.uid, localState);
             
-            if (result.success) {
-              console.log('[AppStateContext] Migration completed');
+            // Only migrate if localState has meaningful data (not default empty state)
+            const hasLocalData = localState && 
+              localState.onboarding?.completedAt != null;
+            
+            if (hasLocalData) {
+              console.log('[AppStateContext] Found localStorage data, migrating...');
+              const result = await migrateLocalStorageToFirestore(user.uid, localState);
+              
+              if (result.success) {
+                console.log('[AppStateContext] Migration completed');
+                firestoreState = await getUserState(user.uid);
+              } else {
+                console.warn('[AppStateContext] Migration failed:', result.error);
+              }
             } else {
-              console.warn('[AppStateContext] Migration failed:', result.error);
+              console.log('[AppStateContext] No meaningful localStorage data to migrate');
             }
           }
           
           migrationDoneRef.current = true;
         }
         
-        // Get current state from Firestore
-        let firestoreState = await getUserState(user.uid);
-        
         if (!firestoreState) {
           // Create new state for new users
+          console.log('[AppStateContext] Creating new user state');
           const newState = createNewUserState();
           await setUserState(user.uid, newState);
           firestoreState = newState;
         } else {
+          console.log('[AppStateContext] Loaded existing state from Firestore');
+          
           // Check if existing user has empty workout plan
           const hasPlan = firestoreState.plan && 
                           Array.isArray(firestoreState.plan.workouts) && 

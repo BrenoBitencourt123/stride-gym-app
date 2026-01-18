@@ -127,9 +127,9 @@ export async function initializeArenaProfile(
   const defaultSchedule = createDefaultSchedule();
   const now = new Date().toISOString();
   
-  const profileData: FirestoreArenaProfile = {
-    displayName,
-    photoURL,
+  // Build profile data without undefined values (Firestore doesn't accept undefined)
+  const profileData: Record<string, any> = {
+    displayName: displayName || 'Atleta',
     elo: getEloFromPoints(0),
     scheduleCurrent: defaultSchedule.current,
     scheduleNext: null,
@@ -141,13 +141,18 @@ export async function initializeArenaProfile(
     updatedAt: now,
   };
   
+  // Only add photoURL if it has a value
+  if (photoURL) {
+    profileData.photoURL = photoURL;
+  }
+  
   const docRef = doc(db, 'users', uid, 'arena', 'profile');
   await setDoc(docRef, profileData);
   
   return {
     userId: uid,
-    displayName,
-    photoURL,
+    displayName: profileData.displayName,
+    photoURL: photoURL || undefined,
     elo: profileData.elo,
     schedule: { current: defaultSchedule.current },
     weeklyPoints: 0,
@@ -161,11 +166,17 @@ export async function updateArenaProfile(
   uid: string,
   updates: Partial<FirestoreArenaProfile>
 ): Promise<void> {
+  // Clean updates to remove undefined values (Firestore doesn't accept undefined)
+  const cleanUpdates: Record<string, any> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) {
+      cleanUpdates[key] = value;
+    }
+  }
+  cleanUpdates.updatedAt = new Date().toISOString();
+  
   const docRef = doc(db, 'users', uid, 'arena', 'profile');
-  await updateDoc(docRef, {
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  });
+  await updateDoc(docRef, cleanUpdates);
 }
 
 async function updateArenaProfileSchedule(uid: string, schedule: ArenaScheduleState): Promise<void> {

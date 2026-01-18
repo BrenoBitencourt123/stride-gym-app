@@ -263,26 +263,65 @@ export async function createPost(
   clanId?: string,
   photoURL?: string
 ): Promise<Post> {
-  const postData: FirestorePost = {
+  // Build post data, explicitly handling undefined fields
+  // Firestore doesn't allow undefined values, so we omit them or use null
+  const postData: Record<string, any> = {
     authorId: uid,
-    authorName: profile.displayName,
-    authorAvatar: profile.photoURL || null,
-    authorElo: profile.elo,
-    type: 'workout',
+    authorName: profile.displayName || 'Atleta',
+    authorElo: profile.elo || getEloFromPoints(0),
+    type: photoURL ? 'mixed' : 'workout',
     visibility,
-    postToClan,
-    clanId: postToClan ? clanId : null,
-    photoURL: photoURL || null,
-    description,
-    workoutSnapshot,
+    postToClan: postToClan || false,
     kudosCount: 0,
     commentsCount: 0,
     createdAt: Timestamp.now(),
   };
+
+  // Only add optional fields if they have values (avoid undefined)
+  if (profile.photoURL) {
+    postData.authorAvatar = profile.photoURL;
+  }
+  if (profile.avatarId) {
+    postData.authorAvatarId = profile.avatarId;
+  }
+  if (postToClan && clanId) {
+    postData.clanId = clanId;
+  }
+  if (photoURL) {
+    postData.photoURL = photoURL;
+  }
+  if (description && description.trim()) {
+    postData.description = description.trim();
+  }
+  
+  // Clean workoutSnapshot to remove undefined values
+  if (workoutSnapshot) {
+    const cleanSnapshot: Record<string, any> = {};
+    for (const [key, value] of Object.entries(workoutSnapshot)) {
+      if (value !== undefined) {
+        // Handle nested objects/arrays
+        if (Array.isArray(value)) {
+          cleanSnapshot[key] = value.map(item => {
+            if (typeof item === 'object' && item !== null) {
+              const cleanItem: Record<string, any> = {};
+              for (const [k, v] of Object.entries(item)) {
+                if (v !== undefined) cleanItem[k] = v;
+              }
+              return cleanItem;
+            }
+            return item;
+          });
+        } else {
+          cleanSnapshot[key] = value;
+        }
+      }
+    }
+    postData.workoutSnapshot = cleanSnapshot;
+  }
   
   const docRef = await addDoc(postsCol(), postData);
   
-  return firestorePostToPost(docRef.id, postData);
+  return firestorePostToPost(docRef.id, postData as FirestorePost);
 }
 
 export async function getGlobalFeed(

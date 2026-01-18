@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Check, Minus, Plus } from "lucide-react";
 import { ActiveSet, SetType } from "@/pages/ActiveWorkout";
 
@@ -25,30 +25,76 @@ function getSetLabel(type: SetType, index: number): { label: string; className: 
 
 const ActiveSetRow = ({ set, setIndex, onChange, onTypeClick }: ActiveSetRowProps) => {
   const setLabel = getSetLabel(set.type, setIndex);
+  const [kgInputValue, setKgInputValue] = useState<string>(String(set.kg));
+  const [repsInputValue, setRepsInputValue] = useState<string>(String(set.reps));
+  const [isKgFocused, setIsKgFocused] = useState(false);
+  const [isRepsFocused, setIsRepsFocused] = useState(false);
 
   const decreaseKg = useCallback(() => {
-    onChange("kg", Math.max(0, set.kg - 2.5));
+    const newValue = Math.max(0, set.kg - 2.5);
+    onChange("kg", newValue);
+    setKgInputValue(String(newValue));
   }, [onChange, set.kg]);
 
   const increaseKg = useCallback(() => {
-    onChange("kg", set.kg + 2.5);
+    const newValue = set.kg + 2.5;
+    onChange("kg", newValue);
+    setKgInputValue(String(newValue));
   }, [onChange, set.kg]);
 
   const decreaseReps = useCallback(() => {
-    onChange("reps", Math.max(1, set.reps - 1));
+    const newValue = Math.max(1, set.reps - 1);
+    onChange("reps", newValue);
+    setRepsInputValue(String(newValue));
   }, [onChange, set.reps]);
 
   const increaseReps = useCallback(() => {
-    onChange("reps", set.reps + 1);
+    const newValue = set.reps + 1;
+    onChange("reps", newValue);
+    setRepsInputValue(String(newValue));
   }, [onChange, set.reps]);
 
+  const handleKgFocus = useCallback(() => {
+    setIsKgFocused(true);
+    setKgInputValue(""); // Clear on focus for easy typing
+  }, []);
+
+  const handleKgBlur = useCallback(() => {
+    setIsKgFocused(false);
+    const parsed = parseFloat(kgInputValue);
+    if (!isNaN(parsed) && parsed >= 0) {
+      onChange("kg", parsed);
+      setKgInputValue(String(parsed));
+    } else {
+      // Restore previous value if invalid
+      setKgInputValue(String(set.kg));
+    }
+  }, [kgInputValue, onChange, set.kg]);
+
   const handleKgChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange("kg", Math.max(0, parseFloat(e.target.value) || 0));
-  }, [onChange]);
+    setKgInputValue(e.target.value);
+  }, []);
+
+  const handleRepsFocus = useCallback(() => {
+    setIsRepsFocused(true);
+    setRepsInputValue(""); // Clear on focus for easy typing
+  }, []);
+
+  const handleRepsBlur = useCallback(() => {
+    setIsRepsFocused(false);
+    const parsed = parseInt(repsInputValue);
+    if (!isNaN(parsed) && parsed >= 1) {
+      onChange("reps", parsed);
+      setRepsInputValue(String(parsed));
+    } else {
+      // Restore previous value if invalid
+      setRepsInputValue(String(set.reps));
+    }
+  }, [repsInputValue, onChange, set.reps]);
 
   const handleRepsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange("reps", Math.max(1, parseInt(e.target.value) || 1));
-  }, [onChange]);
+    setRepsInputValue(e.target.value);
+  }, []);
 
   const toggleDone = useCallback(() => {
     onChange("done", !set.done);
@@ -82,11 +128,14 @@ const ActiveSetRow = ({ set, setIndex, onChange, onTypeClick }: ActiveSetRowProp
               <Minus className="w-4 h-4" />
             </button>
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
-              value={set.kg}
+              pattern="[0-9]*\.?[0-9]*"
+              value={isKgFocused ? kgInputValue : set.kg}
               onChange={handleKgChange}
-              className="text-foreground text-sm w-12 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              onFocus={handleKgFocus}
+              onBlur={handleKgBlur}
+              className="text-foreground text-sm w-12 text-center bg-transparent border-none outline-none"
             />
             <button
               type="button"
@@ -109,11 +158,14 @@ const ActiveSetRow = ({ set, setIndex, onChange, onTypeClick }: ActiveSetRowProp
               <Minus className="w-4 h-4" />
             </button>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
-              value={set.reps}
+              pattern="[0-9]*"
+              value={isRepsFocused ? repsInputValue : set.reps}
               onChange={handleRepsChange}
-              className="text-foreground text-sm w-8 text-center bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              onFocus={handleRepsFocus}
+              onBlur={handleRepsBlur}
+              className="text-foreground text-sm w-8 text-center bg-transparent border-none outline-none"
             />
             <button
               type="button"

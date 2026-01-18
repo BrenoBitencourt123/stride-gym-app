@@ -12,9 +12,10 @@ interface ActiveSetRowProps {
 function getSetLabel(type: SetType, index: number): { label: string; className: string } {
   switch (type) {
     case "warmup":
-      return { label: "W", className: "bg-yellow-500/20 text-yellow-500" };
+      return { label: "A", className: "bg-yellow-500/20 text-yellow-500" };
     case "failed":
-      return { label: "F", className: "bg-destructive/20 text-destructive" };
+      // "failed" type is repurposed as "Preparação" (P)
+      return { label: "P", className: "bg-blue-500/20 text-blue-400" };
     case "drop":
       return { label: "B", className: "bg-purple-500/20 text-purple-400" };
     default:

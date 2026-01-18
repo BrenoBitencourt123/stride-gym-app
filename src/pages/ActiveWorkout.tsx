@@ -51,8 +51,11 @@ export interface ActiveExercise {
 const ActiveWorkout = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
-  const { loading: appLoading } = useAppStateContext();
+  const { state, loading: appLoading } = useAppStateContext();
   const { plan, treinoHoje, treinoProgresso, updateTreinoHoje, updateTreinoProgresso } = useWorkoutPlan();
+  
+  // Get exercise history for previous weights
+  const exerciseHistory = state?.exerciseHistory || {};
   
   // Get workout from Firebase plan
   const workout = useMemo(() => {
@@ -97,10 +100,29 @@ const ActiveWorkout = () => {
     const getExerciseProgress = (exId: string): ExerciseProgress | null => {
       return treinoProgresso?.[treinoId]?.[exId] || null;
     };
+    
+    // Get last exercise performance from history
+    const getLastPerformance = (exId: string) => {
+      const history = exerciseHistory[exId];
+      if (!history || history.length === 0) return null;
+      return history[history.length - 1];
+    };
 
     // Initialize exercises from workout data and saved progress
     const initialExercises: ActiveExercise[] = workout.exercicios.map((ex) => {
       const savedProgress = getExerciseProgress(ex.id);
+      const lastPerformance = getLastPerformance(ex.id);
+      
+      // Get previous workout's weights for this exercise
+      const getPreviousWeight = (index: number) => {
+        if (lastPerformance && lastPerformance.workSets[index]) {
+          return {
+            kg: lastPerformance.workSets[index].kg,
+            reps: lastPerformance.workSets[index].reps,
+          };
+        }
+        return undefined;
+      };
       
       if (savedProgress) {
         // Convert saved progress to active sets
@@ -108,12 +130,12 @@ const ActiveWorkout = () => {
           ...savedProgress.feederSets.map((s, i) => ({
             ...s,
             type: "warmup" as SetType,
-            previous: ex.feederSetsDefault[i] ? { kg: ex.feederSetsDefault[i].kg, reps: ex.feederSetsDefault[i].reps } : undefined,
+            previous: getPreviousWeight(0), // Show first work set weight as reference for warmup
           })),
           ...savedProgress.workSets.map((s, i) => ({
             ...s,
             type: "normal" as SetType,
-            previous: ex.workSetsDefault[i] ? { kg: ex.workSetsDefault[i].kg, reps: ex.workSetsDefault[i].reps } : undefined,
+            previous: getPreviousWeight(i),
           })),
         ];
         
@@ -123,30 +145,33 @@ const ActiveWorkout = () => {
           notes: "",
           restSeconds: ex.descansoSeg,
           repsRange: ex.repsRange,
-          sets: sets.length > 0 ? sets : ex.workSetsDefault.map((s) => ({
-            kg: s.kg,
-            reps: s.reps,
+          sets: sets.length > 0 ? sets : ex.workSetsDefault.map((s, i) => ({
+            kg: getPreviousWeight(i)?.kg ?? s.kg,
+            reps: getPreviousWeight(i)?.reps ?? s.reps,
             done: false,
             type: "normal" as SetType,
+            previous: getPreviousWeight(i),
           })),
         };
       }
 
-      // Fresh workout - initialize with defaults
+      // Fresh workout - use history if available, otherwise defaults
       const warmupSets: ActiveSet[] = ex.warmupEnabled && ex.feederSetsDefault.length > 0
         ? ex.feederSetsDefault.map((s) => ({
-            kg: s.kg,
+            kg: lastPerformance ? Math.round((getPreviousWeight(0)?.kg ?? s.kg) * 0.5) : s.kg,
             reps: s.reps,
             done: false,
             type: "warmup" as SetType,
+            previous: getPreviousWeight(0), // Reference the work set weight
           }))
         : [];
 
-      const workSets: ActiveSet[] = ex.workSetsDefault.map((s) => ({
-        kg: s.kg,
-        reps: s.reps,
+      const workSets: ActiveSet[] = ex.workSetsDefault.map((s, i) => ({
+        kg: getPreviousWeight(i)?.kg ?? s.kg,
+        reps: getPreviousWeight(i)?.reps ?? s.reps,
         done: false,
         type: "normal" as SetType,
+        previous: getPreviousWeight(i),
       }));
 
       return {
@@ -160,7 +185,7 @@ const ActiveWorkout = () => {
     });
 
     setExercises(initialExercises);
-  }, [workout, treinoId, appLoading, treinoHoje, treinoProgresso, updateTreinoHoje]);
+  }, [workout, treinoId, appLoading, treinoHoje, treinoProgresso, updateTreinoHoje, exerciseHistory]);
 
   // Timer
   useEffect(() => {

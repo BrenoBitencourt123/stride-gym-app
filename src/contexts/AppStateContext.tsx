@@ -289,7 +289,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   
   const isOnboardingComplete = useCallback(() => {
     // Only check state - Firebase is the source of truth
-    return state?.onboarding?.completedAt != null;
+    if (!state) return false;
+    if (state.onboarding?.completedAt != null) return true;
+
+    // Fallback: consider onboarding complete if the user already has activity
+    const hasWorkouts = (state.workoutHistory || []).length > 0;
+    const hasExerciseHistory = state.exerciseHistory && Object.keys(state.exerciseHistory).length > 0;
+    const hasNutritionLogs = state.nutrition?.dailyLogs && Object.keys(state.nutrition.dailyLogs).length > 0;
+    const hasWeeklyCompletions =
+      state.weeklyCompletions && Object.keys(state.weeklyCompletions).length > 0;
+
+    return Boolean(hasWorkouts || hasExerciseHistory || hasNutritionLogs || hasWeeklyCompletions);
   }, [state]);
   
   // ============= SPECIFIC UPDATERS =============

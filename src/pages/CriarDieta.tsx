@@ -13,8 +13,8 @@ import type { NutritionDiet, DietMeal, TodayEntry, NutritionToday } from "@/lib/
 
 // Default meals template
 const DEFAULT_MEALS: DietMeal[] = [
-  { id: "cafe", nome: "Café da Manhã", items: [] },
-  { id: "almoco", nome: "Almoço", items: [] },
+  { id: "cafe", nome: "Caf\u00e9 da Manh\u00e3", items: [] },
+  { id: "almoco", nome: "Almo\u00e7o", items: [] },
   { id: "lanche", nome: "Lanche", items: [] },
   { id: "jantar", nome: "Jantar", items: [] },
 ];
@@ -114,7 +114,7 @@ const CriarDieta = () => {
     g: goals.gTarget - totals.g,
   }), [goals, totals]);
 
-  // Calcula kcal por refeição
+  // Calcula kcal por refeicao
   const getMealKcal = (meal: DietMeal) => {
     let total = 0;
     for (const item of meal.items) {
@@ -226,15 +226,15 @@ const CriarDieta = () => {
             <h1 className="text-2xl font-bold text-foreground">
               {existingDiet ? "Minha dieta" : "Criar minha dieta"}
             </h1>
-            <p className="text-sm text-muted-foreground">Monte um padrão para seus dias</p>
+            <p className="text-sm text-muted-foreground">Monte um padr\u00e3o para seus dias</p>
           </div>
         </div>
 
-        {/* Card: Meta diária */}
+        {/* Card: Meta diaria */}
         <div className="card-glass p-4 mt-6 mb-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-foreground">Meta diária</h2>
+              <h2 className="text-lg font-semibold text-foreground">Meta di\u00e1ria</h2>
               <HelpIcon helpKey="nutri.goals" size={16} />
             </div>
             {totals.kcal > 0 && (
@@ -244,7 +244,7 @@ const CriarDieta = () => {
                     ? "bg-green-500/20 text-green-400" 
                     : "bg-yellow-500/20 text-yellow-400"
                 }`}>
-                  {Math.abs(totals.kcal - goals.kcalTarget) <= 200 ? "Meta segura" : "Ajuste necessário"}
+                  {Math.abs(totals.kcal - goals.kcalTarget) <= 200 ? "Meta segura" : "Ajuste necess\u00e1rio"}
                 </span>
                 <HelpIcon helpKey={Math.abs(totals.kcal - goals.kcalTarget) <= 200 ? "nutri.metaSegura" : "nutri.ajuste"} size={14} />
               </div>
@@ -258,7 +258,7 @@ const CriarDieta = () => {
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-xl font-bold text-foreground">{totals.p || goals.pTarget}</span>
-              <span className="text-sm text-muted-foreground">/ {goals.pTarget}g proteína</span>
+              <span className="text-sm text-muted-foreground">/ {goals.pTarget}g prote\u00edna</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-xl font-bold text-foreground">{totals.c || goals.cTarget}</span>
@@ -271,15 +271,15 @@ const CriarDieta = () => {
           </div>
         </div>
 
-        {/* Ajuste necessário card */}
+        {/* Ajuste necessario card */}
         <NutritionAdjustCard 
           gaps={gaps} 
           onFoodAdded={() => setRefreshKey(k => k + 1)}
           mode="diet"
         />
 
-        {/* Seção: Refeições */}
-        <h2 className="text-lg font-semibold text-foreground mb-3">Refeições</h2>
+        {/* Secao: Refeicoes */}
+        <h2 className="text-lg font-semibold text-foreground mb-3">Refei\u00e7\u00f5es</h2>
 
         <div className="space-y-3">
           {diet.meals.map((meal) => (
@@ -307,7 +307,7 @@ const CriarDieta = () => {
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-foreground">{food.nome}</span>
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">\u2014</span>
                           <span className="text-muted-foreground">
                             {item.quantidade}{item.unidade === "un" ? " un" : item.unidade === "scoop" ? " scoop" : ` ${item.unidade}`}
                           </span>
@@ -337,7 +337,7 @@ const CriarDieta = () => {
         <div className="card-glass p-4 mt-4 flex items-start gap-3">
           <Info size={18} className="text-primary mt-0.5 flex-shrink-0" />
           <p className="text-sm text-muted-foreground">
-            Você pode seguir esta dieta como base e registrar extras no dia.
+            Voc\u00ea pode seguir esta dieta como base e registrar extras no dia.
           </p>
         </div>
 

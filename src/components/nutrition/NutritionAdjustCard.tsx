@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Lightbulb, Plus, Wand2, Sparkles } from "lucide-react";
 import { getFoodById, foods, type FoodItem } from "@/data/foods";
-import { addFoodToToday, addFoodToDiet } from "@/lib/storage";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import HelpIcon from "@/components/HelpIcon";
+import { useNutrition } from "@/contexts/AppStateContext";
+import type { NutritionDiet, NutritionToday, TodayEntry } from "@/lib/appState";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,26 @@ const MEAL_LABELS: Record<MealId, string> = {
   lanche: "Lanche",
   jantar: "Jantar",
 };
+
+const DEFAULT_MEALS = [
+  { id: "cafe", nome: "Café da Manhã" },
+  { id: "almoco", nome: "Almoço" },
+  { id: "lanche", nome: "Lanche" },
+  { id: "jantar", nome: "Jantar" },
+] as const;
+
+function createEmptyToday(dateKey: string): NutritionToday {
+  return {
+    dateKey,
+    meals: DEFAULT_MEALS.map((m) => ({ id: m.id, nome: m.nome, entries: [] })),
+  };
+}
+
+function createEmptyDiet(): NutritionDiet {
+  return {
+    meals: DEFAULT_MEALS.map((m) => ({ id: m.id, nome: m.nome, items: [] })),
+  };
+}
 
 interface ComboItem {
   food: FoodItem;
@@ -162,7 +183,7 @@ function generateAutoAdjustCombo(gaps: MacroGaps): ComboItem[] {
     }
   }
   
-  // 4. Se ainda falta kcal (>100) após os macros, completar
+  // 4. Se ainda falta kcal (>100) ap??s os macros, completar
   if (remainingKcal > 100 && combo.length < 4) {
     if (remainingKcal > 200) {
       addToCombo("pao-integral", 2) || addToCombo("aveia-flocos", 50);
@@ -176,6 +197,7 @@ function generateAutoAdjustCombo(gaps: MacroGaps): ComboItem[] {
 
 const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdjustCardProps) => {
   const navigate = useNavigate();
+  const { dietPlan, today, updateDietPlan, updateToday } = useNutrition();
   const [isOpen, setIsOpen] = useState(false);
   const [showAutoModal, setShowAutoModal] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<MealId>("lanche");
@@ -220,6 +242,68 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
 
   const recommendations = getActionableRecommendations();
 
+  const todayKey = new Date().toISOString().split("T")[0];
+
+  const getDietData = (): NutritionDiet => {
+    if (!dietPlan) return createEmptyDiet();
+    return {
+      meals: dietPlan.meals.map((m) => ({
+        ...m,
+        items: [...m.items],
+      })),
+    };
+  };
+
+  const getTodayData = (): NutritionToday => {
+    if (today && today.dateKey === todayKey) {
+      return {
+        ...today,
+        meals: today.meals.map((m) => ({
+          ...m,
+          entries: [...m.entries],
+        })),
+      };
+    }
+    return createEmptyToday(todayKey);
+  };
+
+  const addFoodToDiet = async (
+    mealId: MealId,
+    foodId: string,
+    quantidade: number,
+    unidade: "g" | "un" | "ml" | "scoop"
+  ) => {
+    const diet = getDietData();
+    const meal = diet.meals.find((m) => m.id === mealId);
+    if (!meal) return;
+    meal.items.push({ foodId, quantidade, unidade });
+    await updateDietPlan(diet);
+  };
+
+  const addFoodToToday = async (
+    mealId: MealId,
+    foodId: string,
+    quantidade: number,
+    unidade: "g" | "un" | "ml" | "scoop",
+    source: "diet" | "extra" | "auto"
+  ) => {
+    const current = getTodayData();
+    const meal = current.meals.find((m) => m.id === mealId);
+    if (!meal) return;
+    const entry: TodayEntry = {
+      id: `${foodId}-${Date.now()}`,
+      foodId,
+      quantidade,
+      unidade,
+      source,
+      createdAt: Date.now(),
+      planned: source === "diet",
+      consumed: true,
+    };
+    meal.entries.push(entry);
+    await updateToday(current);
+  };
+
   const handleNavigateToAdd = (macroFilter?: "p" | "c" | "g") => {
     const params = new URLSearchParams();
     params.set("mode", mode);
@@ -229,28 +313,28 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
     navigate(`/nutricao/adicionar-alimento?${params.toString()}`);
   };
   
-  const handleAddSuggestion = (foodId: string, qty: number, unidade: "g" | "un" | "ml" | "scoop") => {
+  const handleAddSuggestion = async (foodId: string, qty: number, unidade: "g" | "un" | "ml" | "scoop") => {
     if (mode === "diet") {
-      addFoodToDiet(selectedMeal, foodId, qty, unidade);
+      await addFoodToDiet(selectedMeal, foodId, qty, unidade);
       toast.success(`Adicionado à dieta (${MEAL_LABELS[selectedMeal]})!`);
     } else {
-      addFoodToToday(selectedMeal, foodId, qty, unidade, "extra");
+      await addFoodToToday(selectedMeal, foodId, qty, unidade, "extra");
       toast.success(`Adicionado ao ${MEAL_LABELS[selectedMeal]}!`);
     }
     onFoodAdded();
   };
   
-  const handleApplyAutoAdjust = () => {
-    autoCombo.forEach((item) => {
-      addFoodToToday(selectedMeal, item.food.id, item.qty, item.food.unidadeBase, "auto");
-    });
+  const handleApplyAutoAdjust = async () => {
+    for (const item of autoCombo) {
+      await addFoodToToday(selectedMeal, item.food.id, item.qty, item.food.unidadeBase, "auto");
+    }
     setShowAutoModal(false);
     toast.success(`${autoCombo.length} itens adicionados ao ${MEAL_LABELS[selectedMeal]}!`, {
       icon: <Sparkles size={16} className="text-primary" />,
     });
     onFoodAdded();
   };
-  
+
   const formatGap = (value: number, suffix: string) => {
     if (value > 0) return `+${value}${suffix}`;
     return `${value}${suffix}`;
@@ -384,7 +468,7 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
                       {s.qty}{s.food.unidadeBase === "un" ? " un" : s.food.unidadeBase === "scoop" ? " scoop" : ` ${s.food.unidadeBase}`}
                     </span>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      +{s.kcal} kcal • P {s.p}g • C {s.c}g • G {s.g}g
+                      +{s.kcal} kcal . P {s.p}g . C {s.c}g . G {s.g}g
                     </div>
                   </div>
                   <button
@@ -478,7 +562,7 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
             <div className="bg-primary/10 rounded-xl p-3">
               <p className="text-xs text-muted-foreground mb-1">Total do combo:</p>
               <p className="text-sm font-medium text-foreground">
-                +{comboTotals.kcal} kcal • P {comboTotals.p}g • C {comboTotals.c}g • G {comboTotals.g}g
+                +{comboTotals.kcal} kcal . P {comboTotals.p}g . C {comboTotals.c}g . G {comboTotals.g}g
               </p>
             </div>
             
@@ -527,3 +611,9 @@ const NutritionAdjustCard = ({ gaps, onFoodAdded, mode = "today" }: NutritionAdj
 };
 
 export default NutritionAdjustCard;
+
+
+
+
+
+

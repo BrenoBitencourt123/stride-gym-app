@@ -1,6 +1,6 @@
 import { Dumbbell, Play, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { isExerciseComplete, getExerciseSetProgress } from "@/lib/storage";
+import { useWorkoutPlan } from "@/contexts/AppStateContext";
 
 interface ExerciseCardProps {
   name: string;
@@ -12,8 +12,11 @@ interface ExerciseCardProps {
 }
 
 const ExerciseCard = ({ name, sets, reps, rest, slug, workoutSlug }: ExerciseCardProps) => {
-  const isComplete = isExerciseComplete(workoutSlug, slug);
-  const { done, total } = getExerciseSetProgress(workoutSlug, slug);
+  const { treinoProgresso } = useWorkoutPlan();
+  const progress = treinoProgresso?.[workoutSlug]?.[slug] || null;
+  const total = progress?.workSets?.length || 0;
+  const done = progress?.workSets?.filter((s) => s.done).length || 0;
+  const isComplete = total > 0 && done === total;
   const hasProgress = total > 0 && done > 0;
 
   return (

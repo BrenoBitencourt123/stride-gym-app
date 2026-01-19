@@ -2,7 +2,7 @@ import { ArrowLeft, Play, RotateCcw, Clock, Dumbbell } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import BottomNav from "@/components/BottomNav";
-import { getUserWorkout, saveTreinoHoje, clearTreinoProgress, getTreinoHoje } from "@/lib/storage";
+import { useWorkoutPlan } from "@/contexts/AppStateContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,8 +17,8 @@ import {
 const WorkoutDetail = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
-  const workout = getUserWorkout(treinoId || "");
-  const treinoHoje = getTreinoHoje();
+  const { plan, treinoHoje, treinoProgresso, updateTreinoHoje, updateTreinoProgresso } = useWorkoutPlan();
+  const workout = plan?.workouts.find(w => w.id === (treinoId || "")) || null;
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   
@@ -34,7 +34,7 @@ const WorkoutDetail = () => {
   const hasActiveWorkout = treinoHoje && !treinoHoje.completedAt && treinoHoje.treinoId === treinoId;
 
   const handleStartWorkout = () => {
-    saveTreinoHoje({
+    updateTreinoHoje({
       treinoId: workout.id,
       startedAt: new Date().toISOString(),
     });
@@ -47,7 +47,11 @@ const WorkoutDetail = () => {
 
   const handleResetWorkout = () => {
     if (treinoId) {
-      clearTreinoProgress(treinoId);
+      const updated = { ...(treinoProgresso || {}) };
+      if (updated[treinoId]) {
+        delete updated[treinoId];
+      }
+      updateTreinoProgresso(updated);
       setResetKey(prev => prev + 1);
     }
     setShowResetDialog(false);

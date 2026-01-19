@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { getNutritionGoals } from "@/lib/storage";
+import { useNutrition } from "@/contexts/AppStateContext";
 
 interface GoalsExplainModalProps {
   open: boolean;
@@ -14,7 +14,13 @@ interface GoalsExplainModalProps {
 }
 
 const GoalsExplainModal = ({ open, onClose }: GoalsExplainModalProps) => {
-  const goals = getNutritionGoals();
+  const { targets } = useNutrition();
+  const goals = {
+    kcalTarget: targets?.kcal ?? 2050,
+    pTarget: targets?.protein ?? 160,
+    cTarget: targets?.carbs ?? 200,
+    gTarget: targets?.fats ?? 65,
+  };
   
   // Mock calculado (coerente com a meta)
   const maintenance = goals.kcalTarget + 300;

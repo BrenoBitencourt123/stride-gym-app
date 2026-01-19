@@ -16,7 +16,7 @@ const Treino = () => {
     updateTreinoHoje 
   } = useWorkoutPlan();
   
-  const todayWorkoutId = getWorkoutOfDay();
+  const todayWorkoutId = getWorkoutOfDay(new Date(), userPlan || undefined);
   const weekStart = getWeekStart();
   const weeklyCompletions = getWeeklyCompletions(weekStart) || {};
   

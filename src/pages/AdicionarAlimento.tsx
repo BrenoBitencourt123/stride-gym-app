@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, Search, Minus, Plus, Trash2, X } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { foods, searchFoods, type FoodItem } from "@/data/foods";
-import { addFoodToToday, addFoodToDiet, DEFAULT_MEALS } from "@/lib/storage";
 import { toast } from "sonner";
 import {
   Select,
@@ -13,16 +12,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useSyncTrigger } from "@/hooks/useSyncTrigger";
+import { useNutrition } from "@/contexts/AppStateContext";
+import type { NutritionDiet, NutritionToday, TodayEntry } from "@/lib/appState";
 
 interface SelectedItem {
   food: FoodItem;
   quantidade: number;
 }
 
+const DEFAULT_MEALS = [
+  { id: "cafe", nome: "Café da Manhã" },
+  { id: "almoco", nome: "Almoço" },
+  { id: "lanche", nome: "Lanche" },
+  { id: "jantar", nome: "Jantar" },
+];
+
+function createEmptyDiet(): NutritionDiet {
+  return {
+    meals: DEFAULT_MEALS.map((m) => ({ id: m.id, nome: m.nome, items: [] })),
+  };
+}
+
+function createEmptyToday(dateKey: string): NutritionToday {
+  return {
+    dateKey,
+    meals: DEFAULT_MEALS.map((m) => ({ id: m.id, nome: m.nome, entries: [] })),
+  };
+}
+
 const AdicionarAlimento = () => {
   const navigate = useNavigate();
-  const triggerSync = useSyncTrigger();
+  const { dietPlan, today, updateDietPlan, updateToday } = useNutrition();
   const [searchParams] = useSearchParams();
   
   const mealId = searchParams.get("mealId");
@@ -76,24 +96,69 @@ const AdicionarAlimento = () => {
     setEditingItem(null);
   };
 
-  const handleAddAll = () => {
+  const todayKey = new Date().toISOString().split("T")[0];
+
+  const getDietData = (): NutritionDiet => {
+    if (!dietPlan) return createEmptyDiet();
+    return {
+      meals: dietPlan.meals.map((m) => ({
+        ...m,
+        items: [...m.items],
+      })),
+    };
+  };
+
+  const getTodayData = (): NutritionToday => {
+    if (today && today.dateKey === todayKey) {
+      return {
+        ...today,
+        meals: today.meals.map((m) => ({
+          ...m,
+          entries: [...m.entries],
+        })),
+      };
+    }
+    return createEmptyToday(todayKey);
+  };
+
+  const handleAddAll = async () => {
     if (selectedItems.length === 0) return;
     
     const targetMeal = mealId || selectedMealId;
     
     if (mode === "diet") {
+      const diet = getDietData();
+      const meal = diet.meals.find((m) => m.id === targetMeal);
+      if (!meal) return;
       selectedItems.forEach(item => {
-        addFoodToDiet(targetMeal, item.food.id, item.quantidade, item.food.unidadeBase);
+        meal.items.push({
+          foodId: item.food.id,
+          quantidade: item.quantidade,
+          unidade: item.food.unidadeBase,
+        });
       });
+      await updateDietPlan(diet);
       toast.success(`${selectedItems.length} ${selectedItems.length === 1 ? 'item adicionado' : 'itens adicionados'} à dieta!`);
-      triggerSync();
       navigate("/nutricao/criar-dieta");
     } else {
+      const current = getTodayData();
+      const meal = current.meals.find((m) => m.id === targetMeal);
+      if (!meal) return;
       selectedItems.forEach(item => {
-        addFoodToToday(targetMeal, item.food.id, item.quantidade, item.food.unidadeBase, "extra");
+        const entry: TodayEntry = {
+          id: `${item.food.id}-${Date.now()}`,
+          foodId: item.food.id,
+          quantidade: item.quantidade,
+          unidade: item.food.unidadeBase,
+          source: "extra",
+          createdAt: Date.now(),
+          planned: false,
+          consumed: true,
+        };
+        meal.entries.push(entry);
       });
+      await updateToday(current);
       toast.success(`${selectedItems.length} ${selectedItems.length === 1 ? 'item adicionado' : 'itens adicionados'}!`);
-      triggerSync();
       navigate("/nutricao");
     }
   };

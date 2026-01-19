@@ -2,7 +2,7 @@
 // Global AppState context with Firebase as single source of truth
 // No localStorage fallbacks - all data comes from Firebase
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import {
   getUserState,
@@ -551,11 +551,38 @@ export function useNutrition() {
     updateNutritionDiet,
     updateNutritionToday
   } = useAppStateContext();
-  
+
+  const mealNameById = useMemo(() => ({
+    cafe: "Caf\u00e9 da Manh\u00e3",
+    almoco: "Almo\u00e7o",
+    lanche: "Lanche",
+    jantar: "Jantar"
+  }), []);
+
+  const normalizeMeals = useCallback(<T extends { id: string; nome: string }>(meals: T[]) => {
+    return meals.map((meal) => ({
+      ...meal,
+      nome: mealNameById[meal.id as keyof typeof mealNameById] ?? meal.nome
+    }));
+  }, [mealNameById]);
+
+  const rawDietPlan = getNutritionDiet();
+  const rawToday = getNutritionToday();
+
+  const dietPlan = useMemo(() => {
+    if (!rawDietPlan) return rawDietPlan;
+    return { ...rawDietPlan, meals: normalizeMeals(rawDietPlan.meals) };
+  }, [rawDietPlan, normalizeMeals]);
+
+  const today = useMemo(() => {
+    if (!rawToday) return rawToday;
+    return { ...rawToday, meals: normalizeMeals(rawToday.meals) };
+  }, [rawToday, normalizeMeals]);
+
   return {
     targets: getNutritionTargets(),
-    dietPlan: getNutritionDiet(),
-    today: getNutritionToday(),
+    dietPlan,
+    today,
     updateTargets: updateNutritionTargets,
     updateDietPlan: updateNutritionDiet,
     updateToday: updateNutritionToday

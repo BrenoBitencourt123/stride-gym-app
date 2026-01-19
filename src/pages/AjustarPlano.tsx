@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Save, RotateCcw, CalendarDays } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Save, RotateCcw, CalendarDays, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,16 +16,10 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "@/hooks/use-toast";
-import {
-  getUserWorkoutPlan,
-  saveUserWorkoutPlan,
-  resetUserWorkoutPlan,
-  type UserWorkoutPlan,
-  type UserExercise,
-  type UserWorkout,
-} from "@/lib/storage";
-import { useSyncTrigger } from "@/hooks/useSyncTrigger";
-import { updateLocalState } from "@/lib/appState";
+import * as XLSX from "xlsx";
+import { workouts as defaultWorkouts, type Workout } from "@/data/workouts";
+import type { UserWorkoutPlan, UserExercise, UserWorkout, SetData } from "@/lib/appState";
+import { useAppStateContext, useWorkoutPlan } from "@/contexts/AppStateContext";
 import { getScheduleDayNames } from "@/lib/weekUtils";
 
 const SCHEDULE_DAYS = getScheduleDayNames();
@@ -110,11 +104,41 @@ function generateWorkoutId(title: string): string {
   return `${baseId}-${Date.now()}`;
 }
 
+function convertDefaultWorkout(workout: Workout): UserWorkout {
+  return {
+    id: workout.id,
+    titulo: workout.titulo,
+    duracaoEstimada: workout.duracaoEstimada,
+    exercicios: workout.exercicios.map((ex) => ({
+      id: ex.id,
+      nome: ex.nome,
+      muscleGroup: ex.tags.find((t) => t !== "Principal" && t !== "Acessório") || "Outro",
+      tags: ex.tags,
+      repsRange: ex.repsRange,
+      descansoSeg: ex.descansoSeg,
+      warmupEnabled: ex.warmupEnabled,
+      feederSetsDefault: ex.feederSetsDefault as SetData[],
+      workSetsDefault: ex.workSetsDefault as SetData[],
+      observacoes: (ex as any).observacoes,
+    })),
+  };
+}
+
+function getDefaultWorkoutPlan(): UserWorkoutPlan {
+  return {
+    workouts: Object.values(defaultWorkouts).map(convertDefaultWorkout),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 const AjustarPlano = () => {
   const navigate = useNavigate();
-  const triggerSync = useSyncTrigger();
+  const { loading: appLoading, refreshState } = useAppStateContext();
+  const { plan: remotePlan, updatePlan } = useWorkoutPlan();
   const [plan, setPlan] = useState<UserWorkoutPlan | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Modal states
   const [showDeleteWorkout, setShowDeleteWorkout] = useState<string | null>(null);
@@ -132,46 +156,250 @@ const AjustarPlano = () => {
   });
 
   useEffect(() => {
-    const userPlan = getUserWorkoutPlan();
-    setPlan(userPlan);
+    if (!remotePlan) return;
+    setPlan(remotePlan);
     // Open first workout by default
-    if (userPlan.workouts.length > 0) {
-      setOpenAccordion([userPlan.workouts[0].id]);
+    if (openAccordion.length === 0 && remotePlan.workouts.length > 0) {
+      setOpenAccordion([remotePlan.workouts[0].id]);
     }
-  }, []);
+  }, [remotePlan, openAccordion.length]);
 
-  const handleSave = () => {
+  const normalizeHeader = (value: string) => {
+    return value
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  };
+
+  const parseNumber = (value: string | number) => {
+    if (typeof value === "number") return value;
+    const cleaned = value.replace(",", ".").replace(/[^\d.-]/g, "");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const stripUndefined = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value.map(stripUndefined);
+    }
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      const cleaned: Record<string, unknown> = {};
+      Object.keys(obj).forEach((key) => {
+        const next = obj[key];
+        if (next !== undefined) {
+          cleaned[key] = stripUndefined(next);
+        }
+      });
+      return cleaned;
+    }
+    return value;
+  };
+
+  const sanitizePlan = (nextPlan: UserWorkoutPlan): UserWorkoutPlan => {
+    return stripUndefined(nextPlan) as UserWorkoutPlan;
+  };
+
+  const buildPlanFromWorkbook = (workbook: XLSX.WorkBook): UserWorkoutPlan => {
+    const workouts: UserWorkout[] = [];
+
+    workbook.SheetNames.forEach((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) return;
+
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as (string | number)[][];
+      if (rows.length < 2) return;
+
+      const header = rows[0].map((cell) => normalizeHeader(String(cell)));
+      const findIndex = (keys: string[]) =>
+        header.findIndex((cell) => keys.some((key) => cell.includes(key)));
+
+      const idxExercise = findIndex(["exercicio"]);
+      const idxRepsTarget = findIndex(["reps alvo", "repeticoes alvo", "repeticoes"]);
+      const idxCarga = findIndex(["carga"]);
+      const idxObs = findIndex(["rpe", "observacoes"]);
+
+      if (idxExercise === -1) return;
+
+      const exercisesMap = new Map<
+        string,
+        { name: string; sets: SetData[]; repsRange: string; notes: Set<string> }
+      >();
+
+      rows.slice(1).forEach((row) => {
+        const name = String(row[idxExercise] || "").trim();
+        if (!name) return;
+
+        const repsValue = idxRepsTarget >= 0 ? String(row[idxRepsTarget] || "").trim() : "";
+        const repsNumber = repsValue ? parseNumber(repsValue) : 0;
+        const repsRange = repsValue && repsValue.includes("-") ? repsValue : repsNumber ? String(repsNumber) : "8-12";
+        const kg = idxCarga >= 0 ? parseNumber(String(row[idxCarga] || "")) : 0;
+
+        const existing = exercisesMap.get(name) || {
+          name,
+          sets: [],
+          repsRange,
+          notes: new Set<string>(),
+        };
+
+        if (repsRange !== "8-12" && existing.repsRange === "8-12") {
+          existing.repsRange = repsRange;
+        }
+
+        if (repsNumber || kg) {
+          existing.sets.push({ kg, reps: repsNumber || 0 });
+        }
+
+        if (idxObs >= 0) {
+          const note = String(row[idxObs] || "").trim();
+          if (note) existing.notes.add(note);
+        }
+
+        exercisesMap.set(name, existing);
+      });
+
+      const exercises: UserExercise[] = Array.from(exercisesMap.values()).map((entry) => {
+        const base: UserExercise = {
+          id: generateExerciseId(entry.name),
+          nome: entry.name,
+          muscleGroup: "Outro",
+          tags: ["Principal", "Outro"],
+          repsRange: entry.repsRange || "8-12",
+          descansoSeg: 120,
+          warmupEnabled: true,
+          feederSetsDefault: [],
+          workSetsDefault: entry.sets.length > 0 ? entry.sets : [{ kg: 0, reps: 0 }],
+        };
+
+        if (entry.notes.size) {
+          return { ...base, observacoes: Array.from(entry.notes).join(" | ") };
+        }
+        return base;
+      });
+
+      if (exercises.length === 0) return;
+
+      workouts.push({
+        id: generateWorkoutId(sheetName),
+        titulo: sheetName,
+        duracaoEstimada: 45,
+        exercicios: exercises,
+      });
+    });
+
+    return {
+      workouts,
+      updatedAt: new Date().toISOString(),
+    };
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (appLoading) {
+      toast({
+        title: "Aguarde",
+        description: "Carregando seus dados. Tente novamente em alguns segundos.",
+      });
+      event.target.value = "";
+      return;
+    }
+
+    if (!window.confirm("Importar vai substituir seu plano atual. Deseja continuar?")) {
+      event.target.value = "";
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const nextPlan = sanitizePlan(buildPlanFromWorkbook(workbook));
+
+      if (nextPlan.workouts.length === 0) {
+        toast({
+          title: "Arquivo vazio",
+          description: "Nenhum treino encontrado nas abas.",
+        });
+        return;
+      }
+
+      let saved = await updatePlan(nextPlan);
+      if (!saved) {
+        await refreshState();
+        saved = await updatePlan(nextPlan);
+      }
+      if (!saved) {
+        toast({
+          title: "Erro ao importar",
+          description: "Nao foi possivel salvar o plano importado.",
+        });
+        return;
+      }
+
+      setPlan(nextPlan);
+      toast({
+        title: "Plano importado!",
+        description: `Importado ${nextPlan.workouts.length} treinos do arquivo.`,
+      });
+    } catch (error) {
+      console.error("[AjustarPlano] import error:", error);
+      toast({
+        title: "Erro ao importar",
+        description: "Falha ao ler o arquivo XLSX.",
+      });
+    } finally {
+      setIsImporting(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleSave = async () => {
     if (!plan) return;
 
-    // ✅ Salva no storage (legacy)
-    saveUserWorkoutPlan(plan);
-
-    // ✅ E também salva no AppState (evita sumir ao concluir treino + melhora sync)
-    updateLocalState((s) => ({ ...s, plan }));
-
-    triggerSync(); // Sync after saving workout plan
+    const nextPlan: UserWorkoutPlan = sanitizePlan({
+      ...plan,
+      updatedAt: new Date().toISOString(),
+    });
+    let saved = await updatePlan(nextPlan);
+    if (!saved) {
+      await refreshState();
+      saved = await updatePlan(nextPlan);
+    }
+    if (!saved) {
+      toast({
+        title: "Erro ao salvar",
+        description: "Nao foi possivel salvar o plano. Tente novamente.",
+      });
+      return;
+    }
+    setPlan(nextPlan);
     toast({
       title: "Plano salvo!",
-      description: "Suas alterações foram salvas com sucesso.",
+      description: "Suas alteracoes foram salvas com sucesso.",
     });
     navigate("/treino");
   };
 
-  const handleReset = () => {
-    resetUserWorkoutPlan();
-    const defaultPlan = getUserWorkoutPlan();
-    setPlan(defaultPlan);
+  const handleReset = async () => {
+    const nextPlan = sanitizePlan(getDefaultWorkoutPlan());
+    setPlan(nextPlan);
     setShowResetConfirm(false);
 
-    // ✅ Reflete no AppState também
-    updateLocalState((s) => ({ ...s, plan: defaultPlan }));
-
-    // opcional: já sincroniza
-    triggerSync();
+    await updatePlan({
+      ...nextPlan,
+      updatedAt: new Date().toISOString(),
+    });
 
     toast({
       title: "Plano restaurado",
-      description: "O plano foi restaurado para o padrão.",
+      description: "O plano foi restaurado para o padrao.",
     });
   };
 
@@ -340,17 +568,37 @@ const AjustarPlano = () => {
             </button>
             <h1 className="text-xl font-bold text-foreground">Ajustar Plano</h1>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowResetConfirm(true)}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <RotateCcw className="w-4 h-4 mr-1" />
-            Restaurar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleImportClick}
+              disabled={isImporting || appLoading}
+              className="text-muted-foreground"
+            >
+              <Upload className="w-4 h-4 mr-1" />
+              {isImporting ? "Importando..." : "Importar XLSX"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowResetConfirm(true)}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              Restaurar
+            </Button>
+          </div>
         </div>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={handleImportFile}
+        className="hidden"
+      />
 
       {/* Content */}
       <div className="max-w-md mx-auto px-4 pt-4">
@@ -445,7 +693,7 @@ const AjustarPlano = () => {
                       >
                         <p className="text-sm font-medium text-foreground">{exercise.nome}</p>
                         <p className="text-xs text-muted-foreground">
-                          {exercise.muscleGroup} • {exercise.repsRange} • {exercise.descansoSeg}s
+                          {exercise.muscleGroup} - {exercise.repsRange} - {exercise.descansoSeg}s
                         </p>
                       </div>
 

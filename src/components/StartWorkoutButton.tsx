@@ -1,15 +1,16 @@
 import { Play, CheckCircle, Calendar } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
-import { isWorkoutCompletedThisWeek } from "@/lib/appState";
-import { saveTreinoHoje, getUserWorkout } from "@/lib/storage";
+import { getWeekStart, getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
+import { useWorkoutPlan } from "@/contexts/AppStateContext";
 
 const StartWorkoutButton = () => {
   const navigate = useNavigate();
-  const workoutIdOfDay = getWorkoutOfDay();
-  const isRest = isRestDay();
-  const isCompletedThisWeek = workoutIdOfDay ? isWorkoutCompletedThisWeek(workoutIdOfDay) : false;
-  const workout = workoutIdOfDay ? getUserWorkout(workoutIdOfDay) : null;
+  const { plan, updateTreinoHoje, getWeeklyCompletions } = useWorkoutPlan();
+  const workoutIdOfDay = getWorkoutOfDay(new Date(), plan || undefined);
+  const isRest = isRestDay(new Date(), plan || undefined);
+  const weeklyCompletions = getWeeklyCompletions(getWeekStart()) || {};
+  const isCompletedThisWeek = workoutIdOfDay ? !!weeklyCompletions[workoutIdOfDay] : false;
+  const workout = workoutIdOfDay ? plan?.workouts.find(w => w.id === workoutIdOfDay) : null;
 
   const handleClick = () => {
     if (isRest) {
@@ -19,7 +20,7 @@ const StartWorkoutButton = () => {
 
     if (workoutIdOfDay) {
       // Registra início do treino
-      saveTreinoHoje({
+      updateTreinoHoje({
         treinoId: workoutIdOfDay,
         startedAt: new Date().toISOString(),
       });

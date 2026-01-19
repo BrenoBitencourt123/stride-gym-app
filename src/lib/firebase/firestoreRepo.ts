@@ -105,6 +105,24 @@ export async function getUserState(uid: string): Promise<AppState | null> {
   }
 }
 
+function stripUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripUndefined);
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const cleaned: Record<string, unknown> = {};
+    Object.keys(obj).forEach((key) => {
+      const next = obj[key];
+      if (next !== undefined) {
+        cleaned[key] = stripUndefined(next);
+      }
+    });
+    return cleaned;
+  }
+  return value;
+}
+
 /**
  * Save user's complete AppState to Firestore
  */
@@ -113,11 +131,12 @@ export async function setUserState(uid: string, state: AppState): Promise<boolea
   
   try {
     const docRef = doc(db, 'users', uid);
+    const cleanedState = stripUndefined({
+      ...state,
+      updatedAt: Date.now()
+    }) as AppState;
     await setDoc(docRef, {
-      state: {
-        ...state,
-        updatedAt: Date.now()
-      },
+      state: cleanedState,
       updatedAt: serverTimestamp(),
       schemaVersion: 2, // Increment for Firebase-first
     }, { merge: true });
@@ -143,11 +162,11 @@ export async function updateUserState(uid: string, updates: Partial<AppState>): 
       return setUserState(uid, updates as AppState);
     }
     
-    const mergedState: AppState = {
+    const mergedState: AppState = stripUndefined({
       ...currentState,
       ...updates,
       updatedAt: Date.now()
-    };
+    }) as AppState;
     
     await setDoc(docRef, {
       state: mergedState,

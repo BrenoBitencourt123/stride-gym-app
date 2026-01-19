@@ -1,6 +1,7 @@
 // Utilitários de semana e treino do dia
 
 import { getUserWorkoutPlan } from './storage';
+import type { UserWorkoutPlan } from './appState';
 
 export interface WorkoutScheduleEntry {
   workoutId: string | null; // null = dia de descanso
@@ -23,8 +24,8 @@ const DEFAULT_SCHEDULE: WorkoutScheduleEntry[] = [
 /**
  * Obtém o cronograma do usuário com base nos scheduledDays de cada workout
  */
-function getUserSchedule(): WorkoutScheduleEntry[] {
-  const plan = getUserWorkoutPlan();
+function getUserSchedule(planOverride?: UserWorkoutPlan): WorkoutScheduleEntry[] {
+  const plan = planOverride ?? getUserWorkoutPlan();
   
   // Inicializa todos os dias como descanso
   const schedule: WorkoutScheduleEntry[] = Array(7).fill(null).map(() => ({ workoutId: null }));
@@ -84,9 +85,9 @@ export function getDayIndex(date: Date = new Date()): number {
 /**
  * Retorna o ID do treino do dia ou null se for descanso
  */
-export function getWorkoutOfDay(date: Date = new Date()): string | null {
+export function getWorkoutOfDay(date: Date = new Date(), planOverride?: UserWorkoutPlan): string | null {
   const dayIndex = getDayIndex(date);
-  const schedule = getUserSchedule();
+  const schedule = getUserSchedule(planOverride);
   return schedule[dayIndex].workoutId;
 }
 
@@ -101,15 +102,15 @@ export function getDayName(date: Date = new Date()): string {
 /**
  * Verifica se o dia é de descanso
  */
-export function isRestDay(date: Date = new Date()): boolean {
-  return getWorkoutOfDay(date) === null;
+export function isRestDay(date: Date = new Date(), planOverride?: UserWorkoutPlan): boolean {
+  return getWorkoutOfDay(date, planOverride) === null;
 }
 
 /**
  * Retorna o cronograma completo da semana com IDs
  */
-export function getWeeklySchedule(): { dayName: string; workoutId: string | null }[] {
-  const schedule = getUserSchedule();
+export function getWeeklySchedule(planOverride?: UserWorkoutPlan): { dayName: string; workoutId: string | null }[] {
+  const schedule = getUserSchedule(planOverride);
   return schedule.map((entry, index) => ({
     dayName: DAY_NAMES[index],
     workoutId: entry.workoutId,

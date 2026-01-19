@@ -1,38 +1,30 @@
 import { Trophy, ArrowRight, CheckCircle, Dumbbell, Share2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useRef, useState, useMemo } from "react";
-import { 
-  getUserWorkout,
-  completeTreinoDoDia, 
-  saveExerciseSnapshot,
-  saveWorkoutCompleted,
-  ExerciseSetSnapshot,
-} from "@/lib/storage";
-import { markWorkoutCompletedThisWeek } from "@/lib/appState";
-import { getWorkoutOfDay } from "@/lib/weekUtils";
+import type { ExerciseSetSnapshot } from "@/lib/appState";
+import { getWeekStart, getWorkoutOfDay } from "@/lib/weekUtils";
 import BottomNav from "@/components/BottomNav";
-import { useSyncTrigger } from "@/hooks/useSyncTrigger";
 import WorkoutCompleteShareModal from "@/components/arena/WorkoutCompleteShareModal";
 import { WorkoutSnapshot } from "@/lib/arena/types";
 import { useProgression } from "@/hooks/useProgression";
-import { useWorkoutPlan } from "@/contexts/AppStateContext";
+import { useAppStateContext, useWorkoutPlan } from "@/contexts/AppStateContext";
 
 const XP_PER_WORKOUT = 150;
 
 const WorkoutSummary = () => {
   const { treinoId } = useParams();
   const navigate = useNavigate();
-  const triggerSync = useSyncTrigger();
   const { completeWorkout } = useProgression();
+  const { state, updateState } = useAppStateContext();
   const { plan, treinoProgresso } = useWorkoutPlan();
   
-  const defaultWorkoutId = getWorkoutOfDay() || 'upper-a';
+  const defaultWorkoutId = getWorkoutOfDay(new Date(), plan || undefined) || 'upper-a';
   const workoutId = treinoId || defaultWorkoutId;
   
   // Get workout from Firebase plan
   const workout = useMemo(() => {
-    if (!plan?.workouts) return getUserWorkout(workoutId);
-    return plan.workouts.find(w => w.id === workoutId) || getUserWorkout(workoutId);
+    if (!plan?.workouts) return null;
+    return plan.workouts.find(w => w.id === workoutId) || null;
   }, [plan, workoutId]);
   
   const rewardsAppliedRef = useRef(false);
@@ -101,7 +93,7 @@ const WorkoutSummary = () => {
   // Salvar snapshots de todos os exercícios ao entrar no resumo
   // Only run when we have actual data (completedSets > 0 or after a small delay)
   useEffect(() => {
-    if (snapshotSavedRef.current || !workout) return;
+    if (snapshotSavedRef.current || !workout || !state) return;
     
     const workoutProgress = treinoProgresso?.[workoutId] || {};
     
@@ -121,6 +113,8 @@ const WorkoutSummary = () => {
     let snapshotTotalVolume = 0;
     let totalReps = 0;
     
+    const updatedExerciseHistory = { ...(state.exerciseHistory || {}) };
+    
     for (const exercise of workout.exercicios) {
       const exerciseProgress = workoutProgress[exercise.id];
       if (exerciseProgress) {
@@ -135,14 +129,21 @@ const WorkoutSummary = () => {
         
         // Salvar snapshot com todos os tipos de séries
         if (completedSetsData.length > 0 || warmupSetsData.length > 0) {
-          saveExerciseSnapshot(
-            exercise.id,
-            workout.id,
-            exercise.repsRange,
-            completedSetsData.length > 0 ? completedSetsData : exerciseProgress.workSets.map(s => ({ kg: s.kg, reps: s.reps })),
-            warmupSetsData.length > 0 ? warmupSetsData : undefined,
-            undefined // feederSets separados se necessário no futuro
-          );
+          const snapshotEntry = {
+            exerciseId: exercise.id,
+            workoutId: workout.id,
+            repsRange: exercise.repsRange,
+            workSets: completedSetsData.length > 0
+              ? completedSetsData
+              : exerciseProgress.workSets.map(s => ({ kg: s.kg, reps: s.reps })),
+            warmupSets: warmupSetsData.length > 0 ? warmupSetsData : undefined,
+            feederSets: undefined as ExerciseSetSnapshot[] | undefined,
+            timestamp: new Date().toISOString(),
+          };
+          
+          const existing = updatedExerciseHistory[exercise.id] || [];
+          const nextHistory = [...existing, snapshotEntry].slice(-100);
+          updatedExerciseHistory[exercise.id] = nextHistory;
           
           if (completedSetsData.length > 0) {
             exerciseSnapshots.push({
@@ -174,19 +175,49 @@ const WorkoutSummary = () => {
     };
     setWorkoutSnapshotData(snapshot);
     
-    // Save workout completed record (legacy - for local tracking)
-    saveWorkoutCompleted(workout.id, snapshotTotalVolume);
+    const nowIso = new Date().toISOString();
+    const updatedWorkoutHistory = [
+      ...(state.workoutHistory || []),
+      { workoutId: workout.id, timestamp: nowIso, totalVolume: snapshotTotalVolume },
+    ];
     
-    // Mark workout as completed this week (legacy - for UI display)
-    markWorkoutCompletedThisWeek(workout.id, XP_PER_WORKOUT, snapshotTotalSets, snapshotTotalVolume);
+    const weekStart = getWeekStart(new Date());
+    const completion = {
+      completedAt: nowIso,
+      xpGained: XP_PER_WORKOUT,
+      setsCompleted: snapshotTotalSets,
+      totalVolume: snapshotTotalVolume,
+    };
+    
+    const updatedWeeklyCompletions = {
+      ...(state.weeklyCompletions || {}),
+      [weekStart]: {
+        ...(state.weeklyCompletions?.[weekStart] || {}),
+        [workout.id]: completion,
+      },
+    };
+    
+    updateState({
+      exerciseHistory: updatedExerciseHistory,
+      workoutHistory: updatedWorkoutHistory,
+      weeklyCompletions: updatedWeeklyCompletions,
+      treinoHoje: state.treinoHoje ? { ...state.treinoHoje, completedAt: completion.completedAt } : null,
+    });
     
     // Show share modal automatically
     setTimeout(() => setShowShareModal(true), 500);
-  }, [workout, workoutId, treinoProgresso]);
+  }, [workout, workoutId, treinoProgresso, state, updateState]);
 
-  const handleConcluir = () => {
-    completeTreinoDoDia(XP_PER_WORKOUT);
-    triggerSync(); // Sync after completing workout
+  const handleConcluir = async () => {
+    if (state) {
+      const todayKey = new Date().toISOString().split('T')[0];
+      const quests = {
+        ...state.quests,
+        treinoDoDiaDone: true,
+        questsDate: state.quests?.questsDate || todayKey,
+      };
+      await updateState({ quests, treinoHoje: null });
+    }
     navigate("/");
   };
 
@@ -243,12 +274,12 @@ const WorkoutSummary = () => {
           {/* Sets Card */}
           <div className="card-glass p-5 flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center">
-              <Trophy className="w-6 h-6 text-muted-foreground" />
+              <Dumbbell className="w-6 h-6 text-muted-foreground" />
             </div>
             <div className="flex-1">
               <p className="text-muted-foreground text-sm">Séries Completadas</p>
               <p className="text-2xl font-bold text-foreground">
-                {completedSets} <span className="text-lg text-muted-foreground font-normal">/ {totalPlannedSets}</span>
+                {completedSets}/{totalPlannedSets}
               </p>
             </div>
           </div>
@@ -261,47 +292,61 @@ const WorkoutSummary = () => {
             <div className="flex-1">
               <p className="text-muted-foreground text-sm">Volume Total</p>
               <p className="text-2xl font-bold text-foreground">
-                {totalVolume.toLocaleString()} <span className="text-lg text-muted-foreground font-normal">kg</span>
+                {Math.round(totalVolume)} kg
               </p>
             </div>
           </div>
 
-          {/* Message Card */}
-          <div className="card-glass p-5 text-center">
-            <p className="text-lg font-medium text-foreground">Bom trabalho! 💪</p>
-            <p className="text-muted-foreground text-sm mt-1">
-              Continue assim para alcançar seus objetivos
-            </p>
+          {/* Exercises Card */}
+          <div className="card-glass p-5 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <p className="text-muted-foreground text-sm">Exercícios Feitos</p>
+              <p className="text-2xl font-bold text-foreground">
+                {exercisesDone}/{workout?.exercicios.length || 0}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* CTA Button */}
-        <button
-          onClick={handleConcluir}
-          className="w-full cta-button flex items-center justify-center gap-3"
-        >
-          <span className="text-lg font-semibold">Concluir</span>
-          <ArrowRight className="w-5 h-5" />
-        </button>
+        {/* Encouragement */}
+        <div className="text-center mb-8">
+          <p className="text-muted-foreground">
+            Continue assim para alcançar seus objetivos
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="w-full space-y-3">
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="w-full py-4 bg-secondary/50 text-foreground rounded-xl font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+          >
+            <Share2 className="w-4 h-4" />
+            Compartilhar conquista
+          </button>
+          <button
+            onClick={handleConcluir}
+            className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+          >
+            Concluir
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Share Modal */}
       {workoutSnapshotData && (
         <WorkoutCompleteShareModal
-          open={showShareModal}
-          onOpenChange={setShowShareModal}
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
           workoutSnapshot={workoutSnapshotData}
-          summary={{
-            duration: 45,
-            totalSets: workoutSnapshotData.totalSets,
-            totalVolume: workoutSnapshotData.totalVolume,
-            xpGained: displayXp,
-          }}
-          onPostToArena={() => setShowShareModal(false)}
         />
       )}
 
-      {/* Bottom Nav */}
+      {/* Bottom Navigation */}
       <BottomNav />
     </div>
   );

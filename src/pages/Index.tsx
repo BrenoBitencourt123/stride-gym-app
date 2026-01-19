@@ -4,15 +4,14 @@ import { useState, useMemo } from "react";
 import HelpIcon from "@/components/HelpIcon";
 import BottomNav from "@/components/BottomNav";
 import { useAppStateContext, useWorkoutPlan } from "@/contexts/AppStateContext";
-import { getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
-import { isWorkoutCompletedThisWeek } from "@/lib/appState";
+import { getWeekStart, getWorkoutOfDay, isRestDay } from "@/lib/weekUtils";
 import { Progress } from "@/components/ui/progress";
 import { getObjectiveLabel } from "@/lib/onboarding";
 
 const Index = () => {
   const navigate = useNavigate();
   const { state, loading, getOnboarding, getQuests: getQuestsFromContext, getProfile: getProfileFromContext } = useAppStateContext();
-  const { plan, updateTreinoHoje } = useWorkoutPlan();
+  const { plan, updateTreinoHoje, getWeeklyCompletions } = useWorkoutPlan();
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -111,9 +110,11 @@ const Index = () => {
     : 100;
 
   // Workout of the day
-  const workoutIdOfDay = getWorkoutOfDay();
-  const isRest = isRestDay();
-  const isCompletedThisWeek = workoutIdOfDay ? isWorkoutCompletedThisWeek(workoutIdOfDay) : false;
+  const weekStart = getWeekStart();
+  const weeklyCompletions = getWeeklyCompletions(weekStart) || {};
+  const workoutIdOfDay = getWorkoutOfDay(new Date(), plan || undefined);
+  const isRest = isRestDay(new Date(), plan || undefined);
+  const isCompletedThisWeek = workoutIdOfDay ? !!weeklyCompletions[workoutIdOfDay] : false;
   const workout = workoutIdOfDay ? getUserWorkout(workoutIdOfDay) : null;
 
   const handleStartWorkout = async () => {

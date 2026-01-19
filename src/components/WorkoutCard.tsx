@@ -1,12 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { 
-  getUserWorkout,
-  getLastExercisePerformance, 
-  getProgressionSuggestion, 
-  getLastWorkoutDate,
-  formatRelativeDate 
-} from "@/lib/storage";
+import { useAppStateContext, useWorkoutPlan } from "@/contexts/AppStateContext";
+import { formatRelativeDate } from "@/lib/storage";
 
 interface WorkoutCardProps {
   title: string;
@@ -15,13 +10,55 @@ interface WorkoutCardProps {
 }
 
 const WorkoutCard = ({ title, exercises, slug }: WorkoutCardProps) => {
-  const workout = getUserWorkout(slug);
+  const { state } = useAppStateContext();
+  const { plan } = useWorkoutPlan();
+  const workout = plan?.workouts.find(w => w.id === slug) || null;
   const mainExercise = workout?.exercicios[0];
-  
+  const exerciseHistory = state?.exerciseHistory || {};
+  const workoutHistory = state?.workoutHistory || [];
+
   // Dados do último treino
-  const lastWorkoutDate = getLastWorkoutDate(slug);
-  const lastPerformance = mainExercise ? getLastExercisePerformance(mainExercise.id) : null;
-  const progression = mainExercise ? getProgressionSuggestion(mainExercise.id, mainExercise.repsRange) : null;
+  const lastWorkoutDate = (() => {
+    const entries = workoutHistory.filter((w) => w.workoutId === slug);
+    if (entries.length === 0) return null;
+    const latest = entries.reduce((best, current) => {
+      return new Date(current.timestamp) > new Date(best.timestamp) ? current : best;
+    }, entries[0]);
+    return latest.timestamp;
+  })();
+
+  const lastPerformance = (() => {
+    if (!mainExercise) return null;
+    const history = exerciseHistory[mainExercise.id];
+    if (!history || history.length === 0) return null;
+    return history[history.length - 1];
+  })();
+
+  const progression = (() => {
+    if (!mainExercise || !lastPerformance || !lastPerformance.workSets?.length) return null;
+    const firstSet = lastPerformance.workSets[0];
+    const [minReps, maxReps] = mainExercise.repsRange
+      .split(/[^0-9]+/)
+      .filter(Boolean)
+      .map((s) => parseInt(s.trim(), 10));
+
+    if (firstSet.reps >= maxReps) {
+      const nextKg = firstSet.kg + 2.5;
+      return {
+        status: "ready" as const,
+        statusIcon: "🔥",
+        statusLabel: "Pronto para subir",
+        metaHoje: `${nextKg} kg × ${minReps}+`,
+      };
+    }
+
+    return {
+      status: "maintain" as const,
+      statusIcon: "💪",
+      statusLabel: "Manter carga",
+      metaHoje: `${firstSet.kg} kg × ${firstSet.reps + 1}+`,
+    };
+  })();
 
   return (
     <Link

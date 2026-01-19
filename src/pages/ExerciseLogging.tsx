@@ -3,29 +3,20 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import SetRow from "@/components/SetRow";
-import { 
-  getUserWorkout,
-  getUserExercise,
-  getUserNextExercise,
-  isUserLastExercise,
-  getExerciseProgress, 
-  saveExerciseProgress, 
-  SetProgress,
-  ExerciseProgress,
-  getLastExercisePerformance,
-  getProgressionSuggestion,
-  getProgressionSuggestions,
-  saveProgressionSuggestion,
-  ProgressionSuggestion,
-} from "@/lib/storage";
+import { useAppStateContext, useWorkoutPlan } from "@/contexts/AppStateContext";
+import type { ExerciseProgress, SetProgress } from "@/lib/appState";
 import { toast } from "sonner";
 
 const ExerciseLogging = () => {
   const { treinoId, exercicioId } = useParams();
   const navigate = useNavigate();
+  const { plan, treinoProgresso, updateTreinoProgresso } = useWorkoutPlan();
+  const { state, updateState } = useAppStateContext();
   
-  const workout = getUserWorkout(treinoId || "");
-  const exercise = getUserExercise(treinoId || "", exercicioId || "");
+  const workout = plan?.workouts.find(w => w.id === (treinoId || "")) || null;
+  const exercise = workout?.exercicios.find(e => e.id === (exercicioId || "")) || null;
+  const exerciseHistory = state?.exerciseHistory || {};
+  const progressionSuggestions = state?.progressionSuggestions || {};
   
   // State
   const [warmupDone, setWarmupDone] = useState(false);
@@ -33,11 +24,11 @@ const ExerciseLogging = () => {
   const [workSets, setWorkSets] = useState<SetProgress[]>([]);
   const [showSuggestion, setShowSuggestion] = useState(false);
 
-  // Initialize from storage or defaults, with suggested load support
+  // Initialize from state or defaults, with suggested load support
   useEffect(() => {
     if (!exercise) return;
     
-    const savedProgress = getExerciseProgress(treinoId || "", exercicioId || "");
+    const savedProgress = treinoProgresso?.[treinoId || ""]?.[exercicioId || ""] || null;
     
     if (savedProgress) {
       setWarmupDone(savedProgress.warmupDone);
@@ -45,8 +36,7 @@ const ExerciseLogging = () => {
       setWorkSets(savedProgress.workSets);
     } else {
       // Check for suggested load from previous session
-      const suggestions = getProgressionSuggestions();
-      const suggestion = suggestions[exercicioId || ""];
+      const suggestion = progressionSuggestions[exercicioId || ""];
       const suggestedLoad = suggestion?.suggestedNextLoad;
       
       // Use defaults from workout data, applying suggested load if available
@@ -62,10 +52,10 @@ const ExerciseLogging = () => {
         }))
       );
     }
-  }, [treinoId, exercicioId, exercise]);
+  }, [treinoId, exercicioId, exercise, treinoProgresso, progressionSuggestions]);
 
   // Save progress whenever state changes
-  const saveProgress = useCallback(() => {
+  const saveProgress = useCallback(async () => {
     if (!treinoId || !exercicioId) return;
     
     const progress: ExerciseProgress = {
@@ -75,8 +65,13 @@ const ExerciseLogging = () => {
       updatedAt: new Date().toISOString(),
     };
     
-    saveExerciseProgress(treinoId, exercicioId, progress);
-  }, [treinoId, exercicioId, warmupDone, feederSets, workSets]);
+    const updated = { ...(treinoProgresso || {}) };
+    if (!updated[treinoId]) {
+      updated[treinoId] = {};
+    }
+    updated[treinoId][exercicioId] = progress;
+    await updateTreinoProgresso(updated);
+  }, [treinoId, exercicioId, warmupDone, feederSets, workSets, treinoProgresso, updateTreinoProgresso]);
 
   useEffect(() => {
     saveProgress();
@@ -87,7 +82,7 @@ const ExerciseLogging = () => {
     if (!exercise) return;
     
     // Parse reps range to get upper limit
-    const repsRangeMatch = exercise.repsRange.match(/(\d+)–(\d+)/);
+    const repsRangeMatch = exercise.repsRange.match(/(\d+)\D+(\d+)/);
     if (!repsRangeMatch) return;
     
     const upperLimit = parseInt(repsRangeMatch[2]);
@@ -153,19 +148,20 @@ const ExerciseLogging = () => {
 
   // Navigation
   const handleNextExercise = () => {
-    if (!treinoId || !exercicioId) return;
+    if (!treinoId || !exercicioId || !workout) return;
     
-    if (isUserLastExercise(treinoId, exercicioId)) {
+    const idx = workout.exercicios.findIndex((e) => e.id === exercicioId);
+    if (idx === -1) return;
+    
+    if (idx >= workout.exercicios.length - 1) {
       navigate(`/treino/${treinoId}/resumo`);
     } else {
-      const nextExercise = getUserNextExercise(treinoId, exercicioId);
-      if (nextExercise) {
-        navigate(`/treino/${treinoId}/${nextExercise.id}`);
-      }
+      const nextExercise = workout.exercicios[idx + 1];
+      navigate(`/treino/${treinoId}/${nextExercise.id}`);
     }
   };
 
-  const isLast = isUserLastExercise(treinoId || "", exercicioId || "");
+  const isLast = !!workout && workout.exercicios[workout.exercicios.length - 1]?.id === (exercicioId || "");
   const restTime = exercise ? `${Math.floor(exercise.descansoSeg / 60)} min` : "2 min";
 
   if (!exercise || !workout) {
@@ -178,16 +174,49 @@ const ExerciseLogging = () => {
   }
 
   // Dados de progressão
-  const lastPerformance = getLastExercisePerformance(exercicioId || "");
-  const progression = getProgressionSuggestion(exercicioId || "", exercise.repsRange);
+  const lastPerformance = (() => {
+    const history = exerciseHistory[exercicioId || ""];
+    if (!history || history.length === 0) return null;
+    return history[history.length - 1];
+  })();
 
-  const handleApplySuggestion = () => {
-    if (progression && progression.status === "ready") {
-      const suggestedLoad = parseFloat(progression.metaHoje.split(" ")[0]) || 0;
-      if (suggestedLoad > 0) {
-        saveProgressionSuggestion(exercicioId || "", suggestedLoad);
-        toast.success(`Sugestão salva: ${suggestedLoad} kg`);
-      }
+  const progression = (() => {
+    if (!lastPerformance || !exercise?.repsRange || !lastPerformance.workSets?.length) return null;
+    const firstSet = lastPerformance.workSets[0];
+    const [minReps, maxReps] = exercise.repsRange
+      .split(/[^0-9]+/)
+      .filter(Boolean)
+      .map((s) => parseInt(s.trim(), 10));
+
+    if (firstSet.reps >= maxReps) {
+      const nextKg = firstSet.kg + 2.5;
+      return {
+        status: "ready" as const,
+        statusIcon: "🔥",
+        statusLabel: "Pronto para subir",
+        metaHoje: `${nextKg} kg × ${minReps}+`,
+      };
+    }
+
+    return {
+      status: "maintain" as const,
+      statusIcon: "💪",
+      statusLabel: "Manter carga",
+      metaHoje: `${firstSet.kg} kg × ${firstSet.reps + 1}+`,
+    };
+  })();
+
+  const handleApplySuggestion = async () => {
+    if (!progression || progression.status !== "ready" || !state) return;
+    const suggestedLoad = parseFloat(progression.metaHoje.split(" ")[0]) || 0;
+    if (suggestedLoad > 0) {
+      const updated = { ...(state.progressionSuggestions || {}) };
+      updated[exercicioId || ""] = {
+        suggestedNextLoad: suggestedLoad,
+        appliedAt: new Date().toISOString(),
+      };
+      await updateState({ progressionSuggestions: updated });
+      toast.success(`Sugestão salva: ${suggestedLoad} kg`);
     }
   };
 
@@ -366,41 +395,46 @@ const ExerciseLogging = () => {
           {/* Add Set Button */}
           <button
             onClick={handleAddSet}
-            className="w-full mt-4 bg-secondary/30 rounded-xl px-4 py-3 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+            className="w-full mt-3 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >
-            <Plus className="w-4 h-4" />
+            <Plus size={16} />
             <span className="text-sm">Adicionar série</span>
           </button>
-
-          {/* Suggestion Banner */}
-          {showSuggestion && (
-            <div className="mt-4 bg-secondary/30 rounded-xl px-4 py-3 text-center">
-              <span className="text-muted-foreground text-sm">
-                Sugerimos{" "}
-                <span className="text-primary font-medium">+2,5%</span> no próximo
-                treino
-              </span>
-            </div>
-          )}
         </div>
+
+        {/* Suggestion Banner */}
+        {showSuggestion && (
+          <div className="card-glass p-4 mb-6 border-primary/30 bg-primary/5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-foreground font-medium mb-1">Hora de progredir!</p>
+                <p className="text-xs text-muted-foreground">
+                  Você completou todas as séries no limite superior de repetições.
+                </p>
+              </div>
+              <span className="text-primary font-medium">+2,5%</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Sticky CTA */}
-      <div className="fixed bottom-20 left-0 right-0 z-20 px-4 pb-4">
+      {/* Bottom CTA */}
+      <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
         <div className="max-w-md mx-auto">
           <button
             onClick={handleNextExercise}
-            className="w-full cta-button flex items-center justify-center gap-3"
+            className="w-full py-4 bg-primary text-primary-foreground rounded-2xl font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
           >
-            <Play className="w-5 h-5 fill-primary-foreground" />
-            <span className="text-lg font-semibold">
-              {isLast ? "Finalizar treino" : "Próximo exercício"}
-            </span>
+            {isLast ? "Finalizar treino" : "Próximo exercício"}
+            <Play className="w-4 h-4 fill-current" />
           </button>
         </div>
       </div>
 
-      {/* Bottom Nav */}
+      {/* Bottom Navigation */}
       <BottomNav />
     </div>
   );
